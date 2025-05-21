@@ -1,0 +1,20 @@
+{
+  "name": "gimmetool",
+  "version": "0.0.1",
+  "description": "A tool for managing git repositories",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "start": "deno run -A src/index.ts"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "es-toolkit": "^1.38.0",
+    "json5": "^2.2.3",
+    "log": "^6.3.2",
+    "log-symbols": "^7.0.0",
+    "semver": "^7.5.4",
+    "jsonschema": "^1.5.0",
+    "simple-git": "^3.27.0"
+  }
+} 
