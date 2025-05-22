@@ -3,7 +3,7 @@ type KlepErrorOptions = {
   type: KlepErrorType
   id: string
   message?: string
-  context?: Record<string, unknown>
+  context?: unknown
 }
 
 type KlepErrorType = 'parsing' | 'argument' | 'git' | 'unknown'
@@ -11,7 +11,7 @@ type KlepErrorType = 'parsing' | 'argument' | 'git' | 'unknown'
 export class KlepError extends Error {
   type: KlepErrorType
   id: string
-  context: Record<string, unknown>
+  context: unknown
   message: string
 
   constructor(options: KlepErrorOptions) {
@@ -37,12 +37,30 @@ export function errorBoundary(fn: Function) {
       if (e.message) {
         console.error(` - message: ${e.message}`)
       }
-      
-      for (const [key, value] of Object.entries(e.context)) {
-        console.error(` - ${key}:`, value)
-      }
 
+      __printErrorContext(e.context)
       process.exit(1)
     }
   }
+}
+
+function __printErrorContext(context: unknown, level: number = 0, key: string = '', tick: string = '-') {
+  if (Array.isArray(context)) {
+    console.error(`${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}`)
+    for (const item of context) {
+      __printErrorContext(item, level + 1, '', tick)
+    }
+
+    return
+  }
+
+  if (!!context && typeof context === 'object' && Object.keys(context).length > 0) {
+    for (const [key, value] of Object.entries(context)) {
+      __printErrorContext(value, level, key)
+    }
+
+    return
+  }
+
+  console.error(`${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}${context}`)
 }

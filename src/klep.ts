@@ -6,9 +6,8 @@ import { KlepError } from './errors.ts';
 import { klepDepsSchema } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema } from './schemas/klep.keep.schema.ts';
 import path from 'node:path';
-import { getVersionType, getLatestCommit } from './gitUtils.ts';
+import { getVersionType, getLatestCommit } from './git.ts';
 export const DEFAULT_SUBFOLDER = 'dependencies';
-import { assertIsRepository, isLocalRepository, isRemoteRepository, isRepository } from './gitUtils.ts';
 
 let __deps: DepsFile = {}
 
