@@ -35,10 +35,13 @@ export function errorBoundary(fn: Function) {
 
       console.error(`${e.type} error:`, e.id)
       if (e.message) {
-        console.error(` - message: ${e.message}`)
+        console.error(`- message: ${e.message}`)
       }
 
-      __printErrorContext(e.context)
+      if (e.context) {
+        __printErrorContext(e.context)
+      }
+
       process.exit(1)
     }
   }
@@ -48,15 +51,19 @@ function __printErrorContext(context: unknown, level: number = 0, key: string = 
   if (Array.isArray(context)) {
     console.error(`${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}`)
     for (const item of context) {
-      __printErrorContext(item, level + 1, '', tick)
+      __printErrorContext(item, level + 1, '', '.')
     }
 
     return
   }
 
   if (!!context && typeof context === 'object' && Object.keys(context).length > 0) {
-    for (const [key, value] of Object.entries(context)) {
-      __printErrorContext(value, level, key)
+    const entries = Object.entries(context)
+
+    if (entries.length > 0) {
+      for (const [key, value] of entries) {
+        __printErrorContext(value, level, key)
+      }
     }
 
     return

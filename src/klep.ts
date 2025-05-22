@@ -7,7 +7,14 @@ import { klepDepsSchema } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema } from './schemas/klep.keep.schema.ts';
 import path from 'node:path';
 import { getVersionType, getLatestCommit } from './git.ts';
-export const DEFAULT_SUBFOLDER = 'dependencies';
+
+export const DEFAULT_SUBFOLDER = '.dependencies';
+
+const DEFAULT_KLEP_FILE = {
+  dependencyFolder: DEFAULT_SUBFOLDER,
+  dependencies: {},
+  devDependencies: {}
+}
 
 let __deps: DepsFile = {}
 
@@ -52,11 +59,32 @@ export function loadDeps(): DepsFile | undefined {
     jsonschema.validate(deps, klepDepsSchema, {throwError: true});
   } catch (e) {
     if (e instanceof jsonschema.ValidationError) {
-      console.error('Invalid klep dependencies file:\n', e.message)
+      throw new KlepError({
+        type: 'parsing',
+        id: 'invalid-klep-deps-file',
+        message: 'Invalid klep dependencies file',
+        context: {
+          'error': e.message
+        }
+      })
     } else if (e instanceof SyntaxError) {
-      console.error('Error parsing klep dependencies file:\n', e.message)
+      throw new KlepError({
+        type: 'parsing',
+        id: 'invalid-klep-deps-file',
+        message: 'Error parsing klep dependencies file',
+        context: {
+          'error': e.message
+        }
+      })
     } else {
-      console.error('Unknown error loading klep dependencies file:\n', e.message)
+      throw new KlepError({
+        type: 'parsing',
+        id: 'unknown-error-loading-deps',
+        message: 'Unknown error loading klep dependencies file',
+        context: {
+          'error': e.message
+        }
+      })
     }
 
     return
@@ -199,4 +227,18 @@ export function ensureDependencyFolder(name: string, dep: Dependency) {
   } else {
     fs.mkdirSync(path.join(process.cwd(), dep.folder, name), { recursive: true })
   }
+}
+
+export function init() {
+  if (fs.existsSync(path.join(process.cwd(), 'klep.deps'))) {
+    throw new KlepError({
+      type: 'parsing',
+      id: 'klep-file-exists',
+      message: 'A klep.deps file already exists in the current directory'
+    })
+  }
+
+  fs.mkdirSync(path.join(process.cwd(), DEFAULT_SUBFOLDER), { recursive: true })
+  fs.writeFileSync(path.join(process.cwd(), 'klep.deps'), json5.stringify(DEFAULT_KLEP_FILE, null, 2))
+  fs.writeFileSync(path.join(process.cwd(), 'klep.keep'), json5.stringify({}, null, 2))
 }

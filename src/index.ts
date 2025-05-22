@@ -4,42 +4,48 @@ import packageJson from "../package.json" with { type: "json" };
 import { errorBoundary } from "./errors.ts";
 const program = new Command();
 
-program.name('rebel').description('I can\'t believe people aren\'t using agnostic dependency management');
+const description = `I can't believe people aren't using language-agnostic dependency management.
+This feels like a good idea someone much smarter than me should have done ages ago.
+
+I'm not sure why I'm doing this, but here we are. Hope it works.`
+
+program.name('klep').description(description);
 
 program.version(packageJson.version);
 
 program.command('init')
   .description('Initialize a new project')
-  .action(() => {
+  .action(errorBoundary(async () => {
     console.log('Initializing a new project');
-  });
+    klep.init();
+  }));
 
 program.command('install')
   .description('Install dependencies')
-  .action(() => {
+  .action(errorBoundary(async () => {
     console.log('Installing dependencies');
-  });
+  }));
 
 program.command('clean')
   .description('Clean the project')
-  .action(() => {
+  .action(errorBoundary(async () => {
     console.log('Cleaning the project');
-  });
+  }));
 
 program.command('add')
   .description('Add a dependency to the project')
   .argument('<url>', 'The url of the dependency to add')
-  .argument('[version]', 'The version of the dependency to add')
+  .option('-@, --version <version>', 'The version of the dependency to add')
   .option('-r, --rename <rename>', 'Rename the dependency. By default, the name is the repository name from the url.')
   .option('-d, --dev', 'Add a development dependency')
   .option('-e, --extract <extractString>', `Subfolders in the dependency to extract. This string takes the form "<from1>[:<to1>],<from2>[:<to2>],...<fromN>[:<toN>]", which will extract each desired folder "from" the repository "to" the desired destination under ${klep.DEFAULT_SUBFOLDER}/<dep-name>/<to>/`)
   .option('--to <folder>', `The folder to extract the dependency to. By default, the dependency is extracted to ${klep.DEFAULT_SUBFOLDER} at the root of the project`)
-  .action(errorBoundary(async (url, version, options) => {
-    const v = version || 'latest';
+  .action(errorBoundary(async (url, options) => {
+    const v = options.version  || 'latest';
     const name = options.rename || url.split('/').pop().split('.').shift();
     console.log(`Adding dependency ${name} from ${url} with version ${v}...`);
 
-    const candidate = await klep.createCandidateDependency(url, version, options)
+    const candidate = await klep.createCandidateDependency(url, v, options)
 
     if (!klep.loadDeps()) {
       return

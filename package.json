@@ -1,7 +1,7 @@
 {
-  "name": "gimmetool",
+  "name": "kleptool",
   "version": "0.0.1",
-  "description": "A tool for managing git repositories",
+  "description": "A tool for stealing dependencies",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {

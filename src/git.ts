@@ -7,7 +7,7 @@ type VersionType = 'tag' | 'hash' | 'branch' | 'semver'
 const COMMIT_LENGTH = 40
 const hashRegex = new RegExp(`^[0-9a-f]{${COMMIT_LENGTH}}$`)
 
-const constraints = ['>', '<', '>=', '<=', '!=']
+const constraints = ['^', '~', '<', '>=', '<=', '!=']
 
 type RepositoryStat = {
   isLocal: boolean
@@ -17,7 +17,7 @@ type RepositoryStat = {
 }
 
 async function getRemoteTags(url: string) {
-  return (await doGitCommand(['ls-remote', url]))
+  return (await __git(['ls-remote', url]))
     .split('\n')
     .filter(line => line.trim())
     .filter(line => line.startsWith('refs/tags/'))
@@ -25,7 +25,7 @@ async function getRemoteTags(url: string) {
 }
 
 async function getRemoteBranches(url: string) {
-  return (await doGitCommand(['ls-remote', url]))
+  return (await __git(['ls-remote', url]))
     .split('\n')
     .filter(line => line.trim())
     .filter(line => line.startsWith('refs/heads/'))
@@ -34,7 +34,7 @@ async function getRemoteBranches(url: string) {
 
 export async function isRemoteRepository(url: string) {
   try {
-    await doGitCommand(["ls-remote", url])
+    await __git(["ls-remote", url])
     return true;
   } catch {
     return false;
@@ -101,7 +101,7 @@ export async function getLatestCommit(url: string) {
     return commits[0].hash
   }
 
-  const output = await doGitCommand(["ls-remote", url])
+  const output = await __git(["ls-remote", url])
   if (!output) {
     throw new KlepError({
       type: 'git',
@@ -153,29 +153,40 @@ export async function getLatestCommit(url: string) {
   return latestCommit;  
 }
 
-async function doGitCommand(args: string[], timeout: number = 10000): Promise<string> {
-  const command = new Deno.Command("git", {
-    args: args,
-  })
+async function __git(args: string[], timeout: number = 10000): Promise<string> {
+  const command = new Deno.Command("git", {args});
+  const timer = setTimeout(() => command.kill(), timeout);
 
-  const result = await Promise.race([
-    command.output(),
-    new Promise((_, reject) => setTimeout(() => reject(new Error()), timeout))
-  ])
+  try {
+    const result = await command.output();
+    clearTimeout(timer);
 
-  if (result.success) {
-    return new TextDecoder().decode(result.stdout);
-  }
-
-  throw new KlepError({
-    type: 'git',
-    id: 'command-timeout',
-    message: 'The git command timed out',
-    context: {
-      'command': ['git', ...args].join(' '),
-      'error': new TextDecoder().decode(result.stderr),
+    if (result.success) {
+      return new TextDecoder().decode(result.stdout);
     }
-  })
+
+    throw new KlepError({
+      type: 'git',
+      id: 'command-failed',
+      message: 'The git command failed',
+      context: {
+        'command': ['git', ...args].join(' '),
+        'error': new TextDecoder().decode(result.stderr),
+      }
+    });
+
+  } catch (error) {
+    clearTimeout(timer);
+    throw new KlepError({
+      type: 'git', 
+      id: 'command-timeout',
+      message: 'The git command timed out',
+      context: {
+        'command': ['git', ...args].join(' '),
+        'error': error.message
+      }
+    });
+  }
 }
 
 function removeVersionConstraint(version: string): string {
