@@ -1,9 +1,8 @@
 import fs, { PathLike } from 'node:fs'
-import jsonschema from 'jsonschema'
 import json5 from 'json5'
 import * as _ from 'es-toolkit'
 import { KlepError } from './errors.ts'
-import { klepDepsSchema } from './schemas/klep.deps.schema.ts'
+import { klepDepsSchema, DepsFile } from './schemas/klep.deps.schema.ts'
 
 import path from 'node:path'
 import { getVersionType, getLatestCommit } from './git.ts'
@@ -11,13 +10,13 @@ import process from 'node:process'
 
 export const DEFAULT_SUBFOLDER = '.dependencies'
 
-const DEFAULT_KLEP_FILE = {
+const DEFAULT_KLEP_FILE: DepsFile = {
   dependencyFolder: DEFAULT_SUBFOLDER,
   dependencies: {},
   devDependencies: {},
 }
 
-let __deps: DepsFile = {}
+let __deps: DepsFile = DEFAULT_KLEP_FILE
 
 export type BaseDependency = {
   url: PathLike
@@ -29,29 +28,28 @@ export type Dependency = BaseDependency & {
   version?: string
 }
 
-export type DepsFile = {
-  dependencyFolder?: string
-  dependencies?: Record<string, Dependency>
-  devDependencies?: Record<string, Dependency>
-}
-
 export function loadDeps(): DepsFile | undefined {
-  let deps: DepsFile = {}
   try {
-    deps = json5.parse<DepsFile>(fs.readFileSync('./klep.deps', 'utf8'))
-    jsonschema.validate(deps, klepDepsSchema, { throwError: true })
-    __deps = deps
-    return __deps
-  } catch (e: unknown) {
-    if (e instanceof jsonschema.ValidationError) {
+    const rawDeps = json5.parse(fs.readFileSync('./klep.deps', 'utf8'))
+    const result = klepDepsSchema.safeParse(rawDeps)
+
+    if (!result.success) {
       throw new KlepError({
         type: 'parsing',
         id: 'invalid-klep-deps-file',
         message: 'Invalid klep dependencies file',
         context: {
-          error: e.message,
+          error: result.error.message,
+          issues: result.error.issues,
         },
       })
+    }
+
+    __deps = result.data
+    return __deps
+  } catch (e: unknown) {
+    if (e instanceof KlepError) {
+      throw e
     } else if (e instanceof SyntaxError) {
       throw new KlepError({
         type: 'parsing',
