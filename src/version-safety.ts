@@ -1,10 +1,10 @@
-import { VersionType } from './git.ts'
+import { VersionType } from './git.ts';
 
 export type VersionSafetyLevel = {
-  level: number
-  type: VersionType
-  description: string
-}
+  level: number;
+  type: VersionType;
+  description: string;
+};
 
 export const VERSION_SAFETY_LEVELS: Record<VersionType, VersionSafetyLevel> = {
   semver: {
@@ -27,20 +27,20 @@ export const VERSION_SAFETY_LEVELS: Record<VersionType, VersionSafetyLevel> = {
     type: 'branch',
     description: 'Git branch - moving target',
   },
-}
+};
 
 export function getVersionSafetyLevel(type: VersionType): VersionSafetyLevel {
-  return VERSION_SAFETY_LEVELS[type]
+  return VERSION_SAFETY_LEVELS[type];
 }
 
 export function compareVersionSafety(a: VersionType, b: VersionType): number {
-  return VERSION_SAFETY_LEVELS[a].level - VERSION_SAFETY_LEVELS[b].level
+  return VERSION_SAFETY_LEVELS[a].level - VERSION_SAFETY_LEVELS[b].level;
 }
 
 export function getSafetyWarning(type: VersionType): string | null {
-  const level = VERSION_SAFETY_LEVELS[type]
+  const level = VERSION_SAFETY_LEVELS[type];
   if (level.level <= 2) {
-    return `Warning: Using ${level.type} version. ${level.description}`
+    return `Warning: Using ${level.type} version. ${level.description}`;
   }
-  return null
+  return null;
 }

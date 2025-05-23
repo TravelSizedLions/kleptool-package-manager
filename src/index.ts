@@ -1,56 +1,56 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander'
-import * as klep from './klep.ts'
-import packageJson from '../package.json' with { type: 'json' }
-import kerror from './kerror.ts'
-import process from 'node:process'
-const program = new Command()
+import { Command } from 'commander';
+import * as klep from './klep.ts';
+import packageJson from '../package.json' with { type: 'json' };
+import kerror from './kerror.ts';
+import process from 'node:process';
+const program = new Command();
 
 const description = `I can't believe people aren't using language-agnostic dependency management.
 This feels like a good idea someone much smarter than me should have done ages ago.
 
-I'm not sure why I'm doing this, but here we are. Hope it works.`
+I'm not sure why I'm doing this, but here we are. Hope it works.`;
 
-program.name('klep').description(description)
+program.name('klep').description(description);
 
-program.version(packageJson.version)
+program.version(packageJson.version);
 
 program
   .command('init')
   .description('Initialize a new project')
   .action(
     kerror.boundary(() => {
-      console.log('Initializing a new project')
-      klep.init()
+      console.log('Initializing a new project');
+      klep.init();
     })
-  )
+  );
 
 program
   .command('install')
   .description('Install dependencies')
   .action(
     kerror.boundary(() => {
-      console.log('Installing dependencies')
+      console.log('Installing dependencies');
     })
-  )
+  );
 
 program
   .command('clean')
   .description('Clean the project')
   .action(
     kerror.boundary(() => {
-      console.log('Cleaning the project')
+      console.log('Cleaning the project');
     })
-  )
+  );
 
 type AddOptions = {
-  version?: string
-  rename?: string
-  dev?: boolean
-  extract?: string
-  to?: string
-}
+  version?: string;
+  rename?: string;
+  dev?: boolean;
+  extract?: string;
+  to?: string;
+};
 
 program
   .command('add')
@@ -72,30 +72,27 @@ program
   )
   .action(
     kerror.boundary(async (...args: unknown[]) => {
-      const [url, options] = args as [string, AddOptions]
+      const [url, options] = args as [string, AddOptions];
 
-      const v = options.version || 'latest'
-      const name =
-        options.rename || url.split('/').pop()?.split('.').shift() || url
+      const v = options.version || 'latest';
+      const name = options.rename || url.split('/').pop()?.split('.').shift() || url;
 
-      console.log(`Adding dependency ${name} from ${url} with version ${v}...`)
+      console.log(`Adding dependency ${name} from ${url} with version ${v}...`);
 
-      const candidate = await klep.createCandidateDependency(url, v, options)
+      const candidate = await klep.createCandidateDependency(url, v, options);
 
       if (!klep.loadDeps()) {
-        return
+        return;
       }
 
       if (!klep.isUnique(name, candidate)) {
-        return
+        return;
       }
 
-      klep.addDependency(name, candidate, options.dev)
-      klep.saveDeps()
-      console.log(
-        `Added ${options.dev ? 'development' : 'core'} dependency ${name}@${v}`
-      )
+      klep.addDependency(name, candidate, options.dev);
+      klep.saveDeps();
+      console.log(`Added ${options.dev ? 'development' : 'core'} dependency ${name}@${v}`);
     })
-  )
+  );
 
-program.parse(process.argv)
+program.parse(process.argv);

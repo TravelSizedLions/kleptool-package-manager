@@ -27,7 +27,10 @@
       "FunctionExpression": {
         "parameters": "first"
       }
-    }]
+    }],
+    "object-property-newline": "off",
+    "object-curly-newline": "off",
+    "object-curly-spacing": ["error", "always"]
   },
   "settings": {
     "@typescript-eslint": {
