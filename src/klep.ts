@@ -4,7 +4,6 @@ import json5 from 'json5'
 import * as _ from 'es-toolkit'
 import { KlepError } from './errors.ts'
 import { klepDepsSchema } from './schemas/klep.deps.schema.ts'
-import { klepKeepfileSchema } from './schemas/klep.keep.schema.ts'
 import path from 'node:path'
 import { getVersionType, getLatestCommit } from './git.ts'
 import process from 'node:process'
@@ -19,16 +18,10 @@ const DEFAULT_KLEP_FILE = {
 
 let __deps: DepsFile = {}
 
-type BaseDependency = {
+export type BaseDependency = {
   url: PathLike
   folder?: string
   extract?: Record<string, string> | 'all'
-}
-
-export type ResolvedDependency = BaseDependency & {
-  requested: string[]
-  resolved: string
-  dependencies: DependencyGraph
 }
 
 export type Dependency = BaseDependency & {
@@ -39,17 +32,6 @@ export type DepsFile = {
   dependencyFolder?: string
   dependencies?: Record<string, Dependency>
   devDependencies?: Record<string, Dependency>
-}
-
-export type DependencyGraph = {
-  [name: string]: ResolvedDependency
-}
-
-export function loadGraph(): DependencyGraph {
-  const lockfile = JSON.parse(fs.readFileSync('./klep.keep', 'utf8'))
-  jsonschema.validate(lockfile, klepKeepfileSchema)
-
-  return lockfile
 }
 
 export function loadDeps(): DepsFile | undefined {
