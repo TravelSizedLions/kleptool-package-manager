@@ -1,6 +1,6 @@
 import git from 'simple-git'
 import semver from 'semver'
-import { KlepError } from './kerror.ts'
+import kerror from './kerror.ts'
 import { spawn } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 
@@ -75,9 +75,7 @@ export async function repositoryStat(
     }
   }
 
-  throw new KlepError({
-    type: 'argument',
-    id: 'bad-git-repository',
+  throw kerror(kerror.type.Argument, 'bad-git-repository', {
     message: 'The provided argument is not a valid git repository',
     context: {
       'provided value': `"${url}"`,
@@ -104,9 +102,7 @@ export async function getLatestCommit(url: string) {
     try {
       return commits.latest.hash
     } catch {
-      throw new KlepError({
-        type: 'git',
-        id: 'empty-local-repository',
+      throw kerror(kerror.type.Git, 'empty-local-repository', {
         message: 'Repository appears to be empty',
       })
     }
@@ -115,9 +111,7 @@ export async function getLatestCommit(url: string) {
   // Handle remote repositories more carefully
   const output = await __git(['ls-remote', url])
   if (!output) {
-    throw new KlepError({
-      type: 'git',
-      id: 'no-remote-refs',
+    throw kerror(kerror.type.Git, 'no-remote-refs', {
       message: 'Could not get remote refs from repository',
       context: {
         repository: url,
@@ -127,9 +121,7 @@ export async function getLatestCommit(url: string) {
 
   const lines = output.split('\n').filter((line) => line.trim())
   if (lines.length === 0) {
-    throw new KlepError({
-      type: 'git',
-      id: 'empty-remote-repository',
+    throw kerror(kerror.type.Git, 'empty-remote-repository', {
       message: 'Repository appears to be empty',
       context: {
         repository: url,
@@ -139,9 +131,7 @@ export async function getLatestCommit(url: string) {
 
   const headLine = lines.find((line) => line.includes('HEAD'))
   if (!headLine) {
-    throw new KlepError({
-      type: 'git',
-      id: 'no-remote-head-ref',
+    throw kerror(kerror.type.Git, 'no-remote-head-ref', {
       message: 'Could not find HEAD reference in repository',
       context: {
         repository: url,
@@ -151,9 +141,7 @@ export async function getLatestCommit(url: string) {
 
   const latestCommit = headLine.split('HEAD')[0].trim()
   if (!latestCommit || !__isValidHash(latestCommit)) {
-    throw new KlepError({
-      type: 'git',
-      id: 'invalid-remote-commit-hash',
+    throw kerror(kerror.type.Git, 'invalid-remote-commit-hash', {
       message: 'Got invalid commit hash from repository',
       context: {
         repository: url,
@@ -174,9 +162,7 @@ function __git(args: string[], timeout: number = 10000): Promise<string> {
     const timer = setTimeout(() => {
       process.kill()
       reject(
-        new KlepError({
-          type: 'git',
-          id: 'command-timeout',
+        kerror(kerror.type.Git, 'command-timeout', {
           message: 'The git command timed out',
           context: {
             command: ['git', ...args].join(' '),
@@ -200,9 +186,7 @@ function __git(args: string[], timeout: number = 10000): Promise<string> {
         resolve(stdout)
       } else {
         reject(
-          new KlepError({
-            type: 'git',
-            id: 'command-failed',
+          kerror(kerror.type.Git, 'command-failed', {
             message: 'The git command failed',
             context: {
               command: ['git', ...args].join(' '),
@@ -216,9 +200,7 @@ function __git(args: string[], timeout: number = 10000): Promise<string> {
     process.on('error', (error: Error) => {
       clearTimeout(timer)
       reject(
-        new KlepError({
-          type: 'git',
-          id: 'command-error',
+        kerror(kerror.type.Git, 'command-error', {
           message: 'Failed to execute git command',
           context: {
             command: ['git', ...args].join(' '),
@@ -270,7 +252,7 @@ export async function getVersionType(
 
   const repo = await repositoryStat(url)
   if (!repo) {
-    throw new KlepError({ type: 'argument', id: 'invalid-repository' })
+    throw kerror(kerror.type.Argument, 'invalid-repository')
   }
 
   if (await semanticVersionIsAvailable(repo, url, version)) {
@@ -290,9 +272,7 @@ export async function getVersionType(
     return 'hash'
   }
 
-  throw new KlepError({
-    type: 'argument',
-    id: 'invalid-version',
+  throw kerror(kerror.type.Argument, 'invalid-version', {
     message:
       'The provided version is not a valid semver version, tag, branch, or hash in this repository',
     context: {

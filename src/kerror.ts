@@ -8,10 +8,10 @@ type KlepErrorOptions = {
 }
 
 enum Type {
-  Parsing = 'parsing',
-  ARGUMENT = 'argument',
-  GIT = 'git',
-  UNKNOWN = 'unknown'
+  Parsing = 'Parsing',
+  Argument = 'Argument',
+  Git = 'Git',
+  Unknown = 'Unknown',
 }
 
 class KlepError extends Error {

@@ -29,7 +29,7 @@ export function loadKeepfile(): DependencyGraph | undefined {
       throw kerror(kerror.type.Parsing, 'invalid-klep-keep-file', {
         message: 'Error parsing klep keep file',
         context: {
-          error: e.message
+          error: e.message,
         },
       })
     } else {

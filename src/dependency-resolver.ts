@@ -1,19 +1,22 @@
 import fs from 'node:fs'
 import json5 from 'json5'
 import kerror from './kerror.ts'
-import { klepKeepfileSchema, type DependencyGraph } from './schemas/klep.keep.schema.ts'
+import {
+  klepKeepfileSchema,
+  type DependencyGraph,
+} from './schemas/klep.keep.schema.ts'
 
 export function loadKeepfile(): DependencyGraph {
   try {
     const rawKeep = json5.parse(fs.readFileSync('./klep.keep', 'utf8'))
     const result = klepKeepfileSchema.safeParse(rawKeep)
-    
+
     if (!result.success) {
       throw kerror(kerror.type.Parsing, 'invalid-klep-keep-file', {
         message: 'Invalid klep keep file',
         context: {
           error: result.error.message,
-          issues: result.error.issues
+          issues: result.error.issues,
         },
       })
     }
