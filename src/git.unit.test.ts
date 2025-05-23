@@ -12,7 +12,7 @@ import {
   getLatestCommit,
   getVersionType,
 } from './git.ts'
-import { KlepError } from './kerror.ts'
+import kerror from './kerror.ts'
 
 // Mock data
 const VALID_REMOTE_REPO = 'https://github.com/denoland/deno.git'
@@ -74,7 +74,7 @@ describe('Repository Statistics', () => {
     it('should throw KlepError for invalid repository', async () => {
       await assertThrows(
         async () => await repositoryStat(INVALID_REPO),
-        KlepError,
+        kerror.KlepError,
         'The provided argument is not a valid git repository'
       )
     })
@@ -92,7 +92,7 @@ describe('Commit and Version Management', () => {
     it('should throw KlepError for invalid repository', async () => {
       await assertThrows(
         async () => await getLatestCommit(INVALID_REPO),
-        KlepError
+        kerror.KlepError
       )
     })
   })
@@ -123,7 +123,7 @@ describe('Commit and Version Management', () => {
     it('should throw KlepError for invalid version', async () => {
       await assertThrows(
         async () => await getVersionType(VALID_REMOTE_REPO, 'invalid-version'),
-        KlepError,
+        kerror.KlepError,
         'The provided version is not a valid semver version, tag, branch, or hash in this repository'
       )
     })
