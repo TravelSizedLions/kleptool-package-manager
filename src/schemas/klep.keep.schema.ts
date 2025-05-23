@@ -1,14 +1,14 @@
-import { lockedDependency } from "./dependency.schema.ts"
+import { lockedDependency } from './dependency.schema.ts'
 
 export const klepKeepfileSchema = {
-  $id: "gimme.lock.schema",
-  title: "Gimme Lockfile",
-  description: "Gimme lockfile schema.",
-  type: "object",
+  $id: 'gimme.lock.schema',
+  title: 'Gimme Lockfile',
+  description: 'Gimme lockfile schema.',
+  type: 'object',
   definitions: {
-    lockedDependency: lockedDependency
+    lockedDependency: lockedDependency,
   },
   additionalProperties: {
-    $ref: "#/definitions/lockedDependency"
-  }
+    $ref: '#/definitions/lockedDependency',
+  },
 }

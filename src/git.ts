@@ -1,7 +1,8 @@
-import git from 'simple-git';
-import semver from 'semver';
-import { KlepError } from './errors.ts';
-import { spawn } from 'node:child_process';
+import git from 'simple-git'
+import semver from 'semver'
+import { KlepError } from './errors.ts'
+import { spawn } from 'node:child_process'
+import { Buffer } from 'node:buffer'
 
 type VersionType = 'tag' | 'hash' | 'branch' | 'semver'
 
@@ -21,49 +22,56 @@ type RepositoryStat = {
 async function __getRemoteTags(url: string) {
   return (await __git(['ls-remote', url]))
     .split('\n')
-    .filter(line => line.trim())
-    .filter(line => tagsRegex.test(line))
-    .map(line => line.split('refs/tags/')[1].trim())
+    .filter((line) => line.trim())
+    .filter((line) => tagsRegex.test(line))
+    .map((line) => line.split('refs/tags/')[1].trim())
 }
 
 async function __getRemoteBranches(url: string) {
   return (await __git(['ls-remote', url]))
     .split('\n')
-    .filter(line => line.trim())
-    .filter(line => branchesRegex.test(line))
-    .map(line => line.split('refs/heads/')[1].trim())
+    .filter((line) => line.trim())
+    .filter((line) => branchesRegex.test(line))
+    .map((line) => line.split('refs/heads/')[1].trim())
 }
 
 export async function isRemoteRepository(url: string) {
   try {
-    await __git(["ls-remote", url])
-    return true;
+    await __git(['ls-remote', url])
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
 export async function isLocalRepository(url: string) {
   try {
-    await git(url, {timeout: {block: 10000}})
+    await git(url, { timeout: { block: 10000 } })
     return true
   } catch {
-    return false;
+    return false
   }
 }
 
 export function isRepository(url: string) {
-  return isRemoteRepository(url) || isLocalRepository(url);
+  return isRemoteRepository(url) || isLocalRepository(url)
 }
 
-export async function repositoryStat(url: string): Promise<RepositoryStat | undefined> {
-  const [isLocal, isRemote] = await Promise.all([isLocalRepository(url), isRemoteRepository(url)])
+export async function repositoryStat(
+  url: string
+): Promise<RepositoryStat | undefined> {
+  const [isLocal, isRemote] = await Promise.all([
+    isLocalRepository(url),
+    isRemoteRepository(url),
+  ])
   if (isLocal || isRemote) {
     return {
       isLocal,
       isRemote,
       tags: isLocal ? (await git(url).tags()).all : await __getRemoteTags(url),
-      branches: isLocal ? (await git(url).branch()).all : await __getRemoteBranches(url),
+      branches: isLocal
+        ? (await git(url).branch()).all
+        : await __getRemoteBranches(url),
     }
   }
 
@@ -79,7 +87,7 @@ export async function repositoryStat(url: string): Promise<RepositoryStat | unde
         '../path/to/local/repo',
         '/home/user/path/to/local/repo',
       ],
-    }
+    },
   })
 }
 
@@ -103,119 +111,127 @@ export async function getLatestCommit(url: string) {
     return commits[0].hash
   }
 
-  const output = await __git(["ls-remote", url])
+  const output = await __git(['ls-remote', url])
   if (!output) {
     throw new KlepError({
       type: 'git',
       id: 'no-remote-refs',
       message: 'Could not get remote refs from repository',
       context: {
-        'repository': url
-      }
+        repository: url,
+      },
     })
   }
 
-  const lines = output.split('\n').filter(line => line.trim());
+  const lines = output.split('\n').filter((line) => line.trim())
   if (lines.length === 0) {
     throw new KlepError({
       type: 'git',
-      id: 'empty-remote-repository', 
+      id: 'empty-remote-repository',
       message: 'Repository appears to be empty',
       context: {
-        'repository': url
-      }
+        repository: url,
+      },
     })
   }
 
-  const headLine = lines.find(line => line.includes('HEAD'));
+  const headLine = lines.find((line) => line.includes('HEAD'))
   if (!headLine) {
     throw new KlepError({
       type: 'git',
       id: 'no-remote-head-ref',
       message: 'Could not find HEAD reference in repository',
       context: {
-        'repository': url
-      }
+        repository: url,
+      },
     })
   }
 
-  const latestCommit = headLine.split('HEAD')[0].trim();
+  const latestCommit = headLine.split('HEAD')[0].trim()
   if (!latestCommit || !__isValidHash(latestCommit)) {
     throw new KlepError({
       type: 'git',
       id: 'invalid-remote-commit-hash',
       message: 'Got invalid commit hash from repository',
       context: {
-        'repository': url,
-        'commit hash': latestCommit
-      }
+        repository: url,
+        'commit hash': latestCommit,
+      },
     })
   }
 
-  return latestCommit;  
+  return latestCommit
 }
 
 function __git(args: string[], timeout: number = 10000): Promise<string> {
   return new Promise((resolve, reject) => {
-    const process = spawn('git', args);
-    let stdout = '';
-    let stderr = '';
+    const process = spawn('git', args)
+    let stdout = ''
+    let stderr = ''
 
     const timer = setTimeout(() => {
-      process.kill();
-      reject(new KlepError({
-        type: 'git',
-        id: 'command-timeout',
-        message: 'The git command timed out',
-        context: {
-          'command': ['git', ...args].join(' '),
-          'error': 'Command timed out'
-        }
-      }));
-    }, timeout);
-
-    process.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    process.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    process.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve(stdout);
-      } else {
-        reject(new KlepError({
+      process.kill()
+      reject(
+        new KlepError({
           type: 'git',
-          id: 'command-failed',
-          message: 'The git command failed',
+          id: 'command-timeout',
+          message: 'The git command timed out',
           context: {
-            'command': ['git', ...args].join(' '),
-            'error': stderr,
-          }
-        }));
-      }
-    });
+            command: ['git', ...args].join(' '),
+            error: 'Command timed out',
+          },
+        })
+      )
+    }, timeout)
 
-    process.on('error', (error) => {
-      clearTimeout(timer);
-      reject(new KlepError({
-        type: 'git',
-        id: 'command-error',
-        message: 'Failed to execute git command',
-        context: {
-          'command': ['git', ...args].join(' '),
-          'error': error.message
-        }
-      }));
-    });
-  });
+    process.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString()
+    })
+
+    process.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString()
+    })
+
+    process.on('close', (code: number) => {
+      clearTimeout(timer)
+      if (code === 0) {
+        resolve(stdout)
+      } else {
+        reject(
+          new KlepError({
+            type: 'git',
+            id: 'command-failed',
+            message: 'The git command failed',
+            context: {
+              command: ['git', ...args].join(' '),
+              error: stderr,
+            },
+          })
+        )
+      }
+    })
+
+    process.on('error', (error: Error) => {
+      clearTimeout(timer)
+      reject(
+        new KlepError({
+          type: 'git',
+          id: 'command-error',
+          message: 'Failed to execute git command',
+          context: {
+            command: ['git', ...args].join(' '),
+            error: error.message,
+          },
+        })
+      )
+    })
+  })
 }
 
 function __removeVersionConstraint(version: string): string {
-  const constraint = constraints.find(constraint => version.startsWith(constraint))
+  const constraint = constraints.find((constraint) =>
+    version.startsWith(constraint)
+  )
   if (constraint) {
     return version.split(constraint)[1]
   }
@@ -240,13 +256,17 @@ function __normalizeVersion(version: string): string {
   return noConstraint
 }
 
-function semanticVersionIsAvailable(stat: RepositoryStat, _url: string, version: string): boolean {
+function semanticVersionIsAvailable(
+  stat: RepositoryStat,
+  _url: string,
+  version: string
+): boolean {
   const normalized = __normalizeVersion(version)
-  if (!semver.valid(normalized) && !semver.valid(version)) { 
+  if (!semver.valid(normalized) && !semver.valid(version)) {
     return false
   }
 
-  return stat.tags.some(tag => {
+  return stat.tags.some((tag) => {
     const normalizedTag = __normalizeVersion(tag)
     return normalizedTag === normalized || normalizedTag === version
   })
@@ -256,10 +276,13 @@ function __isValidHash(version: string): boolean {
   return hashRegex.test(version)
 }
 
-export async function getVersionType(url: string, version: string): Promise<VersionType> {
+export async function getVersionType(
+  url: string,
+  version: string
+): Promise<VersionType> {
   const repo = await repositoryStat(url)
   if (!repo) {
-    throw new KlepError({type: 'argument', id: 'invalid-repository'})
+    throw new KlepError({ type: 'argument', id: 'invalid-repository' })
   }
 
   if (await semanticVersionIsAvailable(repo, url, version)) {
@@ -282,12 +305,13 @@ export async function getVersionType(url: string, version: string): Promise<Vers
   throw new KlepError({
     type: 'argument',
     id: 'invalid-version',
-    message: 'The provided version is not a valid semver version, tag, branch, or hash in this repository',
+    message:
+      'The provided version is not a valid semver version, tag, branch, or hash in this repository',
     context: {
       'provided value': `"${version}"`,
-      'repository': url,
+      repository: url,
       'available tags': repo.tags,
       'available branches': repo.branches,
-    }
+    },
   })
 }

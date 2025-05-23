@@ -1,4 +1,4 @@
-import process from "node:process";
+import process from 'node:process'
 type KlepErrorOptions = {
   type: KlepErrorType
   id: string
@@ -23,10 +23,12 @@ export class KlepError extends Error {
   }
 }
 
-export function errorBoundary(fn: (...args: unknown[]) => Promise<void> | void) {
+export function errorBoundary(
+  fn: (...args: unknown[]) => Promise<void> | void
+) {
   return async (...args: unknown[]) => {
     try {
-      await fn(...args);
+      await fn(...args)
     } catch (error) {
       if (!(error instanceof KlepError)) {
         console.error('unexpected error received', error)
@@ -47,9 +49,16 @@ export function errorBoundary(fn: (...args: unknown[]) => Promise<void> | void) 
   }
 }
 
-function __printErrorContext(context: unknown, level: number = 0, key: string = '', tick: string = '-') {
+function __printErrorContext(
+  context: unknown,
+  level: number = 0,
+  key: string = '',
+  tick: string = '-'
+) {
   if (Array.isArray(context)) {
-    console.error(`${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}`)
+    console.error(
+      `${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}`
+    )
     for (const item of context) {
       __printErrorContext(item, level + 1, '', '.')
     }
@@ -57,7 +66,11 @@ function __printErrorContext(context: unknown, level: number = 0, key: string = 
     return
   }
 
-  if (!!context && typeof context === 'object' && Object.keys(context).length > 0) {
+  if (
+    !!context &&
+    typeof context === 'object' &&
+    Object.keys(context).length > 0
+  ) {
     const entries = Object.entries(context)
 
     if (entries.length > 0) {
@@ -69,5 +82,7 @@ function __printErrorContext(context: unknown, level: number = 0, key: string = 
     return
   }
 
-  console.error(`${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}${context}`)
+  console.error(
+    `${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}${context}`
+  )
 }

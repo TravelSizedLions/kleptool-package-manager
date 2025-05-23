@@ -1,22 +1,22 @@
 export const dependencyBaseSchema = {
-  type: "object",
+  type: 'object',
   properties: {
     url: {
-      type: "string",
-      description: "Dependency url"
+      type: 'string',
+      description: 'Dependency url',
     },
-    folder: { 
-      type: "string",
-      description: "Dependency folder"
+    folder: {
+      type: 'string',
+      description: 'Dependency folder',
     },
     extract: {
-      type: ["object", "string"],
-      description: "Extract rules",
-      default: "all"
-    }
+      type: ['object', 'string'],
+      description: 'Extract rules',
+      default: 'all',
+    },
   },
-  required: ["url"],
-  additionalProperties: false
+  required: ['url'],
+  additionalProperties: false,
 }
 
 export const dependency = {
@@ -24,11 +24,11 @@ export const dependency = {
   properties: {
     ...dependencyBaseSchema.properties,
     version: {
-      type: "string",
-      description: "Dependency version",
-      default: "latest"
-    }
-  }
+      type: 'string',
+      description: 'Dependency version',
+      default: 'latest',
+    },
+  },
 }
 
 export const lockedDependency = {
@@ -36,16 +36,16 @@ export const lockedDependency = {
   properties: {
     ...dependencyBaseSchema.properties,
     requested: {
-      type: "array",
-      description: "Available dependency versions"
+      type: 'array',
+      description: 'Available dependency versions',
     },
     resolved: {
-      type: "string",
-      description: "Resolved dependency version"
+      type: 'string',
+      description: 'Resolved dependency version',
     },
     dependencies: {
-      type: "array",
-      description: "Subdependencies"
-    }
-  }
+      type: 'array',
+      description: 'Subdependencies',
+    },
+  },
 }
