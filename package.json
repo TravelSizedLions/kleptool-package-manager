@@ -5,7 +5,8 @@
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "start": "deno run -A src/index.ts"
+    "start": "deno run -A src/index.ts",
+    "tidy": "deno lint --fix"
   },
   "dependencies": {
     "commander": "^13.1.0",
@@ -17,4 +18,4 @@
     "jsonschema": "^1.5.0",
     "simple-git": "^3.27.0"
   }
-} 
+}

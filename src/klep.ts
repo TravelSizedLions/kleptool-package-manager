@@ -58,6 +58,8 @@ export function loadDeps(): DepsFile | undefined {
   try {
     deps = json5.parse<DepsFile>(fs.readFileSync('./klep.deps', 'utf8'));
     jsonschema.validate(deps, klepDepsSchema, {throwError: true});
+    __deps = deps;
+    return __deps;
   } catch (e) {
     if (e instanceof jsonschema.ValidationError) {
       throw new KlepError({
@@ -87,12 +89,7 @@ export function loadDeps(): DepsFile | undefined {
         }
       })
     }
-
-    return
   }
-
-  __deps = deps;
-  return __deps;
 }
 
 export function saveDeps() {

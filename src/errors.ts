@@ -1,4 +1,3 @@
-
 import process from "node:process";
 type KlepErrorOptions = {
   type: KlepErrorType
@@ -24,23 +23,23 @@ export class KlepError extends Error {
   }
 }
 
-export function errorBoundary(fn: Function) {
+export function errorBoundary(fn: (...args: unknown[]) => Promise<void> | void) {
   return async (...args: unknown[]) => {
     try {
-      return await fn(...args)
-    } catch (e) {
-      if (!(e instanceof KlepError)) {
-        console.error('unexpected error received', e)
+      await fn(...args);
+    } catch (error) {
+      if (!(error instanceof KlepError)) {
+        console.error('unexpected error received', error)
         process.exit(1)
       }
 
-      console.error(`${e.type} error:`, e.id)
-      if (e.message) {
-        console.error(`- message: ${e.message}`)
+      console.error(`${error.type} error:`, error.id)
+      if (error.message) {
+        console.error(`- message: ${error.message}`)
       }
 
-      if (e.context) {
-        __printErrorContext(e.context)
+      if (error.context) {
+        __printErrorContext(error.context)
       }
 
       process.exit(1)

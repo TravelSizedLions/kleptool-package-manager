@@ -52,7 +52,7 @@ export async function isLocalRepository(url: string) {
   }
 }
 
-export async function isRepository(url: string) {
+export function isRepository(url: string) {
   return isRemoteRepository(url) || isLocalRepository(url);
 }
 
@@ -155,7 +155,7 @@ export async function getLatestCommit(url: string) {
   return latestCommit;  
 }
 
-async function __git(args: string[], timeout: number = 10000): Promise<string> {
+function __git(args: string[], timeout: number = 10000): Promise<string> {
   return new Promise((resolve, reject) => {
     const process = spawn('git', args);
     let stdout = '';
@@ -240,7 +240,7 @@ function __normalizeVersion(version: string): string {
   return noConstraint
 }
 
-async function semanticVersionIsAvailable(stat: RepositoryStat, url: string,version: string): Promise<boolean> {
+function semanticVersionIsAvailable(stat: RepositoryStat, _url: string, version: string): boolean {
   const normalized = __normalizeVersion(version)
   if (!semver.valid(normalized) && !semver.valid(version)) { 
     return false
