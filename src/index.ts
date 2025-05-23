@@ -91,7 +91,9 @@ program
 
       klep.addDependency(name, candidate, options.dev)
       klep.saveDeps()
-      console.log(`Added ${options.dev ? 'development' : 'core'} dependency ${name}@${v}`)
+      console.log(
+        `Added ${options.dev ? 'development' : 'core'} dependency ${name}@${v}`
+      )
     })
   )
 

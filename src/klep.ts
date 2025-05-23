@@ -59,7 +59,7 @@ export function loadDeps(): DepsFile | undefined {
     jsonschema.validate(deps, klepDepsSchema, { throwError: true })
     __deps = deps
     return __deps
-  } catch (e) {
+  } catch (e: unknown) {
     if (e instanceof jsonschema.ValidationError) {
       throw new KlepError({
         type: 'parsing',
@@ -84,7 +84,7 @@ export function loadDeps(): DepsFile | undefined {
         id: 'unknown-error-loading-deps',
         message: 'Unknown error loading klep dependencies file',
         context: {
-          error: e.message,
+          error: e instanceof Error ? e.message : 'Unknown error',
         },
       })
     }
@@ -213,7 +213,7 @@ function __getExtractRules(extractString: string): Dependency['extract'] {
     return 'all'
   }
 
-  return extractString.split(',').reduce((extract, entry) => {
+  return extractString.split(',').reduce((extract: Record<string, string>, entry) => {
     const [from, to] = entry.split(':')
     if (!from) {
       throw new KlepError({
