@@ -10,7 +10,7 @@ import _ from 'es-toolkit';
 
 const DEFAULT: DependencyGraph = [];
 
-let __keep: DependencyGraph = DEFAULT;
+let __keep: DependencyGraph | undefined = undefined;
 
 function initialize() {
   if (fs.existsSync(path.join(process.cwd(), 'klep.keep'))) {
@@ -36,6 +36,10 @@ function ensureDependencyFolder(name: string, dep: Dependency) {
 }
 
 function load(): DependencyGraph {
+  if (__keep) {
+    return __keep;
+  }
+
   try {
     const rawKeep = json5.parse(fs.readFileSync('./klep.keep', 'utf8'));
     const result = klepKeepfileSchema.safeParse(rawKeep);
@@ -73,13 +77,20 @@ function load(): DependencyGraph {
   }
 }
 
+function reload() {
+  __keep = undefined;
+  return load();
+}
+
 function clone(): DependencyGraph {
-  return _.cloneDeep(__keep);
+  load();
+  return _.cloneDeep(__keep) as DependencyGraph;
 }
 
 export default {
   initialize,
   load,
+  reload,
   ensureDependencyFolder,
   clone,
   defaults: DEFAULT,
