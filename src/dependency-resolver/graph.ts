@@ -3,16 +3,32 @@ import { klepKeepfileSchema } from '../schemas/klep.keep.schema.ts'
 import fs from 'node:fs'
 import jsonschema from 'jsonschema'
 
-export type ResolvedDependency = BaseDependency & {
-  requested: string[]
-  resolved: string
-  dependencies: DependencyGraph
+type ExtractRule = Record<string, string> | 'all'
+
+type RequestedVersion = {
+  version: string
+  extract?: ExtractRule
 }
 
-export type DependencyGraph = {
-  root: ResolvedDependency
-  nodes: Map<string, ResolvedDependency>
+type RequiredDependency = {
+  name: string
+  version: string
+  extract?: ExtractRule
 }
+
+type ResolvedVersion = {
+  version: string
+  extract: ExtractRule
+  requires: RequiredDependency[]
+}
+
+export type ResolvedDependency = {
+  name: string
+  requested: RequestedVersion[]
+  resolved: ResolvedVersion
+}
+
+export type DependencyGraph = ResolvedDependency[]
 
 export function loadKeepfile(): DependencyGraph {
   const lockfile = JSON.parse(fs.readFileSync('./klep.keep', 'utf8'))

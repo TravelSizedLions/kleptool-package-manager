@@ -1,35 +1,69 @@
-import { dependency } from './dependency.schema.ts'
-
 export const klepDepsSchema = {
   $id: 'klep.deps.schema',
   title: 'Klep Dependencies',
   description: 'Klep dependencies configuration file.',
   type: 'object',
   definitions: {
-    dependency: dependency,
+    extractRule: {
+      description: 'Extract rules for the dependency',
+      oneOf: [
+        {
+          type: 'string',
+          enum: ['all']
+        },
+        {
+          type: 'object',
+          additionalProperties: {
+            type: 'string'
+          }
+        }
+      ],
+    },
+    dependency: {
+      description: 'Individual dependency entry',
+      type: 'object',
+      required: ['url'],
+      properties: {
+        url: {
+          type: 'string',
+          description: 'URL of the dependency'
+        },
+        folder: {
+          type: 'string',
+          description: 'Folder to extract the dependency to'
+        },
+        version: {
+          type: 'string',
+          description: 'Version of the dependency',
+          default: 'latest'
+        },
+        extract: {
+          $ref: '#/definitions/extractRule'
+        }
+      },
+      additionalProperties: false
+    }
   },
   properties: {
-    path: {
+    dependencyFolder: {
       type: 'string',
-      description:
-        "Path to the dependencies folder for your project. Doesn't need to be explicitly specified unless you are doing something non-standard.",
-      default: 'deps',
+      description: 'Path to the dependencies folder for your project. Defaults to .dependencies',
+      default: '.dependencies'
     },
     dependencies: {
+      description: 'Map of dependencies. Each dependency must have a unique name and cannot conflict with development dependencies.',
       type: 'object',
-      description:
-        'Map of dependencies. Because dependencies can share the same url, a unique name is required for each dependency.',
       additionalProperties: {
-        $ref: '#/definitions/dependency',
-      },
+        $ref: '#/definitions/dependency'
+      }
     },
     devDependencies: {
+      description: 'Map of development dependencies. Each dependency must have a unique name and cannot conflict with core dependencies.',
       type: 'object',
-      description: 'Map of development dependencies.',
       additionalProperties: {
-        $ref: '#/definitions/dependency',
-      },
-    },
+        $ref: '#/definitions/dependency'
+      }
+    }
   },
-  required: ['dependencies'],
+  required: ['dependencies']
 }
