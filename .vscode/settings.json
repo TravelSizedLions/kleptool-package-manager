@@ -1,14 +1,17 @@
 {
-  "deno.enable": true,
-  "deno.lint": true,
-  "deno.unstable": false,
-  "deno.config": null,
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "denoland.vscode-deno",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
   "[typescript]": {
-    "editor.defaultFormatter": "denoland.vscode-deno"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[javascript]": {
-    "editor.defaultFormatter": "denoland.vscode-deno"
-  }
-} 
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "eslint.validate": [
+    "javascript",
+    "typescript"
+  ]
+}

@@ -4,6 +4,7 @@ import json5 from 'json5'
 import * as _ from 'es-toolkit'
 import { KlepError } from './errors.ts'
 import { klepDepsSchema } from './schemas/klep.deps.schema.ts'
+
 import path from 'node:path'
 import { getVersionType, getLatestCommit } from './git.ts'
 import process from 'node:process'

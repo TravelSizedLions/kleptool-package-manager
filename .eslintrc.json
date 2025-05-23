@@ -18,7 +18,16 @@
     "prettier"
   ],
   "rules": {
-    "prettier/prettier": "error"
+    "prettier/prettier": "error",
+    "@typescript-eslint/indent": ["error", 2, {
+      "SwitchCase": 1,
+      "FunctionDeclaration": {
+        "parameters": "first"
+      },
+      "FunctionExpression": {
+        "parameters": "first"
+      }
+    }]
   },
   "settings": {
     "@typescript-eslint": {
