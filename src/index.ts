@@ -44,6 +44,14 @@ program
     })
   )
 
+type AddOptions = {
+  version?: string
+  rename?: string
+  dev?: boolean
+  extract?: string
+  to?: string
+}
+
 program
   .command('add')
   .description('Add a dependency to the project')
@@ -64,19 +72,12 @@ program
   )
   .action(
     errorBoundary(async (...args: unknown[]) => {
-      const [url, options] = args as [
-        string,
-        {
-          version?: string
-          rename?: string
-          dev?: boolean
-          extract?: string
-          to?: string
-        },
-      ]
+      const [url, options] = args as [string, AddOptions]
+
       const v = options.version || 'latest'
       const name =
         options.rename || url.split('/').pop()?.split('.').shift() || url
+
       console.log(`Adding dependency ${name} from ${url} with version ${v}...`)
 
       const candidate = await klep.createCandidateDependency(url, v, options)

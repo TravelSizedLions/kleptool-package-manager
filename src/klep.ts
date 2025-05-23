@@ -213,22 +213,24 @@ function __getExtractRules(extractString: string): Dependency['extract'] {
     return 'all'
   }
 
-  return extractString.split(',').reduce((extract: Record<string, string>, entry) => {
-    const [from, to] = entry.split(':')
-    if (!from) {
-      throw new KlepError({
-        type: 'parsing',
-        id: 'bad-extract-option',
-        message: 'The provided extract string is not in the correct format',
-        context: {
-          'provided-value': `"${extractString}"`,
-          'expected-format': '"from[:to],from[:to],...from[:to]"',
-        },
-      })
-    }
-    extract[from] = to || from
-    return extract
-  }, {})
+  return extractString
+    .split(',')
+    .reduce((extract: Record<string, string>, entry) => {
+      const [from, to] = entry.split(':')
+      if (!from) {
+        throw new KlepError({
+          type: 'parsing',
+          id: 'bad-extract-option',
+          message: 'The provided extract string is not in the correct format',
+          context: {
+            'provided-value': `"${extractString}"`,
+            'expected-format': '"from[:to],from[:to],...from[:to]"',
+          },
+        })
+      }
+      extract[from] = to || from
+      return extract
+    }, {})
 }
 
 async function __getVersion(url: string, version?: string): Promise<string> {
