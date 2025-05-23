@@ -3,7 +3,7 @@
 import { Command } from 'commander'
 import * as klep from './klep.ts'
 import packageJson from '../package.json' with { type: 'json' }
-import { errorBoundary } from './errors.ts'
+import kerror from './kerror.ts'
 import process from 'node:process'
 const program = new Command()
 
@@ -20,7 +20,7 @@ program
   .command('init')
   .description('Initialize a new project')
   .action(
-    errorBoundary(() => {
+    kerror.boundary(() => {
       console.log('Initializing a new project')
       klep.init()
     })
@@ -30,7 +30,7 @@ program
   .command('install')
   .description('Install dependencies')
   .action(
-    errorBoundary(() => {
+    kerror.boundary(() => {
       console.log('Installing dependencies')
     })
   )
@@ -39,7 +39,7 @@ program
   .command('clean')
   .description('Clean the project')
   .action(
-    errorBoundary(() => {
+    kerror.boundary(() => {
       console.log('Cleaning the project')
     })
   )
@@ -71,7 +71,7 @@ program
     `The folder to extract the dependency to. By default, the dependency is extracted to ${klep.DEFAULT_SUBFOLDER} at the root of the project`
   )
   .action(
-    errorBoundary(async (...args: unknown[]) => {
+    kerror.boundary(async (...args: unknown[]) => {
       const [url, options] = args as [string, AddOptions]
 
       const v = options.version || 'latest'

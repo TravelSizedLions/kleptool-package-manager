@@ -1,6 +1,6 @@
 import git from 'simple-git'
 import semver from 'semver'
-import { KlepError } from './errors.ts'
+import { KlepError } from './kerror.ts'
 import { spawn } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 

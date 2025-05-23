@@ -12,7 +12,7 @@ import {
   getLatestCommit,
   getVersionType,
 } from './git.ts'
-import { KlepError } from './errors.ts'
+import { KlepError } from './kerror.ts'
 
 // Mock data
 const VALID_REMOTE_REPO = 'https://github.com/denoland/deno.git'

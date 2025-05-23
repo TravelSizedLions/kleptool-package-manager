@@ -1,7 +1,7 @@
 import fs, { PathLike } from 'node:fs'
 import json5 from 'json5'
 import * as _ from 'es-toolkit'
-import { KlepError } from './errors.ts'
+import kerror from './kerror.ts'
 import { klepDepsSchema, DepsFile } from './schemas/klep.deps.schema.ts'
 
 import path from 'node:path'
@@ -28,15 +28,13 @@ export type Dependency = BaseDependency & {
   version?: string
 }
 
-export function loadDeps(): DepsFile | undefined {
+export function loadDeps(): DepsFile {
   try {
     const rawDeps = json5.parse(fs.readFileSync('./klep.deps', 'utf8'))
     const result = klepDepsSchema.safeParse(rawDeps)
 
     if (!result.success) {
-      throw new KlepError({
-        type: 'parsing',
-        id: 'invalid-klep-deps-file',
+      throw kerror(kerror.type.Parsing, 'invalid-klep-deps-file', {
         message: 'Invalid klep dependencies file',
         context: {
           error: result.error.message,
@@ -45,30 +43,28 @@ export function loadDeps(): DepsFile | undefined {
       })
     }
 
-    __deps = result.data
+    __deps = result.data as DepsFile
     return __deps
   } catch (e: unknown) {
-    if (e instanceof KlepError) {
+    if (kerror.isKlepError(e)) {
       throw e
-    } else if (e instanceof SyntaxError) {
-      throw new KlepError({
-        type: 'parsing',
-        id: 'invalid-klep-deps-file',
+    }
+
+    if (e instanceof SyntaxError) {
+      throw kerror(kerror.type.Parsing, 'invalid-klep-deps-file', {
         message: 'Error parsing klep dependencies file',
         context: {
           error: e.message,
         },
       })
-    } else {
-      throw new KlepError({
-        type: 'parsing',
-        id: 'unknown-error-loading-deps',
-        message: 'Unknown error loading klep dependencies file',
-        context: {
-          error: e instanceof Error ? e.message : 'Unknown error',
-        },
-      })
     }
+
+    throw kerror(kerror.type.Parsing, 'unknown-error-loading-deps', {
+      message: 'Unknown error loading klep dependencies file',
+      context: {
+        error: e instanceof Error ? e.message : 'Unknown error',
+      },
+    })
   }
 }
 
@@ -199,9 +195,7 @@ function __getExtractRules(extractString: string): Dependency['extract'] {
     .reduce((extract: Record<string, string>, entry) => {
       const [from, to] = entry.split(':')
       if (!from) {
-        throw new KlepError({
-          type: 'parsing',
-          id: 'bad-extract-option',
+        throw kerror(kerror.type.Parsing, 'bad-extract-option', {
           message: 'The provided extract string is not in the correct format',
           context: {
             'provided-value': `"${extractString}"`,
@@ -227,9 +221,7 @@ async function __getVersion(url: string, version?: string): Promise<string> {
     case 'hash':
       return version
     default:
-      throw new KlepError({
-        type: 'parsing',
-        id: 'bad-version-type',
+      throw kerror(kerror.type.Parsing, 'bad-version-type', {
         message: 'The provided version type is not valid',
         context: {
           'provided-value': `"${version}"`,
@@ -252,9 +244,7 @@ export function ensureDependencyFolder(name: string, dep: Dependency) {
 
 export function init() {
   if (fs.existsSync(path.join(process.cwd(), 'klep.deps'))) {
-    throw new KlepError({
-      type: 'parsing',
-      id: 'klep-file-exists',
+    throw kerror(kerror.type.Parsing, 'klep-file-exists', {
       message: 'A klep.deps file already exists in the current directory',
     })
   }
