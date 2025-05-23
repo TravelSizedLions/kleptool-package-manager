@@ -1,7 +1,7 @@
-import { Dependency } from '../schemas/klep.deps.schema.ts'
-import depsfile from '../depsfile.ts'
-import { getVersionType, getLatestCommit } from '../git.ts'
-import kerror from '../kerror.ts'
+import { Dependency } from '../schemas/klep.deps.schema.ts';
+import depsfile from '../depsfile.ts';
+import { getVersionType, getLatestCommit } from '../git.ts';
+import kerror from '../kerror.ts';
 
 async function createCandidateDependency(
   url: string,
@@ -63,4 +63,4 @@ async function __getVersion(url: string, version?: string): Promise<string> {
 
 export default {
   createCandidateDependency,
-}
+};

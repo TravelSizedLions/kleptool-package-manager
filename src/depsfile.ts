@@ -1,16 +1,16 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import kerror from './kerror.ts'
-import json5 from 'json5'
-import { DepsFile, klepDepsSchema, Dependency } from './schemas/klep.deps.schema.ts'
-import process from "node:process";
-import _ from 'es-toolkit'
+import fs from 'node:fs';
+import path from 'node:path';
+import kerror from './kerror.ts';
+import json5 from 'json5';
+import { DepsFile, klepDepsSchema, Dependency } from './schemas/klep.deps.schema.ts';
+import process from 'node:process';
+import _ from 'es-toolkit';
 
 export const DEFAULT = {
   dependencyFolder: '.dependencies',
   dependencies: {},
   devDependencies: {},
-}
+};
 
 let __deps: DepsFile = DEFAULT;
 
@@ -109,7 +109,6 @@ function exists(name: string, dep: Dependency): boolean {
   return true;
 }
 
-
 function __dependencyNameExists(deps: Record<string, Dependency>, name: string): boolean {
   return Object.keys(deps).some((listedName) => listedName === name);
 }
@@ -137,8 +136,6 @@ function __findMatchingRule(deps: Record<string, Dependency>, dep: Dependency): 
   });
 }
 
-
-
 function initialize() {
   if (fs.existsSync(path.join(process.cwd(), 'klep.deps'))) {
     throw kerror(kerror.type.Parsing, 'klep-file-exists', {
@@ -149,7 +146,6 @@ function initialize() {
   fs.writeFileSync(path.join(process.cwd(), 'klep.deps'), json5.stringify(DEFAULT, null, 2));
 }
 
-
 const depsfile = {
   initialize,
   load,
@@ -157,20 +153,18 @@ const depsfile = {
   exists,
   save,
   defaults: DEFAULT,
-}
+};
 
 Object.defineProperty(depsfile, 'dependencies', {
-  get: () => __deps.dependencies
+  get: () => __deps.dependencies,
 });
 
 Object.defineProperty(depsfile, 'devDependencies', {
-  get: () => __deps.devDependencies
+  get: () => __deps.devDependencies,
 });
 
 Object.defineProperty(depsfile, 'dependencyFolder', {
-  get: () => __deps.dependencyFolder
+  get: () => __deps.dependencyFolder,
 });
-
-
 
 export default depsfile;

@@ -1,7 +1,7 @@
-import depsfile from './depsfile.ts'
-import keepfile from './keepfile.ts'
-import resolver from './dependency-resolution/resolver.ts'
-import { Dependency } from './schemas/klep.deps.schema.ts'
+import depsfile from './depsfile.ts';
+import keepfile from './keepfile.ts';
+import resolver from './dependency-resolution/resolver.ts';
+import { Dependency } from './schemas/klep.deps.schema.ts';
 
 export function loadDeps() {
   return depsfile.load();
@@ -28,6 +28,6 @@ export function ensureDependencyFolder(name: string, dep: Dependency) {
 }
 
 export function init() {
-  depsfile.initialize()
-  keepfile.initialize()
+  depsfile.initialize();
+  keepfile.initialize();
 }

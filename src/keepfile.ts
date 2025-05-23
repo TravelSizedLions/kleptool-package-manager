@@ -1,14 +1,14 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import kerror from './kerror.ts'
-import json5 from 'json5'
-import process from "node:process";
-import depsfile from './depsfile.ts'
-import { Dependency } from './schemas/klep.deps.schema.ts'
+import fs from 'node:fs';
+import path from 'node:path';
+import kerror from './kerror.ts';
+import json5 from 'json5';
+import process from 'node:process';
+import depsfile from './depsfile.ts';
+import { Dependency } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema, type DependencyGraph } from './schemas/klep.keep.schema.ts';
-import _ from 'es-toolkit'
+import _ from 'es-toolkit';
 
-const DEFAULT: DependencyGraph = []
+const DEFAULT: DependencyGraph = [];
 
 let __keep: DependencyGraph = DEFAULT;
 
@@ -83,4 +83,4 @@ export default {
   ensureDependencyFolder,
   clone,
   defaults: DEFAULT,
-}
+};
