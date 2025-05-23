@@ -56,6 +56,28 @@ function isKlepError(error: unknown): error is KlepError {
   return error instanceof KlepError;
 }
 
+/**
+ * boundary is a function that wraps a function and catches any errors.
+ * Useful for wrapping functions that may throw errors deep into the call stack.
+ * Any error caught will be printed and the process will exit. KlepErrors will be specially formatted.
+ *
+ * @param fn - The function to wrap.
+ * @returns A function that wraps the input function and catches any errors. May be an async function.
+ *
+ * @example
+ *
+ * ```ts
+ * import kerror from './kerror.ts';
+ *
+ * const fn = kerror.boundary(async () => {
+ *   throw kerror(kerror.Type.Parsing, '123', { message: 'Parsing error' });
+ * });
+ *
+ * fn();
+ *
+ * console.log('makes it here safely');
+ * ```
+ */
 function boundary(fn: (...args: unknown[]) => Promise<void> | void) {
   return async (...args: unknown[]) => {
     try {
