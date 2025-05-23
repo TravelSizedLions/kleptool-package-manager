@@ -2,6 +2,7 @@ import { Command } from "commander";
 import * as klep from "./klep.ts";
 import packageJson from "../package.json" with { type: "json" };
 import { errorBoundary } from "./errors.ts";
+import process from "node:process";
 const program = new Command();
 
 const description = `I can't believe people aren't using language-agnostic dependency management.

@@ -1,4 +1,5 @@
 
+import process from "node:process";
 type KlepErrorOptions = {
   type: KlepErrorType
   id: string

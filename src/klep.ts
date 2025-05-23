@@ -7,6 +7,7 @@ import { klepDepsSchema } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema } from './schemas/klep.keep.schema.ts';
 import path from 'node:path';
 import { getVersionType, getLatestCommit } from './git.ts';
+import process from "node:process";
 
 export const DEFAULT_SUBFOLDER = '.dependencies';
 
@@ -106,6 +107,15 @@ export function addDependency(name: string, dep: Dependency, dev: boolean = fals
   }
 
   const depslist = dev ? __deps.devDependencies : __deps.dependencies;
+
+  if ((dep.folder && __deps.dependencyFolder === dep.folder) || 
+      (!__deps.dependencyFolder && dep.folder === DEFAULT_SUBFOLDER)) {
+    delete dep.folder
+  }
+
+  if (dep.extract === 'all') {
+    delete dep.extract
+  }
 
   depslist![name] = dep;
 }
