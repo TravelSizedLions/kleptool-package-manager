@@ -232,7 +232,7 @@ function __getExtractRules(extractString: string): Dependency['extract'] {
 }
 
 async function __getVersion(url: string, version?: string): Promise<string> {
-  if (!version) {
+  if (!version || version === 'latest') {
     return await getLatestCommit(url)
   }
 

@@ -100,17 +100,19 @@ export async function getLatestCommit(url: string) {
   if (repo.isLocal) {
     const repo = await git(url)
     const commits = await repo.log()
-    if (commits.all.length === 0) {
+
+    try {
+      return commits.latest.hash
+    } catch {
       throw new KlepError({
         type: 'git',
         id: 'empty-local-repository',
         message: 'Repository appears to be empty',
       })
     }
-
-    return commits[0].hash
   }
 
+  // Handle remote repositories more carefully
   const output = await __git(['ls-remote', url])
   if (!output) {
     throw new KlepError({
@@ -238,36 +240,18 @@ function __removeVersionConstraint(version: string): string {
   return version
 }
 
-/**
- * Normalizes a version string to remove any version constraints and leading 'v'
- * @param version - The version string to normalize
- * @returns The normalized version string
- */
-function __normalizeVersion(version: string): string {
-  const noConstraint = __removeVersionConstraint(version)
-  if (!semver.valid(noConstraint)) {
-    return version
-  }
-
-  if (noConstraint.startsWith('v')) {
-    return noConstraint.slice(1)
-  }
-
-  return noConstraint
-}
-
 function semanticVersionIsAvailable(
   stat: RepositoryStat,
   _url: string,
   version: string
 ): boolean {
-  const normalized = __normalizeVersion(version)
+  const normalized = semver.coerce(version)
   if (!semver.valid(normalized) && !semver.valid(version)) {
     return false
   }
 
   return stat.tags.some((tag) => {
-    const normalizedTag = __normalizeVersion(tag)
+    const normalizedTag = semver.coerce(tag)
     return normalizedTag === normalized || normalizedTag === version
   })
 }
@@ -280,6 +264,10 @@ export async function getVersionType(
   url: string,
   version: string
 ): Promise<VersionType> {
+  if (version === 'latest') {
+    return 'hash'
+  }
+
   const repo = await repositoryStat(url)
   if (!repo) {
     throw new KlepError({ type: 'argument', id: 'invalid-repository' })
