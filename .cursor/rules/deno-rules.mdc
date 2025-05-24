@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-Whenever making changes to the project configuration, please don't add a deno.json or import map to this repository. I'd rather configs be made through the package.json, eslintrc, and tsconfig.
