@@ -28,5 +28,6 @@ function toSAT(graph: DependencyGraph) {
 }
 
 export default {
+  create,
   clone,
 };

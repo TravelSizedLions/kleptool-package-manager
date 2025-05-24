@@ -57,29 +57,30 @@ export function isRepository(url: string) {
   return isRemoteRepository(url) || isLocalRepository(url);
 }
 
-export async function repositoryStat(url: string): Promise<RepositoryStat | undefined> {
+export async function repositoryStat(url: string): Promise<RepositoryStat> {
   const [isLocal, isRemote] = await Promise.all([isLocalRepository(url), isRemoteRepository(url)]);
-  if (isLocal || isRemote) {
-    return {
-      isLocal,
-      isRemote,
-      tags: isLocal ? (await git(url).tags()).all : await __getRemoteTags(url),
-      branches: isLocal ? (await git(url).branch()).all : await __getRemoteBranches(url),
-    };
-  }
 
-  throw kerror(kerror.type.Argument, 'bad-git-repository', {
-    message: 'The provided argument is not a valid git repository',
-    context: {
-      'provided value': `"${url}"`,
-      'example values': [
-        'https://github.com/username/repository.git',
-        'git@github.com:username/repository.git',
-        '../path/to/local/repo',
-        '/home/user/path/to/local/repo',
-      ],
-    },
-  });
+  if (!(isLocal || isRemote)) {
+    throw kerror(kerror.type.Argument, 'bad-git-repository', {
+      message: 'The provided argument is not a valid git repository',
+      context: {
+        'provided value': `"${url}"`,
+        'example values': [
+          'https://github.com/username/repository.git',
+          'git@github.com:username/repository.git',
+          '../path/to/local/repo',
+          '/home/user/path/to/local/repo',
+        ],
+      },
+    });
+  } 
+
+  return {
+    isLocal,
+    isRemote,
+    tags: isLocal ? (await git(url).tags()).all : await __getRemoteTags(url),
+    branches: isLocal ? (await git(url).branch()).all : await __getRemoteBranches(url),
+  };
 }
 
 export async function getLatestCommit(url: string) {
@@ -266,4 +267,12 @@ export async function getVersionType(url: string, version: string): Promise<Vers
       'available branches': repo.branches,
     },
   });
+}
+
+export default {
+  isRemoteRepository,
+  isLocalRepository,
+  repositoryStat,
+  getLatestCommit,
+  getVersionType,
 }

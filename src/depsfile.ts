@@ -5,14 +5,10 @@ import json5 from 'json5';
 import { DepsFile, klepDepsSchema, Dependency } from './schemas/klep.deps.schema.ts';
 import process from 'node:process';
 import _ from 'es-toolkit';
+import _defaults from './defaults.ts';
 
-export const DEFAULT = {
-  dependencyFolder: '.dependencies',
-  dependencies: {},
-  devDependencies: {},
-};
-
-let __deps: DepsFile = DEFAULT;
+const defaults: DepsFile = _defaults.depsfile.entry;
+let __deps: DepsFile = defaults;
 
 export function load(): DepsFile {
   try {
@@ -69,7 +65,7 @@ export function addDependency(name: string, dep: Dependency, dev: boolean = fals
 
   if (
     (dep.folder && __deps.dependencyFolder === dep.folder) ||
-    (!__deps.dependencyFolder && dep.folder === DEFAULT.dependencyFolder)
+    (!__deps.dependencyFolder && dep.folder === defaults.dependencyFolder)
   ) {
     delete dep.folder;
   }
@@ -143,7 +139,7 @@ function initialize() {
     });
   }
 
-  fs.writeFileSync(path.join(process.cwd(), 'klep.deps'), json5.stringify(DEFAULT, null, 2));
+  fs.writeFileSync(path.join(process.cwd(), 'klep.deps'), json5.stringify(defaults, null, 2));
 }
 
 const depsfile = {
@@ -152,7 +148,7 @@ const depsfile = {
   addDependency,
   exists,
   save,
-  defaults: DEFAULT,
+  defaults
 };
 
 Object.defineProperty(depsfile, 'dependencies', {

@@ -7,8 +7,9 @@ import depsfile from './depsfile.ts';
 import { Dependency } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema, type DependencyGraph } from './schemas/klep.keep.schema.ts';
 import _ from 'es-toolkit';
+import _defaults from './defaults.ts';
 
-const DEFAULT: DependencyGraph = [];
+const defaults: DependencyGraph = _defaults.keepfile;
 
 let __keep: DependencyGraph | undefined = undefined;
 
@@ -19,8 +20,8 @@ function initialize() {
     });
   }
 
-  fs.writeFileSync(path.join(process.cwd(), 'klep.keep'), json5.stringify(DEFAULT, null, 2));
-  return DEFAULT;
+  fs.writeFileSync(path.join(process.cwd(), 'klep.keep'), json5.stringify(defaults, null, 2));
+  return defaults;
 }
 
 function ensureDependencyFolder(name: string, dep: Dependency) {
@@ -93,5 +94,5 @@ export default {
   reload,
   ensureDependencyFolder,
   clone,
-  defaults: DEFAULT,
+  defaults,
 };
