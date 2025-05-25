@@ -148,7 +148,7 @@ const depsfile = {
   addDependency,
   exists,
   save,
-  defaults
+  defaults,
 };
 
 Object.defineProperty(depsfile, 'dependencies', {

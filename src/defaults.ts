@@ -1,7 +1,7 @@
-import path from 'node:path'
-import os from 'node:os'
+import path from 'node:path';
+import os from 'node:os';
 
-const home = os.homedir()
+const home = os.homedir();
 
 export default {
   cache: {
@@ -16,5 +16,5 @@ export default {
       devDependencies: {},
     },
   },
-  keepfile: []
-}
+  keepfile: [],
+};

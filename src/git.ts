@@ -73,7 +73,7 @@ export async function repositoryStat(url: string): Promise<RepositoryStat> {
         ],
       },
     });
-  } 
+  }
 
   return {
     isLocal,
@@ -275,4 +275,4 @@ export default {
   repositoryStat,
   getLatestCommit,
   getVersionType,
-}
+};
