@@ -3,6 +3,7 @@
 What a banger of a title, am I right? 🤜💥🤛
 
 ## Abstract
+
 In this document, we'll explore the theoretical and technical challenges of implementing a language and versioning agnostic recursive dependency resolver using a novel formulation of the A* optimization algorithm. This formulation of A* will leverage Stochastic Gradient Descent to weight the linear combination of its neighbor-distance and heuristic-distance aspects to learn an efficient cost function for traversing a configuration space of candidate dependency graphs. We will also explore how this SGD cost function could be implemented to fine-tune itself to individual user and project needs and patterns.
 
 First, we'll explore a rigorous application of the theories involved in this design, followed by a discussion of their synergies. Then, we'll then go on to discuss practical requirements for such a tool, including:
@@ -15,37 +16,62 @@ First, we'll explore a rigorous application of the theories involved in this des
 - Recovering from expired or missing cached dependencies
 - Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A*-SMT resolver
 
-Then, we'll consider how these aspects affect the formulation and initialization of the A*I-SMT distance and heuristic functions.
-
-### In God's own English
-
-I'm building a package manager that straps a smallish neural network to a well-known path-searching algorithm to figure out which versions of dependencies to install when the target versions are such comforting values as `v0.0.1-alpha`, `>=sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, and my personal favorite, `latest`.
-
-If that sounds absurd, don't worry—it absolutely is—and I'll explain why it's sorely needed, and actually a pretty well-reasoned approach despite it incidentally being made up of exclusively tech buzz-words.
+Then, we'll consider how these aspects affect the formulation and initialization of the Neural A*-SMT distance and heuristic functions.
 
 ### Motivation
 
-If you're writing a python tool, a web application, a .NET app, or something an unironic PHP-enjoyer would want to write in PHP, you've already got a package ecosystem for that. Why would you ever use or need a package management system that explicitly isn't tailored to your language of choice?
+If you're writing
+
+- A python tool
+- A web or mobile application
+- A .NET or Rust application
+- Or something an unironic PHP-enjoyer would want to write in PHP
+
+You've already got a package ecosystem for that. Why would you ever use or need a package management system that isn't tailored to your language of choice?
 
 Well…what if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
 
-What if your dependencies are build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment?
+An experienced Java developer might retort, mentioning that language agnostic dependency management tools like Gradle and Maven make it possible to manage dependencies and run scripts for language contexts other than the Java landscape they were born in.
 
-If that's you, then you're probably a hobby developer like me.
+Well, what if your dependencies are build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment? 
+What if the target versions you have to work with are such comforting values as `v0.0.1-alpha`, `>= sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, or my personal favorite, `latest`.
 
-I know this pain from wanting to develop games. Most game engines come with either limited (and proprietary) dependency management or basically none at all. If they do have a way to get and install dependencies, it's not recursive, and they're locked behind the paywall of an asset store. Hell, the situation is so glaringly bad that Godot's otherwise-brilliant GDScript and free asset store refuses to implement namespaces and so every named class in your project, addon or not, is *global.* 
 
-Because most games are developed by one or two pasty 20-somethings with crappy laptops, a basement, and a dream, a lot of the most useful dependencies end up coming from abandoned or barely maintained projects that don't follow any real standard, let alone have official releases.
+If you've run into this, then you've probably done hobby development at some point in your life.
 
-I think that in reality, these things are more of a symptom for the real problem: the *.wheel keeps getting re-invented for specific languages, when the basic approach is almost always the same for every major package manager: build a public repository for packages, enforce versioning, enforce directory structures, enforce tooling, resolve dependencies with SAT, .lock things in place, and let people run scripts.
+You use languages and tools with small, scrappy, dedicated communities that don't have the time or the energy to build CI-CD for their projects, and certainly don't have the capacity to write their own packaging toolset.
 
-But despite that, no-one's sought to actually, *fully* solve the general case, i.e., for all project structures, versioning schemes, and languages. Game dev isn't alone in this. Any hobby project not tied to a handful of big languages is going to be lacking in the kind of tooling to build a robust, shareable, and replicatable solution. The end result is that niche hobby-devs can't cross-pollinate their open source tools and packages with their communities as effectively, and struggle to get team mates for their projects on-boarded. Worst of all, young developers eager to experience what it's like to code learn crappy development habits from the communities they engage with.
+Personally, I know this pain from wanting to develop games. Most game engines come with either limited (and proprietary) dependency management or basically none at all. 
 
-We've got some of the most brilliant developers in the world alive today and some of the most sophisticated algorithms to help us solve this problem for everyone. Why hasn't a general-purpose package manager broken through into the mainstream?
+If they do have a way to get and install dependencies:
+- It's not recursive, so it has no concept of transitive dependencies
+- Or if it is, it doesn't handle resolving version constraints on those transitive dependencies
+- Or if they do, the packages that support these things are locked behind the paywall of a proprietary asset store
 
-Well…I don't know. As far as my planning and efforts have gone so far, there's literally no reason why something like that can't exist at this point. I mean, for crying out loud guys, someone got [Doom to run on the typescript transpiler.](https://www.youtube.com/watch?v=0mCsluv5FXA&t=7s) I think we can figure out general-purpose package management.
+Yet many of these environments have a desparate need for solid dependency resolution. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also has no concept of dependency resolution, so mid-sized projects have one of four options:
+- Manage every dependency and namespace collision themselves
+- Use a tool like Gradle or Maven, which has no official Godot support
+- Eschew dependencies entirely and implement everything their project needs from scratch
+- Or switch to a language binding like C# or Rust with better tooling.
 
-So let's do it.
+In addition to this, most small-scale projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development contex can't rely on anything most package managers take for granted.
+
+We in the development community have a core problem: the *.wheel keeps getting re-invented for specific languages, when the basic approach is almost always the same for every major package manager: 
+- build a public source for packages to be published
+- enforce versioning on those publishes
+- enforce directory structures
+- enforce tooling
+- resolve dependencies with SAT solvers
+- *.lock resolved versions in place.
+
+Despite the approach always being the same, no-one's sought to actually, *fully* solve the general case problem of dependency management, i.e., for all project structures, sources, versioning schemes, and languages. And as much as the core motivation for this effort started with helping the hobby developer, small-scale projects aren't the only context in which this is an issue. Even larger organizations using standardized tools will sink significant portions of their budget re-inventing and maintaining tooling built on top of other-wise standard core infrastructure to meet their individual needs, and this includes for package management and publishing. Entire businesses have been built up around the need organizations have to privately store publish artifacts for internal use. However, if organizations are given a tool that allows them to use their own remote git repositories as sources for published dependencies, then paying for external package hosting services such as artifactory or GitHub Packages becomes unecessary. We don't need artifact stores when remote repositories already exist.
+
+Both the industry and the individual stand to benefit from a general purpose solution to package management and dependency resolution, one that can handle a complex or non-ideal development environment. The benefits that would come from a language and versioning agnostic dependency resolver are numerous:
+- No more need for dedicated package stores
+- No need to re-learn CLIs and tooling when hopping from language to language or project to project
+- Support for semantic version tags when they exist, and other schemes when they don't.
+- Greater precision in resolving exactly which version of which dependencies are needed for each project, down to individual commits if necessary.
+- The capacity to work with and standardize non-standard project layouts in your dependencies
 
 ## The A* Algorithm
 
@@ -77,8 +103,8 @@ The A* algorithm finds the optimal path between two nodes in a graph by maintain
         - Reconstruct path from $n_{end}$ to $n_{start}$ using linkbacks
         - Return this path
       - Otherwise:
-        - If $\exists n \in Q_{open}: score(n) < score(s), n \ne s$, skip
-        - If $\exists n \in Q_{closed}: score(n) < score(s), n \ne s$, skip
+        - If $\exists n \in Q_{open}: score(n) \le score(s), n \ne s$, skip
+        - If $\exists n \in Q_{closed}: score(n) \le score(s), n \ne s$, skip
         - Otherwise:
           - Add $s$ to $Q_{open}$
           - Link $s$ back to $q$
@@ -206,37 +232,103 @@ Our goal is to define a vector space $K$ to adequately represent the space of po
 
 A single dimension $K_i$ in the space of possibilities (where $K_i$ is the $i^{th}$ dimension in $K$ ) is the finite, time-ordered set of commit hashes of a single git repository. Incrementing and decrementing from hash to hash within a repository, we see changes in the repository contents and therfore in its dependency requirements. This yields the following properties for each enumeration $j$ within the dimension:
 
-- The dimension-wise unique hash $h_j$
-- The ordinal set $d_j$ of dependencies on other dimensions 
-- The co-ordinal set of constraints $c_j$ on $d_j$ that are the acceptable hash values of each dependency
+- The hash $h_{i_j}$, which is unique within the repository's dimension
+- The ordinal set $d_{i_j}$ of dependencies on other dimensions, which are edges to other dimensions in space
+- The co-ordinal set of constraints $c_{i_j}$ on $d_{i_j}$ that are the acceptable hash values of each dependency
 
 So the range of each dimension $K_i$ describes the following about a particular repository:
 
-- A set of possible dependencies $D_i= \bigcup\limits_{j=1}^{m} d_j$
-- A a set of possible constraints on those dependencies $C_i = \bigcup\limits_{j=1}^{m}c_j$
-- A set of hashes $H_i=\bigcup\limits_{j=1}^{m}h_j$
-- A function $\delta_i(K_i, j) \rarr (h_j, d_j, c_j)$ mapping $h_j$ to its tuple of related ordinal sets $d_j$ and $c_j$
+- A set of possible dependencies $D_i= \bigcup_{j=1}^{m} d_{i_j}$
+- A a set of possible constraints on those dependencies $C_i = \bigcup_{j=1}^{m}c_{i_j}$
+- A set of hashes $H_i=\bigcup_{j=1}^{m}h_{i_j}$
+- A function $\delta_i(j) \rarr (h_{i_j}, d_{i_j}, c_{i_j})$ mapping $h_{i_j}$ to its tuple of related ordinal sets $d_{i_j}$ and $c_{i_j}$
+  - For example: $\delta_i(5)$ returns the hash, dependencies, and constraints for the 5th commit in repo $i$
 
 
-In a localized range of hash values within a dimension, the number of dependencies and constraints for one hash is not strictly required to be close in number to its neighboring hashes. One hash may add 0 dependencies, 1, or 20, or remove all dependencies--along with anything in-between. However, there's an *a priori* expectation that the number of dependencies in a repository will trend upwards over time. Therefore, "higher" or rather *later* hashes in the dimension will also have more constraints than earlier values.
+In a localized range of hash values within a dimension, the number of dependencies and constraints for one hash is not strictly required to be close in number to its neighboring hashes. One hash may add 0 dependencies, 1, or 20, or remove all dependencies--along with anything in-between. However, there's an *a priori* expectation that the number of dependencies in a repository will trend upwards over time (though this is not guaranteed). Therefore, "higher" or rather *later* hashes in the dimension will also have more constraints than earlier values.
 
-Since the number of repositories in $K$ is effectively infinite, the number of valid commit hashes in each repository is not the same, and the number of dependencies and constraints for each commit in each repository is non-deterministic within local ranges of each repository's corresponding dimension, the vector space of possible configurations for a dependency graph is the following unbounded, non-uniform, non-convex topology:
+Since:
+ - The number of repositories in $K$ is effectively infinite
+ - The number of valid commit hashes in each repository is not the same
+ - The number of dependencies and constraints for each commit in each repository is non-deterministic within local ranges of each repository's corresponding dimension
+
+ Then the vector space of possible configurations for a dependency graph is the following unbounded, non-uniform, non-convex topology:
 
 $$
-K = \bigcup\limits_{i=1}^{\infty} 
-\left\{
-  \bigcup\limits_{j=1}^{\lvert\lvert K_i \rvert\rvert}h_j, 
-  \bigcup\limits_{j=1}^{\lvert\lvert K_i \rvert\rvert}d_j, 
-  \bigcup\limits_{j=1}^{\lvert\lvert K_i \rvert\rvert}c_j
-\right\}
+K = \bigcup\limits_{i=1}^{\infty}\left\{\bigoplus\limits_{j=1}^{\lvert\lvert K_i \rvert \rvert} (h_j, d_j, c_j)\right\}
 $$
 
-Or in simpler terms, $K = \{\{D_1, C_1, H_1\}, \{D_2, C_2, H_2\}, \dots \}$ *ad infinitum*.
+Or:
 
-### A Point in the Space
+$$
+K = \{
+  [
+    (h_{i_j}, d_{i_j}, c_{i_j}) 
+    \vert 
+    j=1\dots \lvert\lvert K_i \rvert\rvert
+  ]
+  \vert
+  i=1 \dots\lvert\lvert K \rvert\rvert
+\}
+$$
 
-In our configuration space $K$, a single point (or node) in the space represents one possible dependency graph, where for each dimension in $K$, there is an assignment $\Theta(K_i)$ of a particular hash in each dimension.
+In other words, the configuration space is the set of all possible combinations of commit hashes (and their associated dependencies and constraints) across all repositories.
 
+## Limiting K-Space
+<p>
+In practice, not all repositories that exist are needed as dependencies for every project (though seeing such a project would be entertaining)<sup>[citation needed]</sup>
+
+This means that to resolve the dependencies for any given repository, we only care about a specific subspace of $K$—namely, the part that includes just the dependencies (and their dependencies, and so on) that are actually relevant to our project. In other words, we want to "zoom in" on the part of $K$ that matters for $K_i$ and ignore the rest of the infinite space of possibilities.
+
+Let's formalize this:
+
+- As mentioned above, for each $K_i$, we have
+  - $H_i$ the set of all values $h_{i_j}$ in $K_i$
+  - $D_i$, the set of all dimensions reachable from $K_i$ through all dependency sets $d_{i_j}$ in $K_i$. This is also known as the dependency closure of $K_i$
+  - $C_i$, the set of all sets of constraints on $D_i$
+
+- For each $K_d \in D_i$, let $H_d'$ be the set of hashes in $K_d$ that are possible given the constraints induced by traversing from $K_i$.
+  - ***Note:*** 
+    - $H_d'$ is the set of hashes in $K_d$ allowed by the currently active constraints in this resolution, where those constraints are imposed by the dependency graph rooted at $K_i$.
+    - $C_i$ is the set of all possible sets of constraints that $K_i$ could ever impose on its dependencies (other dimensions of $K$), across all its hashes. 
+    - In other words, $C_i$ describes the universe of possible requirements $K_i$ might have for its dependencies, while $H_d'$ is the set of versions of $K_d$ that actually satisfy the constraints currently in play for a given commit hash $h_{i_j} \in K_i$.
+
+
+Then the subspace of $K$ constrained for a given $K_i$ is:
+
+$$
+K_{lim}(i) = \prod_{K_d \in S_i} H_d'
+$$
+
+Or, more explicitly:
+
+$$
+K_{lim}(i) = \left\{ (h_d)_{K_d \in D_i} \;\middle|\; h_d \in H_d',\ \forall K_d \in D_i \right\}
+$$
+
+
+#### Example
+Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $S_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_{lim}(i)$ is all possible assignments of hashes to these four repos, subject to the constraints that come from their dependency relationships.
+</p>
+
+
+
+## The Graph Representation of $K_{lim}$
+
+In our configuration space $K$, a single point in the space represents one possible dependency graph, represented by a set $K_\Theta$ of single hash values from each dimension in $K$
+
+
+### The Relation Between Dependencies, Constrains, and Dimensions
+
+As mentioned [above](#dimensions-in-the-space), each point $h_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: The set of needed dependencies $d_{i_j}$ and version constraints on those dependencies $c_{i_j}$.
+
+A value in the dependency set represents an edge pointing from the dimension $K_i$ to another dimension $K_d \in K: K_i \ne K_d$
+
+The constraints set $c_{i_j}$ for $h_{i_j}$ represents the set of hashes $h_{d_j} \in K_d$ which are considered values in $K_d$ that the value $h_{i_j}$ must co-exist with. The remaining values $\lnot c_{i_j}$ are the values in $K_d$ which **must not** co-exist with $h_{i_j}$.
+
+This brings up a natural observation when thinking in practical terms: Even though the space $K$ is infinite in its dimensions, For an actual software project, only a finite number of dependencies will actually be specified.
+
+In formal terms, if a point $K_\Theta$ defines a value for all dimensions, a value of $K_\Theta$ in which all constraints are satisfied for the root dependencies of the project in question may have any value 
 
 ### Successors
 
