@@ -297,56 +297,58 @@ Let's formalize this:
 Then the subspace of $K$ constrained for a given $K_i$ is:
 
 $$
-K_{lim}(i) = \prod_{K_d \in S_i} H_d'
+K_i' = \prod_{K_d \in C_i} H_d'
 $$
 
-Or, more explicitly:
-
-$$
-K_{lim}(i) = \left\{ (h_d)_{K_d \in D_i} \;\middle|\; h_d \in H_d',\ \forall K_d \in D_i \right\}
-$$
+Or, more explicitly as $K_i' = \left\{ (h_d)_{K_d \in D_i} \;\middle|\; h_d \in H_d',\ \forall K_d \in D_i \right\}$
 
 
 #### Example
-Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $S_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_{lim}(i)$ is all possible assignments of hashes to these four repos, subject to the constraints that come from their dependency relationships.
+Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $D_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_i'$ is all possible assignments of hashes to these four repos, subject to the constraints that come from their dependency relationships.
 </p>
 
 
 
-## The Graph Representation of $K_{lim}$
+## The Graph Representation of $K_i'$
 
-In our configuration space $K$, a single point in the space represents one possible dependency graph, represented by a set $K_\Theta$ of single hash values from each dimension in $K$
+In our limited configuration space $K_i'$, a single point in the space represents one possible dependency graph, represented by a set $k \in K_i'$
 
 
-### The Relation Between Dependencies, Constrains, and Dimensions
+As mentioned [above](#dimensions-in-the-space), each point $h_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: the set of needed dependencies $d_{i_j}$ and the set of version constraints on those dependencies $c_{i_j}$.
 
-As mentioned [above](#dimensions-in-the-space), each point $h_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: The set of needed dependencies $d_{i_j}$ and version constraints on those dependencies $c_{i_j}$.
+A value in the dependency set $d_{i_j}$ represents a connection from the dimension $K_i$ to another dimension $K_d \in D_i$ with $K_i \ne K_d$.
 
-A value in the dependency set represents an edge pointing from the dimension $K_i$ to another dimension $K_d \in K: K_i \ne K_d$
+The constraint set $c_{i_j}$ for $h_{i_j}$ specifies the set of allowed hashes $h_{d_j} \in H_d'$ in $K_d$ that $h_{i_j}$ can coexist with. The complement, $\lnot c_{i_j}$, is the set of hashes in $K_d$ that are incompatible with $h_{i_j}$.
 
-The constraints set $c_{i_j}$ for $h_{i_j}$ represents the set of hashes $h_{d_j} \in K_d$ which are considered values in $K_d$ that the value $h_{i_j}$ must co-exist with. The remaining values $\lnot c_{i_j}$ are the values in $K_d$ which **must not** co-exist with $h_{i_j}$.
+In practical terms, even though the full configuration space $K$ is infinite in its dimensions, any actual software project will only specify a finite set of dependencies, corresponding to a finite index set $D_i$.
 
-This brings up a natural observation when thinking in practical terms: Even though the space $K$ is infinite in its dimensions, For an actual software project, only a finite number of dependencies will actually be specified.
+Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in H_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a possible dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$, though not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by values in $\mathbf{k}$ for other values in $\mathbf{k}$. 
 
-In formal terms, if a point $K_\Theta$ defines a value for all dimensions, a value of $K_\Theta$ in which all constraints are satisfied for the root dependencies of the project in question may have any value 
 
-### Successors
 
-A successor node is discovered by:
-1. Changing a version assignment within the range of versions within the dependency's constraints
-2. The addition of net-new dependencies on the current node.
-3. The addition or removal of new constraints
+To reach the final set of valid dependency graphs, values for each dimension in $\mathbf{k}$ must satisfy the constraints posed by each other dimension.
 
-The distance between nodes considers:
-- Version change distance
-- Time to fetch new dependencies
-- Risk of breaking changes
-- Historical success rate
+$$
+\mathcal{V_i} = \{ \mathbf{k} \in K_i' \mid \mathbf{k} \text{ satisfies all constraints applied by values in } \mathbf{k} \}
+$$
+
+### Edges
+
+If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have one repository checked out to the commit prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
+
+### Distance
+
+The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. A hypothetical distance function for $K_i'$ should weigh at least the following considerations:
+
+- The magnitude of the changes made by the contents of repository $K_i$ 
+- The number of dependencies added or removed by the neighbor
+- Whether or not the nieghboring node introduces breaking changes
 
 Formally, for nodes $n_1$ and $n_2$:
 $$
 cost(n_1, n_2) = w_1 \cdot \Delta V + w_2 \cdot \Delta D + w_3 \cdot \Delta R + w_4 \cdot risk(n_2)
 $$
+
 
 #### The Risk Function
 Risk is a quantification of the likelihood that traversing to the given successor graph would create problems with imports and pathing for the dependencies. This includes factors like:
