@@ -375,47 +375,51 @@ $$
 
 Gradient 
 
-## Addressing Common Concerns and Counter-Arguments
-
-While the motivation for this tool is strong, it's worth addressing some of the most common concerns and counter-arguments that may arise when considering a general-purpose, git-based approach to dependency management and artifact distribution:
-
-### Security and Compliance
-
-Artifact stores like Artifactory and GitHub Packages aren't just about storage—they provide access control, audit logs, vulnerability scanning, and compliance features that are critical for many organizations. While git repositories can be secured and access-controlled, organizations with strict requirements may need to layer additional tooling or integrate with existing security workflows. Future iterations of this tool could provide hooks or integrations for popular security scanners and audit systems.
+## Common Questions and Concerns
 
 ### Operational Complexity
 
-Using git repositories as artifact sources can introduce new operational challenges, such as handling large binaries, managing repository sprawl, or dealing with non-source assets. While git is excellent for source code, it's not always ideal for large or frequently changing binary artifacts. For these cases, hybrid approaches—using git for source dependencies and a minimal artifact store for large binaries—may be the most pragmatic solution.
+Klep as a tool was designed with the both the little-guy and the professional team in mind.
 
-However, Git offers a solution for this out of the box: Git LFS or Large File Storage, which addresses the issue of storing artifacts fully.
+For small to mid-sized projects, Klep recommends publishing builds and artifacts as commits to dedicated git repositories separate from the source code of the project ([see why](#TODO))
 
-### Not All Workflows Use Git
+For teams wishing to adopt Klep who already have a number of existing repositories, we've got you covered. Klep is designed to translate and interpret package manifests from pre-existing tools like yarn, npm, pip, and cargo. This means that for many teams, you can start managing new repositories using klep and retain interoperability with existing repositories with no additional effort. See our [table of supported manifest files]() to see if klep's a good fit.
 
-While git is the de facto standard for many projects, some organizations use other version control systems (e.g., Mercurial, Perforce). The current approach assumes git, but the underlying principles could be extended to support other systems in the future.
+### Security and Compliance
+
+For larger companies, artifact stores like Artifactory and GitHub Packages aren't just about storage—they provide access control, audit logs, vulnerability scanning, and compliance features that are critical for many organizations. While Klep recommends publishing artifacts and builds in a separate, sister git remote repository for smaller projects, organizations with strict requirements may still wish to use dedicated artifact storage services. 
+
+As it stands, any system designed to scan source repositories for vulnerabilities such as Snyk and Semgrep are compatible with Klep projects out of the box. And of course, Klep itself isn't designed to replace CDNs or artifact stores. On the contrary, its goal is to work seemlessly with whatever package sources it may need to in order to give developers a unified package management experience across their areas of ownership.
+
+
 
 ### "X or Y Tool Already Lets you install packages from git!"
 
-Within their ecosystem? Sure. But cross-ecosystem?
+Within their ecosystem, sure. But cross-ecosystem?
 
-Tools like cargo can indeed resolve dependencies sourced from public or private repositories outside of the dedicated [crates.io](crates.io) public package repo. But they do so by assuming that the dependency you're looking for is a part of their ecosystem. Cargo will search for a cargo.toml and NPM will look for a package.json, but neither can look for the other.
+Tools like cargo can indeed resolve dependencies sourced from public or private repositories outside of the dedicated [crates.io](crates.io) public package source. But they do so by assuming that the dependency you're looking for is a part of their ecosystem. Cargo will search for a cargo.toml and NPM will look for a package.json, but neither can look for the other, nor any other packaging system.
 
-Klep also supports reading from its own manifest file and resolving subdependencies, but if needed, Klep can be configured with plugins to translate npm, yarn, rust, and other manifest and lock files. This means you're not limited to installing the dependencies available to a single ecosystem, and if the dependencies for a project have already been resolved a certain way, Klep will leverage that, providing even more stability and speed.
+Like these tools Klep supports reading from its own manifest file and resolving subdependencies, but if needed, it can be configured with plugins to translate npm, yarn, rust, and other manifest and lock files. 
+
+This means you're not limited to installing the dependencies available to a single ecosystem, and if the dependencies for a project have already been resolved a certain way, Klep will leverage that, providing even more stability and speed.
 
 ### Migration and Adoption
 
-Klep's core principle is not to force people into a single ecosystem or standard. Rather, it aims to provide a generaadd layers of compatibility and hackability on
-
-Switching from established artifact stores to a git-based approach may not be feasible for every organization. Migration tools, clear documentation, and support for hybrid workflows will be important for adoption. The goal is not to force a one-size-fits-all solution, but to provide a flexible alternative for teams who need it.
+Klep's core principle is not to force people into a single ecosystem or standard, but support those that do. It aims to provide layers of backwards compatibility and hackability on top of existing package management systems like npm, pip, and cargo while paving the way forward to a future where language specific package managers are no longer a necessity.
 
 ### Performance and Scalability
 
-For very large projects or binary assets, performance and scalability must be considered. Git LFS and similar tools can help, but there are limits. Benchmarking and real-world case studies will be important as the tool matures.
+Klep is a tool written as a hybrid of Rust and Node-based Typescript, interfacing through Web Assembly. This allows us to leverage the raw speed and safety of Rust where it matters, and where it doesn't, instead take advantage of Typescript's ease of development and convenient CLI building and Database toolsets to get new features to you faster. 
+
+Both languages were designed with scalability and robust architecture in mind, but as some might guess, is a somewhat unorthodox setup that means managing the dependencies of two languages at once.
+
+But giving developers the freedom to explore niche, highly personalized project structures is exactly what Klep was designed to do, and as such, Klep adheres to the practice of [dogfooding](https://en.wikipedia.org/wiki/Eating_your_own_dog_food). In other words, Klep manages its own dual-language dependencies with Klep. 
+
+We believe this practice incentivizes us to prioritize features and fixes in a way that are actually useful for the wider development community.
 
 ### Community and Ecosystem Fit
 
-This tool is designed to complement, not replace, existing language-specific package managers and workflows. It's especially valuable for polyglot projects, niche languages, or environments where standard tooling falls short.
-
----
+This tool is designed to live happily alongside existing language-specific package managers and workflows, but it's meant to be especially valuable for polyglot projects, niche languages, or environments where standard tooling falls short and needs more customized solutions.
 
 *If you have additional concerns or use cases, please open an issue or contribute to the discussion! The goal is to build a tool that's genuinely useful for the community, and that means listening to feedback from all corners of the software galaxy.*
 

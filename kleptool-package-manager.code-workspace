@@ -1,10 +1,11 @@
 {
-  "folders": [
-    {
-      "path": "."
-    },
-    {
-      "path": "../test-gad"
-    }
-  ]
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../test-gad"
+		}
+	],
+  "settings": {}
 }
