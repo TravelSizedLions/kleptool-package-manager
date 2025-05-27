@@ -1,4 +1,4 @@
-# Kleptool: Neural A*-SMT for Versionless Dependency Resolution in Theoretical and Practical Terms
+# Klep: General-purpose Agnostic Dependency Resolution using Neural A* SMT Heuristics
 
 What a banger of a title, am I right? 🤜💥🤛
 
@@ -6,7 +6,7 @@ What a banger of a title, am I right? 🤜💥🤛
 
 In this document, we'll explore the theoretical and technical challenges of implementing a language and versioning agnostic recursive dependency resolver using a novel formulation of the A* optimization algorithm. This formulation of A* will leverage Stochastic Gradient Descent to weight the linear combination of its neighbor-distance and heuristic-distance aspects to learn an efficient cost function for traversing a configuration space of candidate dependency graphs. We will also explore how this SGD cost function could be implemented to fine-tune itself to individual user and project needs and patterns.
 
-First, we'll explore a rigorous application of the theories involved in this design, followed by a discussion of their synergies. Then, we'll then go on to discuss practical requirements for such a tool, including:
+First, we'll explore a rigorous application of the theories of A* and SMT involved in this design, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
 - Building and maintaining the A* configuration space
 - The time and computational cost to cache and clone repositories
@@ -16,30 +16,28 @@ First, we'll explore a rigorous application of the theories involved in this des
 - Recovering from expired or missing cached dependencies
 - Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A*-SMT resolver
 
-Then, we'll consider how these aspects affect the formulation and initialization of the Neural A*-SMT distance and heuristic functions.
+We'll then use these considerations and others to formulate Neural A*-SMT distance and heuristic functions.
 
 ### Motivation
 
-If you're writing
+If you're writing...
 
 - A python tool
 - A web or mobile application
 - A .NET or Rust application
 - Or something an unironic PHP-enjoyer would want to write in PHP
 
-You've already got a package ecosystem for that. Why would you ever use or need a package management system that isn't tailored to your language of choice?
+...then you've already got a package ecosystem for that. Why would you ever use or need a package management system that isn't tailored to your language of choice?
 
-Well…what if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
+Well, what if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
 
-An experienced Java developer might retort, mentioning that language agnostic dependency management tools like Gradle and Maven make it possible to manage dependencies and run scripts for language contexts other than the Java landscape they were born in.
+An experienced developer might retort, mentioning that language agnostic dependency management tools like Gradle and Maven make it possible to manage dependencies and run scripts for language contexts other than the Java landscape they were born in. In their minds such tools already exist.
 
-Well, what if your dependencies are build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment? 
-What if the target versions you have to work with are such comforting values as `v0.0.1-alpha`, `>= sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, or my personal favorite, `latest`.
+Well, what if one's dependencies include build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment? 
+And what if the target versions you have to work with are such comforting values as `v0.0.1-alpha`, `>= sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, or my personal favorite, `latest`.
 
 
-If you've run into this, then you've probably done hobby development at some point in your life.
-
-You use languages and tools with small, scrappy, dedicated communities that don't have the time or the energy to build CI-CD for their projects, and certainly don't have the capacity to write their own packaging toolset.
+If you've run into this, then you've probably done hobby development at some point in your life. You use languages and tools with small, scrappy, dedicated communities that may not have the time or the energy to build proper CI/CD for their projects, and certainly don't have the capacity to write their own packaging toolset.
 
 Personally, I know this pain from wanting to develop games. Most game engines come with either limited (and proprietary) dependency management or basically none at all. 
 
@@ -48,15 +46,15 @@ If they do have a way to get and install dependencies:
 - Or if it is, it doesn't handle resolving version constraints on those transitive dependencies
 - Or if they do, the packages that support these things are locked behind the paywall of a proprietary asset store
 
-Yet many of these environments have a desparate need for solid dependency resolution. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also has no concept of dependency resolution, so mid-sized projects have one of four options:
+Yet many of these environments have a desparate need for solid dependency resolution outside of a closed ecosystem. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also contains a fraction of the assets that are actually available to all users of Godot, and has no concept of dependency resolution, so mid-sized projects have one of four options:
 - Manage every dependency and namespace collision themselves
 - Use a tool like Gradle or Maven, which has no official Godot support
 - Eschew dependencies entirely and implement everything their project needs from scratch
 - Or switch to a language binding like C# or Rust with better tooling.
 
-In addition to this, most small-scale projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development contex can't rely on anything most package managers take for granted.
+In addition to this, most small-scale projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development context can't rely on anything most popular languages and package managers take for granted.
 
-We in the development community have a core problem: the *.wheel keeps getting re-invented for specific languages, when the basic approach is almost always the same for every major package manager: 
+We in the development community have a core problem: the *.wheel keeps getting re-invented for specific languages in a limited capacity. The basic approach is almost always the same for every major package manager: 
 - build a public source for packages to be published
 - enforce versioning on those publishes
 - enforce directory structures
@@ -64,7 +62,9 @@ We in the development community have a core problem: the *.wheel keeps getting r
 - resolve dependencies with SAT solvers
 - *.lock resolved versions in place.
 
-Despite the approach always being the same, no-one's sought to actually, *fully* solve the general case problem of dependency management, i.e., for all project structures, sources, versioning schemes, and languages. And as much as the core motivation for this effort started with helping the hobby developer, small-scale projects aren't the only context in which this is an issue. Even larger organizations using standardized tools will sink significant portions of their budget re-inventing and maintaining tooling built on top of other-wise standard core infrastructure to meet their individual needs, and this includes for package management and publishing. Entire businesses have been built up around the need organizations have to privately store publish artifacts for internal use. However, if organizations are given a tool that allows them to use their own remote git repositories as sources for published dependencies, then paying for external package hosting services such as artifactory or GitHub Packages becomes unecessary. We don't need artifact stores when remote repositories already exist.
+Despite the approach always being the same, no-one's sought to actually, *fully* solve the general case problem of dependency management, i.e., for all project structures, sources, versioning schemes, and languages. 
+
+And, as much as the core motivation for my efforts started with helping the hobby developer, small-scale projects aren't the only context in which this is an issue. Even larger organizations using standardized tools will sink significant portions of their budget re-inventing and maintaining tooling built on top of the standard tools, and this includes solutions for package management and publishing. Entire businesses and products have been built up around the need for organizations to privately store publish artifacts for internal use. However, if organizations are given a tool that allows them to use their own remote git repositories as sources for published dependencies, then paying for external package hosting services such as artifactory or GitHub Packages becomes unecessary. We don't need artifact stores when remote repositories already exist and are perfectly capable of hosting production builds of your source code for distribution.
 
 Both the industry and the individual stand to benefit from a general purpose solution to package management and dependency resolution, one that can handle a complex or non-ideal development environment. The benefits that would come from a language and versioning agnostic dependency resolver are numerous:
 - No more need for dedicated package stores
@@ -78,7 +78,7 @@ Both the industry and the individual stand to benefit from a general purpose sol
 
 The A* algorithm finds the optimal path between two nodes in a graph by maintaining two sets of nodes and using a scoring function to evaluate potential paths.
 
-### Algorithm Steps
+### A* Algorithm Steps
 
 1. Define two ordinal sets of nodes:
    - $Q_{open}$: Open queue (nodes to be evaluated)
@@ -280,17 +280,17 @@ In practice, not all repositories that exist are needed as dependencies for ever
 
 This means that to resolve the dependencies for any given repository, we only care about a specific subspace of $K$—namely, the part that includes just the dependencies (and their dependencies, and so on) that are actually relevant to our project. In other words, we want to "zoom in" on the part of $K$ that matters for $K_i$ and ignore the rest of the infinite space of possibilities.
 
-Let's formalize this:
+Let's formalize this idea for use later:
 
 - As mentioned above, for each $K_i$, we have
-  - $H_i$ the set of all values $h_{i_j}$ in $K_i$
+  - $H_i$ the set of all commit hash values $h_{i_j}$ in $K_i$
   - $D_i$, the set of all dimensions reachable from $K_i$ through all dependency sets $d_{i_j}$ in $K_i$. This is also known as the dependency closure of $K_i$
-  - $C_i$, the set of all sets of constraints on $D_i$
+  - $C_i$, the set of all sets of constraints on $D_i$ from $H_i$.
 
 - For each $K_d \in D_i$, let $H_d'$ be the set of hashes in $K_d$ that are possible given the constraints induced by traversing from $K_i$.
   - ***Note:*** 
     - $H_d'$ is the set of hashes in $K_d$ allowed by the currently active constraints in this resolution, where those constraints are imposed by the dependency graph rooted at $K_i$.
-    - $C_i$ is the set of all possible sets of constraints that $K_i$ could ever impose on its dependencies (other dimensions of $K$), across all its hashes. 
+    - $C_i$ is the set of all possible sets of constraints that $K_i$ could ever impose on its dependencies, across all its hashes. 
     - In other words, $C_i$ describes the universe of possible requirements $K_i$ might have for its dependencies, while $H_d'$ is the set of versions of $K_d$ that actually satisfy the constraints currently in play for a given commit hash $h_{i_j} \in K_i$.
 
 
@@ -300,94 +300,122 @@ $$
 K_i' = \prod_{K_d \in C_i} H_d'
 $$
 
-Or, more explicitly as $K_i' = \left\{ (h_d)_{K_d \in D_i} \;\middle|\; h_d \in H_d',\ \forall K_d \in D_i \right\}$
+Or, more explicitly,  $K_i' = \left\{ (h_d)_{K_d \in D_i} \;\middle|\; h_d \in H_d',\ \forall K_d \in D_i \right\}$
 
 
 #### Example
-Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $D_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_i'$ is all possible assignments of hashes to these four repos, subject to the constraints that come from their dependency relationships.
+Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $D_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_i'$ is all possible assignments of hashes to these four repos, subject to the constraints that come from the initial dependency relationships imposed by $K_i$.
 </p>
 
 
 
 ## The Graph Representation of $K_i'$
 
-In our limited configuration space $K_i'$, a single point in the space represents one possible dependency graph, represented by a set $k \in K_i'$
+### Nodes
+In our limited configuration space $K_i'$, a single point in the space represents one possible dependency graph, represented by a set $\mathbf{k} \in K_i'$ in which each element is one hash from each dependency needed by the repository.
+
+### Edges
+
+As mentioned [above](#dimensions-in-the-space), each point $h_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: the set of needed dependencies $d_{i_j}$ and the set of version constraints on those dependencies $c_{i_j}$. A value in the dependency set $d_{i_j}$ represents a connection from the dimension $K_i$ to another dimension $K_d \in D_i$ with $K_i \ne K_d$. However, this graph relationship is describing the connections of the dependency graph that each node $\mathbf{k}$ represents.
+
+To understand edges in the graph of $K_i'$, we need to define the neighbors of a node $\mathbf{k}$. If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have a difference of one hash, either the one immediately prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
+
+## Application of A* on the $K_i$-Limited Configuration Space
+
+For an implementation of A* to search through the $K_i$
+
+### Distance
+
+The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors.
+
+- How does the neighbor affect the dependency graph?
+  - How many new transitive dependencies are added and/or removed?
+  - Do the added/modified transitive dependencies contain riskier requirements or safer ones? Do removed transitive dependencies reduce the number of risky requirements?
+
+- How big is the change from one version to the next?
+  - Major > Minor > Patch > Meta (as in meta information appended to the tag such as `rc1`, `alpha`, and `beta`), and single commit differences are closest of all
+
+- How big is the change in actual code from one commit to the next?
+
+- What's the change in risk?
+  - Does the new version have known security vulnerabilities?
+  - Does the new version have known breaking changes?
+  - Does the new version have transitive dependencies that need to be cloned or additional commits to be pulled?
+  - Are all dependencies in the new configuration compatible with the license of the project?
+
+- How restrictive are the constraints on the new version compared to the existing version?
+  - Wider constraint ranges mean searching through more transitive dependencies for a candidate.
+  - Smaller constaint ranges mean less space to search, but provides fewer potential opportunities for optimization
+- Popularity of the dependency
+  - More widely used dependencies tend to score better and have fewer compatibility problems than rarely used dependencies)
+- Maintenence Status of the dependency
+
+  - When was the last commit or tagged version of this dependency?
+  - How often on average are changes made to this dependency, and how big are they?
+
+### The Initial Configuration
+
+The A* Algorithm calls for an initial configuration to place on its open queue (See the [algorithm steps](#a-algorithm-steps)).
+
+In modern software package management systems, the list of root dependencies of a project are specified in a manifest. These specified target versions conveniently serve as a A*'s starting node $n_{start}$. While the root dependencies in these types of manifests do not include all possible repositories serving as dimensions of $K_i'$, this is remediable by following the cascade of transitive dependencies until we fill out the initial configuration. Any remaining dimensions in $K_i'$ not intialized by this process are *possible* transitive dependencies that may not be explored during dependency resolution.
+
+### The Solution Set
+Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in H_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a candidate dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$. However, not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by dependencies in $\mathbf{k}$ for other dependencies in $\mathbf{k}$. 
 
 
-As mentioned [above](#dimensions-in-the-space), each point $h_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: the set of needed dependencies $d_{i_j}$ and the set of version constraints on those dependencies $c_{i_j}$.
-
-A value in the dependency set $d_{i_j}$ represents a connection from the dimension $K_i$ to another dimension $K_d \in D_i$ with $K_i \ne K_d$.
-
-The constraint set $c_{i_j}$ for $h_{i_j}$ specifies the set of allowed hashes $h_{d_j} \in H_d'$ in $K_d$ that $h_{i_j}$ can coexist with. The complement, $\lnot c_{i_j}$, is the set of hashes in $K_d$ that are incompatible with $h_{i_j}$.
-
-In practical terms, even though the full configuration space $K$ is infinite in its dimensions, any actual software project will only specify a finite set of dependencies, corresponding to a finite index set $D_i$.
-
-Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in H_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a possible dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$, though not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by values in $\mathbf{k}$ for other values in $\mathbf{k}$. 
-
-
-
-To reach the final set of valid dependency graphs, values for each dimension in $\mathbf{k}$ must satisfy the constraints posed by each other dimension.
+To reach the solution set of valid dependency graphs, values for each dimension in $\mathbf{k}$ must satisfy the constraints posed by each other dimension of the assignment:
 
 $$
 \mathcal{V_i} = \{ \mathbf{k} \in K_i' \mid \mathbf{k} \text{ satisfies all constraints applied by values in } \mathbf{k} \}
 $$
 
-### Edges
 
-If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have one repository checked out to the commit prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
-
-### Distance
-
-The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. A hypothetical distance function for $K_i'$ should weigh at least the following considerations:
-
-- The magnitude of the changes made by the contents of repository $K_i$ 
-- The number of dependencies added or removed by the neighbor
-- Whether or not the nieghboring node introduces breaking changes
-
-Formally, for nodes $n_1$ and $n_2$:
-$$
-cost(n_1, n_2) = w_1 \cdot \Delta V + w_2 \cdot \Delta D + w_3 \cdot \Delta R + w_4 \cdot risk(n_2)
-$$
-
-
-#### The Risk Function
-Risk is a quantification of the likelihood that traversing to the given successor graph would create problems with imports and pathing for the dependencies. This includes factors like:
-
-- An increase in the complexity of dependency extraction
-- Expected growth in the number of dependencies
-- A change in version type (semver, tag, hash, branch)
-
-#### Historical Success
-"Historical Success" is the term used to describe saving previously satisfied groups of dependencies that are often resolved together. The presence of these sub-graphs implies a risk of 0 for that part of the graph when the same group of dependencies and constraints appear during a dependency update.
-
-### Defining a Starting Node
-
-The starting node $n_{start}$ is defined by:
-- Direct dependencies from the project file
-- Initial version constraints
-- Empty set of discovered dependencies
-- All constraints marked as unresolved
-
-This represents the initial state before any resolution begins.
-
-### Finding a valid End State
-
-A node $n_{end}$ is valid when:
-1. All known dependencies have versions assigned
-2. All constraints are resolved
-3. No conflicts exist
-4. SMT solver verifies the solution
-
-Formally:
-$$
-valid(n) = \begin{cases}
-true & \text{if } U = \emptyset \land conflicts(n) = \emptyset \land SMT(n) = true \\
-false & \text{otherwise}
-\end{cases}
-$$
-
-The unbounded configuration space includes all combinations of version hashes of all repositories listed as dependencies. 
 
 ## Stochastic Gradient Descent and Parameterizing A*
 
 Gradient 
+
+## Addressing Common Concerns and Counter-Arguments
+
+While the motivation for this tool is strong, it's worth addressing some of the most common concerns and counter-arguments that may arise when considering a general-purpose, git-based approach to dependency management and artifact distribution:
+
+### Security and Compliance
+
+Artifact stores like Artifactory and GitHub Packages aren't just about storage—they provide access control, audit logs, vulnerability scanning, and compliance features that are critical for many organizations. While git repositories can be secured and access-controlled, organizations with strict requirements may need to layer additional tooling or integrate with existing security workflows. Future iterations of this tool could provide hooks or integrations for popular security scanners and audit systems.
+
+### Operational Complexity
+
+Using git repositories as artifact sources can introduce new operational challenges, such as handling large binaries, managing repository sprawl, or dealing with non-source assets. While git is excellent for source code, it's not always ideal for large or frequently changing binary artifacts. For these cases, hybrid approaches—using git for source dependencies and a minimal artifact store for large binaries—may be the most pragmatic solution.
+
+However, Git offers a solution for this out of the box: Git LFS or Large File Storage, which addresses the issue of storing artifacts fully.
+
+### Not All Workflows Use Git
+
+While git is the de facto standard for many projects, some organizations use other version control systems (e.g., Mercurial, Perforce). The current approach assumes git, but the underlying principles could be extended to support other systems in the future.
+
+### "X or Y Tool Already Lets you install packages from git!"
+
+Within their ecosystem? Sure. But cross-ecosystem?
+
+Tools like cargo can indeed resolve dependencies sourced from public or private repositories outside of the dedicated [crates.io](crates.io) public package repo. But they do so by assuming that the dependency you're looking for is a part of their ecosystem. Cargo will search for a cargo.toml and NPM will look for a package.json, but neither can look for the other.
+
+Klep also supports reading from its own manifest file and resolving subdependencies, but if needed, Klep can be configured with plugins to translate npm, yarn, rust, and other manifest and lock files. This means you're not limited to installing the dependencies available to a single ecosystem, and if the dependencies for a project have already been resolved a certain way, Klep will leverage that, providing even more stability and speed.
+
+### Migration and Adoption
+
+Klep's core principle is not to force people into a single ecosystem or standard. Rather, it aims to provide a generaadd layers of compatibility and hackability on
+
+Switching from established artifact stores to a git-based approach may not be feasible for every organization. Migration tools, clear documentation, and support for hybrid workflows will be important for adoption. The goal is not to force a one-size-fits-all solution, but to provide a flexible alternative for teams who need it.
+
+### Performance and Scalability
+
+For very large projects or binary assets, performance and scalability must be considered. Git LFS and similar tools can help, but there are limits. Benchmarking and real-world case studies will be important as the tool matures.
+
+### Community and Ecosystem Fit
+
+This tool is designed to complement, not replace, existing language-specific package managers and workflows. It's especially valuable for polyglot projects, niche languages, or environments where standard tooling falls short.
+
+---
+
+*If you have additional concerns or use cases, please open an issue or contribute to the discussion! The goal is to build a tool that's genuinely useful for the community, and that means listening to feedback from all corners of the software galaxy.*
+
