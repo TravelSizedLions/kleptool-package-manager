@@ -4,7 +4,7 @@ What a banger of a title, am I right? 🤜💥🤛
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language and versioning agnostic recursive dependency resolver using a novel formulation of the A* optimization algorithm. This formulation of A* will leverage Stochastic Gradient Descent to weight the linear combination of its neighbor-distance and heuristic-distance aspects to learn an efficient cost function for traversing a configuration space of candidate dependency graphs. We will also explore how this SGD cost function could be implemented to fine-tune itself to individual user and project needs and patterns.
+In this document, we'll explore the theoretical and technical challenges of implementing a language and versioning agnostic recursive dependency resolver using a novel formulation of the A* optimization algorithm. This formulation of A* will leverage Stochastic Gradient Descent to weight the linear combination of its distance and heuristic functions to learn an efficient strategy for traversing a configuration space of candidate dependency graphs. We will also explore how this SGD-based cost function could be implemented to fine-tune itself to individual user and project needs and patterns.
 
 First, we'll explore a rigorous application of the theories of A* and SMT involved in this design, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
@@ -31,11 +31,10 @@ If you're writing...
 
 Well, what if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
 
-An experienced developer might retort, mentioning that language agnostic dependency management tools like Gradle and Maven make it possible to manage dependencies and run scripts for language contexts other than the Java landscape they were born in. In their minds such tools already exist.
+An experienced developer might retort, mentioning that language agnostic dependency management tools like Gradle, Maven make it possible to manage dependencies and run builds for language contexts other than the Java landscape they were born in. In their minds such tools already exist.
 
 Well, what if one's dependencies include build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment? 
 And what if the target versions you have to work with are such comforting values as `v0.0.1-alpha`, `>= sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, or my personal favorite, `latest`.
-
 
 If you've run into this, then you've probably done hobby development at some point in your life. You use languages and tools with small, scrappy, dedicated communities that may not have the time or the energy to build proper CI/CD for their projects, and certainly don't have the capacity to write their own packaging toolset.
 
@@ -159,7 +158,6 @@ In dependency resolution, we can frame our constraints as SMT predicates:
 
 The SMT solver can then find a satisfying assignment that meets all these constraints, effectively finding a valid set of dependency versions.
 
-
 ## SMT and A* Heuristic Dependency Resolution
 
 ### The Core Problem
@@ -214,6 +212,30 @@ This approach gives us the best of both worlds:
 - SMT's ability to validate complex constraints
 - A*'s ability to efficiently search large spaces
 
+### Why use A* and an SMT solver together to search for satisfying dependency resolutions?
+
+Modern dependency resolvers use exclusively SMT satisfiability solvers to reach a valid set of dependencies. While this works, it comes with a few limitations:
+
+- SMT solvers are designed to find *'a'* solution, rather than an optimal or particularly desired one.
+- SMT solvers use static, predefined heuristics to prune the search space of possibilities. This is for the sake of efficiency rather than optimization
+- Even the best solvers for dependency resolution make the assumption that they will be handed semver-compliant version schemes.
+
+A* on the other hand, offers:
+
+- The same heuristic search space pruning approach, but with room for customizability and tunability
+- No assumptions about the nature of the search space other than the requirement that it be expressed as a graph with a defined start state and goal to reach.
+- Not just finding a valid solution, but finding the best solution for the distance and heuristic functions it's handed.
+
+As such, A* offers an advantage when building an adaptive dependency resolver designed to minimize the risks inherent to added dependencies, while not insisting that all candidates adhere strictly to semantic versioning. If the dependency resolver itself can assess and minimize risks, SemVer as a standard is no longer a strict necessity to acquire safe, dependable packages and addons, and we make it possible to fine-tune resolutions for desired goals, such as:
+
+- Automatically limiting or even outright preventing vulnerable transitive dependencies
+- Limiting the number of installed transitive dependencies in the first place
+- Finding resolutions closer to the specified or otherwise optimal target versions.
+- Improving search heuristics over time (as we'll discuss later)
+
+However, our algorithm will still need to verify that candidate solutions do in-fact satisfy the constraints placed upon them, and so SAT validation will still be used to validate the proposed solutions.
+
+Conveniently, A* also gracefully handles cases where no dependency resolution can be found.
 
 ## Formally Defining the Configuration Space
 
@@ -274,7 +296,7 @@ $$
 
 In other words, the configuration space is the set of all possible combinations of commit hashes (and their associated dependencies and constraints) across all repositories.
 
-## Limiting K-Space
+## Bounding K-Space
 <p>
 In practice, not all repositories that exist are needed as dependencies for every project (though seeing such a project would be entertaining)<sup>[citation needed]</sup>
 
@@ -291,10 +313,10 @@ Let's formalize this idea for use later:
   - ***Note:*** 
     - $H_d'$ is the set of hashes in $K_d$ allowed by the currently active constraints in this resolution, where those constraints are imposed by the dependency graph rooted at $K_i$.
     - $C_i$ is the set of all possible sets of constraints that $K_i$ could ever impose on its dependencies, across all its hashes. 
-    - In other words, $C_i$ describes the universe of possible requirements $K_i$ might have for its dependencies, while $H_d'$ is the set of versions of $K_d$ that actually satisfy the constraints currently in play for a given commit hash $h_{i_j} \in K_i$.
+    - In other words, $C_i$ describes the universe of possible requirements $K_i$ might have for its dependencies, while $H_d'$ is the set of versions of $K_d$ that actually satisfy the piecewise dependency constraints currently in play for a given commit hash $h_{i_j} \in H_i$.
 
 
-Then the subspace of $K$ constrained for a given $K_i$ is:
+Then the subspace of $K$ constrained for a given $K_i$ is the finite, non-uniform, non-convex space:
 
 $$
 K_i' = \prod_{K_d \in C_i} H_d'
@@ -309,7 +331,7 @@ Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $D_i 
 
 
 
-## The Graph Representation of $K_i'$
+## The Graph Representation of Bounded K-Space
 
 ### Nodes
 In our limited configuration space $K_i'$, a single point in the space represents one possible dependency graph, represented by a set $\mathbf{k} \in K_i'$ in which each element is one hash from each dependency needed by the repository.
@@ -318,11 +340,31 @@ In our limited configuration space $K_i'$, a single point in the space represent
 
 As mentioned [above](#dimensions-in-the-space), each point $h_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: the set of needed dependencies $d_{i_j}$ and the set of version constraints on those dependencies $c_{i_j}$. A value in the dependency set $d_{i_j}$ represents a connection from the dimension $K_i$ to another dimension $K_d \in D_i$ with $K_i \ne K_d$. However, this graph relationship is describing the connections of the dependency graph that each node $\mathbf{k}$ represents.
 
-To understand edges in the graph of $K_i'$, we need to define the neighbors of a node $\mathbf{k}$. If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have a difference of one hash, either the one immediately prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
+To understand edges in the graph of $K_i'$, we also need to define what constitutes the neighborhood of a node $\mathbf{k}$. If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have a difference of one hash, either the one immediately prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
 
-## Application of A* on the $K_i$-Limited Configuration Space
+## Application of A* on Bounded K-Space
 
 For an implementation of A* to search through the $K_i$
+
+### The Initial Configuration
+
+The A* Algorithm calls for an initial configuration to place on its open queue (See the [algorithm steps](#a-algorithm-steps)).
+
+In modern software package management systems, the list of root dependencies of a project are specified in a manifest. These specified target versions conveniently serve as a A*'s starting node $n_{start}$. While the root dependencies in these types of manifests do not include all possible repositories serving as dimensions of $K_i'$, this is remediable by following the cascade of transitive dependencies until we fill out the initial configuration. Any remaining dimensions in $K_i'$ not intialized by this process are *possible* transitive dependencies that may not be explored during dependency resolution.
+
+#### Alternative Initializations
+
+As one key feature of dependency resolvers is the caching and reusing of partial resolutions, initialization should also weigh a variety of other possible starting places for a candidate graphs based on previous resolutions. (#TODO - add to this more later as I explore)
+
+### The Solution Set
+Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in H_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a candidate dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$. However, not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by dependencies in $\mathbf{k}$ for other dependencies in $\mathbf{k}$. 
+
+
+To reach the solution set of valid dependency graphs, values for each dimension in $\mathbf{k}$ must satisfy the constraints posed by each other dimension of the assignment:
+
+$$
+\mathcal{V_i} = \{ \mathbf{k} \in K_i' \mid \mathbf{k} \text{ satisfies all constraints applied by values in } \mathbf{k} \}
+$$
 
 ### Distance
 
@@ -353,21 +395,40 @@ The distance between values of $\mathbf{k}$ is where we begin to re-enter the re
   - When was the last commit or tagged version of this dependency?
   - How often on average are changes made to this dependency, and how big are they?
 
-### The Initial Configuration
+### The Solution Heuristic
 
-The A* Algorithm calls for an initial configuration to place on its open queue (See the [algorithm steps](#a-algorithm-steps)).
+#### Observations
+For traditional dependency resolution, the problem space is to find one of potentially several sets of versions for dependencies which satisfy all constraints put in place by all sources in the space.
 
-In modern software package management systems, the list of root dependencies of a project are specified in a manifest. These specified target versions conveniently serve as a A*'s starting node $n_{start}$. While the root dependencies in these types of manifests do not include all possible repositories serving as dimensions of $K_i'$, this is remediable by following the cascade of transitive dependencies until we fill out the initial configuration. Any remaining dimensions in $K_i'$ not intialized by this process are *possible* transitive dependencies that may not be explored during dependency resolution.
+Here, our goal is to instead balance the optimization of several factors, including:
 
-### The Solution Set
-Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in H_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a candidate dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$. However, not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by dependencies in $\mathbf{k}$ for other dependencies in $\mathbf{k}$. 
+- Picking versions that minimize the risks posed to the root project
+- Resolving quickly
+- Minimizing the number of dependencies overall
+- Staying relatively close to the user-specified target version
+- Reusing or quickly accessing areas of the search space that previous resolutions have found to be optimal.
+- Preferring safer subsets of the solution space (such as commits tagged with a semantic version) over non-versioned sections of the hash space.
 
+In order for A* to effectively search $K'$ and reach optimal solutions, we must define a search heuristic that is both admissable (guaranteed to be optimistic when compared to the actual cost of the path to the resolved dependency), and monotonically increasing from our initial starting configuration. The value of the heuristic score of a given $\mathbf{k}$ is inversely proportional to its desirability (i.e., lower scores are more valuable).
 
-To reach the solution set of valid dependency graphs, values for each dimension in $\mathbf{k}$ must satisfy the constraints posed by each other dimension of the assignment:
+Therefore, to create a robust adaptive approach, it must guarantee admissability and monotonic distance relationships.
 
-$$
-\mathcal{V_i} = \{ \mathbf{k} \in K_i' \mid \mathbf{k} \text{ satisfies all constraints applied by values in } \mathbf{k} \}
-$$
+#### Dimension-wise Normalization
+
+As the topology of $K_i'$ is non-uniform, distance measured between dimensions and values within dimensions varies. This means that what would be considered a small distance between one step in one dimension may be comparitively small or comparitively large when used in conjunction with distances in other dimensions. Depending on the construction of our heuristic, this may cause bias towards or against undesirable sections of the search space. As such, a dimension-wise normalization vector or function may need to be applied in order to reduce the likelihood of wasted searches.
+
+#### Construction
+
+To start, our hypothetical heuristic $h(x)$ must produce values we can constrain to be monotonic and admissible. Candidate constraint filters for such a function include activation functions familiar to the machine learning community such as 
+
+- $tanh(h)$
+- $\sigma(h)$
+- $clamp(h, 0, 1)$
+
+However, for the sake of making the heuristic adaptive and tunable, there are some additional considerations:
+
+- Pre-activation outputs must already be normalized on a per dimension basis to discourage vanishing or exploding gradients.
+- 
 
 
 
@@ -377,49 +438,80 @@ Gradient
 
 ## Common Questions and Concerns
 
+### Privacy
+Klep is an AI driven tool, but not in the way you think. Klep does not use large language models such as OpenAI. Rather, Klep uses its own smale-scale neural net models local to your machine, and can only see and learn from the dependencies you have cached in its (again local) database. Think of Klep's AI component as a handshake between Klep's CLI and a statistical model to help you resolve dependencies faster and more safely.
+
+However, Klep is also *opt-in* community driven. Your map of resolved dependencies can be shared with others on our public database of dependency maps if you so choose. This map includes metadata about versions, commit dates, and and high level properties for repositories you depend on, not details of implementation or parts of your local model.
+
+We're not here to spy on you. We're here to solve the dependency resolution problem in the same spirit as widespread open-source tools like git solved version control.
+
 ### Operational Complexity
 
 Klep as a tool was designed with the both the little-guy and the professional team in mind.
 
 For small to mid-sized projects, Klep recommends publishing builds and artifacts as commits to dedicated git repositories separate from the source code of the project ([see why](#TODO))
 
-For teams wishing to adopt Klep who already have a number of existing repositories, we've got you covered. Klep is designed to translate and interpret package manifests from pre-existing tools like yarn, npm, pip, and cargo. This means that for many teams, you can start managing new repositories using klep and retain interoperability with existing repositories with no additional effort. See our [table of supported manifest files]() to see if klep's a good fit.
+For teams wishing to adopt Klep who already have a number of existing repositories, we've got you covered. Klep is designed to translate and interpret package manifests from pre-existing tools like yarn, npm, pip, and cargo. This means that for many teams, you can start managing new repositories using klep and retain interoperability with existing repositories, no additional effort required. See our [table of supported manifest files]() to see if klep's a good fit.
 
-### Security and Compliance
+#### A note on Security Tools and Regulatory Compliance
 
 For larger companies, artifact stores like Artifactory and GitHub Packages aren't just about storage—they provide access control, audit logs, vulnerability scanning, and compliance features that are critical for many organizations. While Klep recommends publishing artifacts and builds in a separate, sister git remote repository for smaller projects, organizations with strict requirements may still wish to use dedicated artifact storage services. 
 
 As it stands, any system designed to scan source repositories for vulnerabilities such as Snyk and Semgrep are compatible with Klep projects out of the box. And of course, Klep itself isn't designed to replace CDNs or artifact stores. On the contrary, its goal is to work seemlessly with whatever package sources it may need to in order to give developers a unified package management experience across their areas of ownership.
 
+### Discoverability
 
+Klep is meant to be familiar out of the box. There's no cute or fancy jargon baked into the CLI's commandset.
+
+If you want to add a dependency? `klep add`
+
+If it's a developer dependency? `klep add -D, --dev`
+
+If you want to install or cleanly reinstall your dependencies? `klep install` or `klep reinstall`
+
+If you want to blow the cache or reset the AI model? `klep cache clear`
+
+Etc.
+
+And of course, we provide thorough `-h, --help` documentation and provide even more in depth help through our [online docs](#TODO).
 
 ### "X or Y Tool Already Lets you install packages from git!"
 
 Within their ecosystem, sure. But cross-ecosystem?
 
-Tools like cargo can indeed resolve dependencies sourced from public or private repositories outside of the dedicated [crates.io](crates.io) public package source. But they do so by assuming that the dependency you're looking for is a part of their ecosystem. Cargo will search for a cargo.toml and NPM will look for a package.json, but neither can look for the other, nor any other packaging system.
+Tools like cargo can indeed resolve dependencies sourced from public or private repositories outside of the dedicated [crates.io](crates.io) public package source. But they do so by assuming that the dependency you're looking for is a part of their ecosystem. Cargo will search for a cargo.toml and NPM will look for a package.json, but neither can look for the other, nor any other packaging system. On top of this, if you'd like to publish your code for others more conveniently, tools like NPM and Cargo have strict requirements for allowing packages to be published on their list of publicly available packages.
 
-Like these tools Klep supports reading from its own manifest file and resolving subdependencies, but if needed, it can be configured with plugins to translate npm, yarn, rust, and other manifest and lock files. 
+Like these tools Klep supports reading from its own manifest file and resolving subdependencies, but if needed, it can be configured with plugins to translate npm, yarn, rust, and other manifest and lock files. This means you're not limited to installing the dependencies available to a single ecosystem, and if the dependencies for a project have already been resolved a certain way, Klep will leverage that, providing even more stability and speed.
 
-This means you're not limited to installing the dependencies available to a single ecosystem, and if the dependencies for a project have already been resolved a certain way, Klep will leverage that, providing even more stability and speed.
+And unlike these tools, ***there's no global public list of repositories, and no need for tool specific setup to access private ones. If you have the permissions to clone it, Klep can access it.*** 
 
-### Migration and Adoption
+Therefore, there are no hard requirements to get your code published. However, we still highly recommend using best practices when it comes to verifying, versioning, and distributing your code.
 
-Klep's core principle is not to force people into a single ecosystem or standard, but support those that do. It aims to provide layers of backwards compatibility and hackability on top of existing package management systems like npm, pip, and cargo while paving the way forward to a future where language specific package managers are no longer a necessity.
+### Migration
+
+Klep's core principle is not to force people into a single ecosystem or standard, but support those that do adhere existing standards. Part of our aim is to provide layers of backwards compatibility and hackability on top of existing package management systems like npm, pip, and cargo while paving the way forward to a future where language specific package managers are no longer a necessity.
+
+In the future, we have plans to support a `migrate` command, which will be designed to take an existing manifest file and lockfile from other package managers and construct the equivalent Klep configuration.
 
 ### Performance and Scalability
 
-Klep is a tool written as a hybrid of Rust and Node-based Typescript, interfacing through Web Assembly. This allows us to leverage the raw speed and safety of Rust where it matters, and where it doesn't, instead take advantage of Typescript's ease of development and convenient CLI building and Database toolsets to get new features to you faster. 
+Klep is a tool written as a hybrid of Rust and Node-based Typescript interfacing through Web Assembly. This allows us to leverage the raw speed and safety of Rust where it matters, and where it doesn't, instead take advantage of Typescript's ease of development and convenient CLI building and Database toolsets to get new features to you faster.
 
 Both languages were designed with scalability and robust architecture in mind, but as some might guess, is a somewhat unorthodox setup that means managing the dependencies of two languages at once.
 
-But giving developers the freedom to explore niche, highly personalized project structures is exactly what Klep was designed to do, and as such, Klep adheres to the practice of [dogfooding](https://en.wikipedia.org/wiki/Eating_your_own_dog_food). In other words, Klep manages its own dual-language dependencies with Klep. 
+However giving developers the freedom to explore niche, highly personalized project structures is exactly what Klep was designed to do, and as such, Klep adheres to the practice of [dogfooding](https://en.wikipedia.org/wiki/Eating_your_own_dog_food). In other words, Klep manages its own dual-language dependencies with itself. 
 
 We believe this practice incentivizes us to prioritize features and fixes in a way that are actually useful for the wider development community.
 
-### Community and Ecosystem Fit
+### Configurability and Extendability
 
-This tool is designed to live happily alongside existing language-specific package managers and workflows, but it's meant to be especially valuable for polyglot projects, niche languages, or environments where standard tooling falls short and needs more customized solutions.
+Klep is designed to be configurable and extendable. If you need to write a plugin to handle backwards compatibility with a less common package managers, we support that.
+
+If you need to patch dependencies or run certain scripts before or after dependency resolution, we support that.
+
+### Community and Ecosystem
+
+This tool is designed to live happily alongside existing language-specific package managers and workflows, but it's meant to be especially valuable for polyglot projects, niche languages, or environments where standard tooling falls short and needs less opinionated solutions.
 
 *If you have additional concerns or use cases, please open an issue or contribute to the discussion! The goal is to build a tool that's genuinely useful for the community, and that means listening to feedback from all corners of the software galaxy.*
 
