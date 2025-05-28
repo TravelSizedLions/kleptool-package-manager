@@ -1,4 +1,4 @@
 {
-  "rust": "rustc ./src/rust/main.rs && ./main && rm ./main",
-  "hi": "echo \"Hello, world!\""
+  rust: "rustc ./src/rust/main.rs && ./main && rm ./main",
+  hi: "echo \"Hello, world!\""
 }
