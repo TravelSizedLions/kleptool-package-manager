@@ -1,10 +1,10 @@
-# Klep: General-purpose Agnostic Dependency Resolution using Neural A* SMT Heuristics
+# GAD: General-purpose Agnostic Dependency Resolution using Neural A* SMT Selection Heuristics
 
 What a banger of a title, am I right? 🤜💥🤛
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language and versioning agnostic recursive dependency resolver using a novel formulation of the A* optimization algorithm. This formulation of A* will leverage Stochastic Gradient Descent to weight the linear combination of its distance and heuristic functions to learn an efficient strategy for traversing a configuration space of candidate dependency graphs. We will also explore how this SGD-based cost function could be implemented to fine-tune itself to individual user and project needs and patterns.
+In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic recursive dependency resolver using a novel formulation of the A* optimization algorithm. This formulation of A* will leverage Stochastic Gradient Descent to weight the linear combination of its distance and heuristic functions to learn an efficient strategy for bounding and traversing a configuration space of candidate dependency graphs. We will also explore how this SGD-based heuristic function mauy be implemented to fine-tune itself to individual user and project needs and patterns over time.
 
 First, we'll explore a rigorous application of the theories of A* and SMT involved in this design, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
@@ -254,20 +254,20 @@ Our goal is to define a vector space $K$ to adequately represent the space of po
 
 A single dimension $K_i$ in the space of possibilities (where $K_i$ is the $i^{th}$ dimension in $K$ ) is the finite, time-ordered set of commit hashes of a single git repository. Incrementing and decrementing from hash to hash within a repository, we see changes in the repository contents and therfore in its dependency requirements. This yields the following properties for each enumeration $j$ within the dimension:
 
-- The hash $h_{i_j}$, which is unique within the repository's dimension
+- The time-ordered hash $t_{i_j}$, which is unique within the repository's dimension
 - The ordinal set $d_{i_j}$ of dependencies on other dimensions, which are edges to other dimensions in space
-- The co-ordinal set of constraints $c_{i_j}$ on $d_{i_j}$ that are the acceptable hash values of each dependency
+- The associated ordinal set of constraints $c_{i_j}$ on $d_{i_j}$ that are the acceptable hash values of each dependency
 
 So the range of each dimension $K_i$ describes the following about a particular repository:
 
 - A set of possible dependencies $D_i= \bigcup_{j=1}^{m} d_{i_j}$
 - A a set of possible constraints on those dependencies $C_i = \bigcup_{j=1}^{m}c_{i_j}$
-- A set of hashes $H_i=\bigcup_{j=1}^{m}h_{i_j}$
-- A function $\delta_i(j) \rarr (h_{i_j}, d_{i_j}, c_{i_j})$ mapping $h_{i_j}$ to its tuple of related ordinal sets $d_{i_j}$ and $c_{i_j}$
+- A time-ordered set of hashes $T_i=\bigcup_{j=1}^{m}t_{i_j}$
+- A function $\delta_i(j) \rarr (t_{i_j}, d_{i_j}, c_{i_j})$ mapping $t_{i_j}$ to its tuple of related ordinal sets $d_{i_j}$ and $c_{i_j}$
   - For example: $\delta_i(5)$ returns the hash, dependencies, and constraints for the 5th commit in repo $i$
 
 
-In a localized range of hash values within a dimension, the number of dependencies and constraints for one hash is not strictly required to be close in number to its neighboring hashes. One hash may add 0 dependencies, 1, or 20, or remove all dependencies--along with anything in-between. However, there's an *a priori* expectation that the number of dependencies in a repository will trend upwards over time (though this is not guaranteed). Therefore, "higher" or rather *later* hashes in the dimension will also have more constraints than earlier values.
+In a localized range of hash values within a dimension, the number of dependencies and constraints for one hash is not strictly required to be close in number to its neighboring hashes. One hash may add 0 dependencies, 1, or 20, or remove all dependencies--along with anything in-between. However, there's an *a priori* expectation that the number of dependencies in a repository will trend upwards over time (though again, this is not guaranteed). Therefore, "higher" or rather *later* hashes in the dimension will also have more constraints than earlier values.
 
 Since:
  - The number of repositories in $K$ is effectively infinite
@@ -277,7 +277,7 @@ Since:
  Then the vector space of possible configurations for a dependency graph is the following unbounded, non-uniform, non-convex topology:
 
 $$
-K = \bigcup\limits_{i=1}^{\infty}\left\{\bigoplus\limits_{j=1}^{\lvert\lvert K_i \rvert \rvert} (h_j, d_j, c_j)\right\}
+K = \bigcup\limits_{i=1}^{\infty}\left\{\bigoplus\limits_{j=1}^{\lvert\lvert K_i \rvert \rvert} (t_j, d_j, c_j)\right\}
 $$
 
 Or:
@@ -285,7 +285,7 @@ Or:
 $$
 K = \{
   [
-    (h_{i_j}, d_{i_j}, c_{i_j}) 
+    (t_{i_j}, d_{i_j}, c_{i_j}) 
     \vert 
     j=1\dots \lvert\lvert K_i \rvert\rvert
   ]
@@ -305,24 +305,24 @@ This means that to resolve the dependencies for any given repository, we only ca
 Let's formalize this idea for use later:
 
 - As mentioned above, for each $K_i$, we have
-  - $H_i$ the set of all commit hash values $h_{i_j}$ in $K_i$
+  - $T_i$ the set of all commit hash values $t_{i_j}$ in $K_i$
   - $D_i$, the set of all dimensions reachable from $K_i$ through all dependency sets $d_{i_j}$ in $K_i$. This is also known as the dependency closure of $K_i$
-  - $C_i$, the set of all sets of constraints on $D_i$ from $H_i$.
+  - $C_i$, the set of all sets of constraints on $D_i$ from $T_i$.
 
-- For each $K_d \in D_i$, let $H_d'$ be the set of hashes in $K_d$ that are possible given the constraints induced by traversing from $K_i$.
+- For each $K_d \in D_i$, let $T_d'$ be the set of hashes in $K_d$ that are possible given the constraints induced by traversing from $K_i$.
   - ***Note:*** 
-    - $H_d'$ is the set of hashes in $K_d$ allowed by the currently active constraints in this resolution, where those constraints are imposed by the dependency graph rooted at $K_i$.
+    - $T_d'$ is the set of time-ordered commit hashes in $K_d$ allowed by the currently active constraints in this resolution, where those constraints are imposed by the dependency graph rooted at $K_i$.
     - $C_i$ is the set of all possible sets of constraints that $K_i$ could ever impose on its dependencies, across all its hashes. 
-    - In other words, $C_i$ describes the universe of possible requirements $K_i$ might have for its dependencies, while $H_d'$ is the set of versions of $K_d$ that actually satisfy the piecewise dependency constraints currently in play for a given commit hash $h_{i_j} \in H_i$.
+    - In other words, $C_i$ describes the universe of possible requirements $K_i$ might have for its dependencies, while $T_d'$ is the set of versions of $K_d$ that actually satisfy the piecewise dependency constraints currently in play for a given commit hash $t_{i_j} \in T_i$.
 
 
-Then the subspace of $K$ constrained for a given $K_i$ is the finite, non-uniform, non-convex space:
+Then the subspace of $K$ constrained for a given $K_i$ is the finite, non-uniform, non-convex configuration space:
 
 $$
-K_i' = \prod_{K_d \in C_i} H_d'
+K_i' = \prod_{K_d \in C_i} T_d'
 $$
 
-Or, more explicitly,  $K_i' = \left\{ (h_d)_{K_d \in D_i} \;\middle|\; h_d \in H_d',\ \forall K_d \in D_i \right\}$
+Or, more explicitly,  $K_i' = \left\{ (t_d)_{K_d \in D_i} \;\middle|\; t_d \in T_d',\ \forall K_d \in D_i \right\}$
 
 
 #### Example
@@ -338,7 +338,7 @@ In our limited configuration space $K_i'$, a single point in the space represent
 
 ### Edges
 
-As mentioned [above](#dimensions-in-the-space), each point $h_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: the set of needed dependencies $d_{i_j}$ and the set of version constraints on those dependencies $c_{i_j}$. A value in the dependency set $d_{i_j}$ represents a connection from the dimension $K_i$ to another dimension $K_d \in D_i$ with $K_i \ne K_d$. However, this graph relationship is describing the connections of the dependency graph that each node $\mathbf{k}$ represents.
+As mentioned [above](#dimensions-in-the-space), each point $t_{i_j}$ in a dimension $K_i$ comes with two sets associated with it: the set of needed dependencies $d_{i_j}$ and the set of version constraints on those dependencies $c_{i_j}$. A value in the dependency set $d_{i_j}$ represents a connection from the dimension $K_i$ to another dimension $K_d \in D_i$ with $K_i \ne K_d$. However, this graph relationship is describing the connections of the dependency graph that each node $\mathbf{k}$ represents.
 
 To understand edges in the graph of $K_i'$, we also need to define what constitutes the neighborhood of a node $\mathbf{k}$. If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have a difference of one hash, either the one immediately prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
 
@@ -357,7 +357,7 @@ In modern software package management systems, the list of root dependencies of 
 As one key feature of dependency resolvers is the caching and reusing of partial resolutions, initialization should also weigh a variety of other possible starting places for a candidate graphs based on previous resolutions. (#TODO - add to this more later as I explore)
 
 ### The Solution Set
-Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in H_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a candidate dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$. However, not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by dependencies in $\mathbf{k}$ for other dependencies in $\mathbf{k}$. 
+Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in T_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a candidate dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$. However, not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by dependencies in $\mathbf{k}$ for other dependencies in $\mathbf{k}$. 
 
 
 To reach the solution set of valid dependency graphs, values for each dimension in $\mathbf{k}$ must satisfy the constraints posed by each other dimension of the assignment:
@@ -428,9 +428,41 @@ To start, our hypothetical heuristic $h(x)$ must produce values we can constrain
 However, for the sake of making the heuristic adaptive and tunable, there are some additional considerations:
 
 - Pre-activation outputs must already be normalized on a per dimension basis to discourage vanishing or exploding gradients.
-- 
+- Because our goal is to find the dependency resolution closest to our starting configuration, we must minimize on these functions rather than maximize on them.
+- Weights must not be per dimension (per dependency), but still be able to score dimensions with outputs in a self-consistent range.
+  - Example: if a repository does not utilize semantic versioning, but is otherwise well tested and verified on a per commit basis, it should not score significantly worse than a semantically versioned repository with comparitively little validation. If it were to score much worse, the exploration and resolution of that dimension would be unecessarily delayed or even ignored.
 
+For reasons in the following exploration, we'll use $tanh$.
 
+Let $\mathbf{f}$ be the vector of normalized features for a candidate configuration $\mathbf{k}$, where each feature $f_i$ is normalized to:
+
+$$
+f_i^{norm} = \frac{f_i - \min(f_i)}{\max(f_i) - \min(f_i)} * (b-a) + a
+$$
+
+where $a=-1$ and $b=1$, producing a range of [-1, 1]. Each feature of the repository $f_i$ is one factor in scoring its fit within the dependency graph
+
+Then, let $z$ be the weighted sum of these normalized features:
+
+$$
+z = \sum_i w_i f_i^{norm} + b
+$$
+
+$z$ is then re-normalized to [-5, 5]. To ensure the final heuristic is bounded in $(0, 1)$ and that lower values are better (i.e., safer, simpler graphs), we use a modified activation:
+
+$$
+h(\mathbf{k}) = 0.5 \cdot (1 - \tanh(s \cdot (z - c)))
+$$
+
+where:
+- $s$ is a scaling factor to control the sensitivity of the tanh
+- $c$ is a centering constant (often set to the expected mean of $z$)
+
+This formulation using $tanh$ as an activation ensures:
+- $h(\mathbf{k}) \approx 0$ for the safest, simplest graphs
+- $h(\mathbf{k}) \approx 1$ for the riskiest, most complex graphs
+- The output is always in $(0, 1)$, with pre- and post-sum normalization to encourage stable heuristic adaptation.
+- More optimal configurations are considered "closer" to their neighbors and the end goal than other, less optimal configurations.
 
 ## Stochastic Gradient Descent and Parameterizing A*
 
