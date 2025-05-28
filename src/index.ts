@@ -8,6 +8,7 @@ import process from 'node:process';
 const program = new Command();
 import defaults from './cli/defaults.ts';
 import taskRunner from './cli/task-runner.ts';
+import klepBackend from './cli/klep-backend.ts';
 
 const DEFAULT_SUBFOLDER = defaults.depsfile.entry.dependencyFolder;
 
@@ -99,6 +100,15 @@ program
       console.log(`Added ${options.dev ? 'development' : 'core'} dependency ${name}@${v}`);
     })
   );
+
+program
+  .command('thing')
+  .description('Build the project')
+  .action(
+    kerror.boundary(async () => {
+      console.log('Result: ', await klepBackend.add(1, 2));
+    })
+  )
 
 program
   .argument('[task]', 'The task to run')

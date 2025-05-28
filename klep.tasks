@@ -1,4 +1,5 @@
 {
   rust: "rustc ./src/rust/main.rs && ./main && rm ./main",
-  hi: "echo \"Hello, world!\""
+  hi: "echo \"Hello, world!\"",
+  build: "wasm-pack build"
 }
