@@ -13,6 +13,10 @@ function __load(resourcePath: string) {
   } catch (e) {
     throw kerror(kerror.Parsing, 'invalid-klep-resource', {
       message: 'Invalid klep resource',
+      context: {
+        stack: e instanceof Error ? e.stack : undefined,
+        error: e instanceof Error ? e.message : 'Unknown error',
+      },
     });
   }
 }
@@ -34,6 +38,7 @@ export function load<T>(resourcePath: string, schema: z.ZodSchema): T {
         message: 'Invalid klep resource',
         context: {
           error: e.message,
+          stack: e.stack,
           'file contents': content,
         },
       });

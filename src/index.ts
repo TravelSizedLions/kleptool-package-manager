@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 
 import { Command } from 'commander';
 import * as klep from './cli/klep.ts';
@@ -106,7 +106,8 @@ program
   .description('Build the project')
   .action(
     kerror.boundary(async () => {
-      console.log('Result: ', await klepBackend.add(1, 2));
+      const backend = await klepBackend();
+      console.log('Result: ', backend.add(1, 2));
     })
   )
 
