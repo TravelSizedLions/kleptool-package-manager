@@ -27,6 +27,10 @@ export function ensureDependencyFolder(name: string, dep: Dependency) {
   keepfile.ensureDependencyFolder(name, dep);
 }
 
+export function addDependency(name: string, dep: Dependency, dev: boolean) {
+  depsfile.addDependency(name, dep, dev);
+}
+
 export function init() {
   depsfile.initialize();
   keepfile.initialize();

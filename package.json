@@ -4,9 +4,6 @@
   "description": "Language-agnostic dependency management tool",
   "type": "module",
   "main": "src/index.ts",
-  "bin": {
-    "klep": "./src/index.ts"
-  },
   "license": "MIT",
   "author": "Jeff Hilton",
   "repository": {
@@ -23,6 +20,7 @@
     "zod": "^3.25.26"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
     "eslint": "^8.57.0",

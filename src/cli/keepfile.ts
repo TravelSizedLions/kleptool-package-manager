@@ -6,7 +6,7 @@ import process from 'node:process';
 import depsfile from './depsfile.ts';
 import { Dependency } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema, type DependencyGraph } from './schemas/klep.keep.schema.ts';
-import _ from 'es-toolkit';
+import * as _ from 'es-toolkit';
 import _defaults from './defaults.ts';
 
 const defaults: DependencyGraph = _defaults.keepfile;

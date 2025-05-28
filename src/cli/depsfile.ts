@@ -4,7 +4,7 @@ import kerror from './kerror.ts';
 import json5 from 'json5';
 import { DepsFile, klepDepsSchema, Dependency } from './schemas/klep.deps.schema.ts';
 import process from 'node:process';
-import _ from 'es-toolkit';
+import * as _ from 'es-toolkit';
 import _defaults from './defaults.ts';
 
 const defaults: DepsFile = _defaults.depsfile.entry;
