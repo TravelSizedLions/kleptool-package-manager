@@ -1,0 +1,39 @@
+[project]
+name = "kleptool"
+version = "0.0.1"
+description = "Smarter, more devious package management"
+authors = [
+  {name = "Jared Storm",email = "jeffhilton.code@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+  "typer (>=0.16.0,<0.17.0)",
+  "pydantic (>=2.11.5,<3.0.0)"
+]
+
+[tool.poetry]
+packages = [
+  {include = "kleptool", from = "src"}
+]
+
+[tool.poetry.scripts]
+klep = "kleptool.index:app"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.9.3"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 88
+indent-width = 2
+select = ["E", "W"]
+ignore = []
+
+[tool.ruff.format]
+indent-style = "space"
