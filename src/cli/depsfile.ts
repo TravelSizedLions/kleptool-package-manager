@@ -3,6 +3,7 @@ import path from 'node:path';
 import kerror from './kerror.ts';
 import json5 from 'json5';
 import { DepsFile, klepDepsSchema, Dependency } from './schemas/klep.deps.schema.ts';
+import * as resources from './resource-loader.ts';
 import process from 'node:process';
 import * as _ from 'es-toolkit';
 import _defaults from './defaults.ts';
@@ -11,43 +12,12 @@ const defaults: DepsFile = _defaults.depsfile.entry;
 let __deps: DepsFile = defaults;
 
 export function load(): DepsFile {
-  try {
-    const rawDeps = json5.parse(fs.readFileSync('./klep.deps', 'utf8'));
-    const result = klepDepsSchema.safeParse(rawDeps);
-
-    if (!result.success) {
-      throw kerror(kerror.type.Parsing, 'invalid-klep-deps-file', {
-        message: 'Invalid klep dependencies file',
-        context: {
-          error: result.error.message,
-          issues: result.error.issues,
-        },
-      });
-    }
-
-    __deps = result.data;
+  if (__deps) {
     return __deps;
-  } catch (e: unknown) {
-    if (kerror.isKlepError(e)) {
-      throw e;
-    }
-
-    if (e instanceof SyntaxError) {
-      throw kerror(kerror.type.Parsing, 'invalid-klep-deps-file', {
-        message: 'Error parsing klep dependencies file',
-        context: {
-          error: e.message,
-        },
-      });
-    }
-
-    throw kerror(kerror.type.Parsing, 'unknown-error-loading-deps', {
-      message: 'Unknown error loading klep dependencies file',
-      context: {
-        error: e instanceof Error ? e.message : 'Unknown error',
-      },
-    });
   }
+
+  __deps = resources.load<DepsFile>('./klep.deps', klepDepsSchema);
+  return __deps;
 }
 
 export function save() {
@@ -134,7 +104,7 @@ function __findMatchingRule(deps: Record<string, Dependency>, dep: Dependency): 
 
 function initialize() {
   if (fs.existsSync(path.join(process.cwd(), 'klep.deps'))) {
-    throw kerror(kerror.type.Parsing, 'klep-file-exists', {
+    throw kerror(kerror.Parsing, 'klep-file-exists', {
       message: 'A klep.deps file already exists in the current directory',
     });
   }

@@ -7,6 +7,7 @@ enum Type {
   Parsing = 'Parsing',
   Argument = 'Argument',
   Git = 'Git',
+  Task = 'Task',
   Unknown = 'Unknown',
 }
 
@@ -78,8 +79,8 @@ function isKlepError(error: unknown): error is KlepError {
  * console.log('makes it here safely');
  * ```
  */
-function boundary(fn: (...args: unknown[]) => Promise<void> | void) {
-  return async (...args: unknown[]) => {
+function boundary(fn: (...args: any) => Promise<void> | void) {
+  return async (...args: any) => {
     try {
       await fn(...args);
     } catch (error: unknown) {
@@ -138,12 +139,13 @@ type KerrorFuncOptions = {
   [key: string]: unknown;
 };
 
-interface KerrorFuncModule {
+type KerrorFuncModule = {
   (type: Type, id: string, options?: KerrorFuncOptions): KlepError;
+  type: typeof Type;
+  KlepError: typeof KlepError;
   boundary: typeof boundary;
   isKlepError: (error: unknown) => error is KlepError;
-  type: typeof Type;
-}
+} & typeof Type;
 
 function _throw(type: Type, id: string, options: KerrorFuncOptions = {}) {
   const message = options.message as string;
@@ -169,9 +171,12 @@ Object.defineProperty(kerror, 'isKlepError', { ...defineSettings, value: isKlepE
 
 Object.defineProperty(kerror, 'KlepError', { ...defineSettings, value: KlepError });
 
+Object.defineProperty(kerror, 'type', { ...defineSettings, value: Type });
+
 // Add type constants
 for (const type of Object.values(Type)) {
   Object.defineProperty(kerror, type, { ...defineSettings, value: type });
+  Object.defineProperty(kerror, type.toLowerCase(), { ...defineSettings, value: type });
 }
 
-export default kerror;
+export default kerror as KerrorFuncModule;

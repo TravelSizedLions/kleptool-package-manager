@@ -7,6 +7,7 @@ import kerror from './cli/kerror.ts';
 import process from 'node:process';
 const program = new Command();
 import defaults from './cli/defaults.ts';
+import taskRunner from './cli/task-runner.ts';
 
 const DEFAULT_SUBFOLDER = defaults.depsfile.entry.dependencyFolder;
 
@@ -18,6 +19,9 @@ I'm not sure why I'm doing this, but here we are. Hope it works.`;
 program.name('klep').description(description);
 
 program.version(packageJson.version);
+
+// Global options
+program.option('-s, --silent', 'Silence command output');
 
 program
   .command('init')
@@ -74,9 +78,7 @@ program
     `The folder to extract the dependency to. By default, the dependency is extracted to ${DEFAULT_SUBFOLDER} at the root of the project`
   )
   .action(
-    kerror.boundary(async (...args: unknown[]) => {
-      const [url, options] = args as [string, AddOptions];
-
+    kerror.boundary(async (url: string, options: AddOptions) => {
       const v = options.version || 'latest';
       const name = options.rename || url.split('/').pop()?.split('.').shift() || url;
 
@@ -95,6 +97,23 @@ program
       klep.addDependency(name, candidate, !!options.dev);
       klep.saveDeps();
       console.log(`Added ${options.dev ? 'development' : 'core'} dependency ${name}@${v}`);
+    })
+  );
+
+program
+  .argument('[task]', 'The task to run')
+  .option('[args...]', 'The arguments to pass to the task')
+  .action(
+    kerror.boundary(async (task: string, args: string[]) => {
+      if (!task) {
+        program.help();
+        return;
+      }
+
+      // Get the silent flag from global options
+      const silent = program.opts().silent;
+      
+      await taskRunner.do(task, args, { silent });
     })
   );
 

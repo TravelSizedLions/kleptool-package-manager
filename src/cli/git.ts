@@ -1,8 +1,7 @@
 import git from 'simple-git';
 import semver from 'semver';
 import kerror from './kerror.ts';
-import { spawn } from 'node:child_process';
-import { Buffer } from 'node:buffer';
+import sh from './sh.ts';
 
 export type VersionType = 'tag' | 'hash' | 'branch' | 'semver';
 
@@ -147,63 +146,8 @@ export async function getLatestCommit(url: string) {
   return latestCommit;
 }
 
-function __git(args: string[], timeout: number = 10000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const process = spawn('git', args);
-    let stdout = '';
-    let stderr = '';
-
-    const timer = setTimeout(() => {
-      process.kill();
-      reject(
-        kerror(kerror.type.Git, 'command-timeout', {
-          message: 'The git command timed out',
-          context: {
-            command: ['git', ...args].join(' '),
-            error: 'Command timed out',
-          },
-        })
-      );
-    }, timeout);
-
-    process.stdout.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    process.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    process.on('close', (code: number) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve(stdout);
-      } else {
-        reject(
-          kerror(kerror.type.Git, 'command-failed', {
-            message: 'The git command failed',
-            context: {
-              command: ['git', ...args].join(' '),
-              error: stderr,
-            },
-          })
-        );
-      }
-    });
-
-    process.on('error', (error: Error) => {
-      clearTimeout(timer);
-      reject(
-        kerror(kerror.type.Git, 'command-error', {
-          message: 'Failed to execute git command',
-          context: {
-            command: ['git', ...args].join(' '),
-            error: error.message,
-          },
-        })
-      );
-    });
-  });
+async function __git(args: string[], timeout: number = 10000): Promise<string> {
+  return await sh('git', { args, timeout })
 }
 
 function __removeVersionConstraint(version: string): string {

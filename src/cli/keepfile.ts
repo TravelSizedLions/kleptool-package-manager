@@ -8,6 +8,7 @@ import { Dependency } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema, type DependencyGraph } from './schemas/klep.keep.schema.ts';
 import * as _ from 'es-toolkit';
 import _defaults from './defaults.ts';
+import * as resources from './resource-loader.ts';
 
 const defaults: DependencyGraph = _defaults.keepfile;
 
@@ -15,7 +16,7 @@ let __keep: DependencyGraph | undefined = undefined;
 
 function initialize() {
   if (fs.existsSync(path.join(process.cwd(), 'klep.keep'))) {
-    throw kerror(kerror.type.Parsing, 'klep-file-exists', {
+    throw kerror(kerror.Parsing, 'klep-file-exists', {
       message: 'A klep.keep file already exists in the current directory',
     });
   }
@@ -41,41 +42,8 @@ function load(): DependencyGraph {
     return __keep;
   }
 
-  try {
-    const rawKeep = json5.parse(fs.readFileSync('./klep.keep', 'utf8'));
-    const result = klepKeepfileSchema.safeParse(rawKeep);
-
-    if (!result.success) {
-      throw kerror(kerror.type.Parsing, 'invalid-klep-keep-file', {
-        message: 'Invalid klep keep file',
-        context: {
-          error: result.error.message,
-          issues: result.error.issues,
-        },
-      });
-    }
-
-    __keep = result.data;
-    return __keep;
-  } catch (e: unknown) {
-    if (kerror.isKlepError(e)) {
-      throw e;
-    } else if (e instanceof SyntaxError) {
-      throw kerror(kerror.type.Parsing, 'invalid-klep-keep-file', {
-        message: 'Error parsing klep keep file',
-        context: {
-          error: e.message,
-        },
-      });
-    } else {
-      throw kerror(kerror.type.Parsing, 'unknown-error-loading-keep', {
-        message: 'Unknown error loading klep keep file',
-        context: {
-          error: e instanceof Error ? e.message : 'Unknown error',
-        },
-      });
-    }
-  }
+  __keep = resources.load<DependencyGraph>('./klep.keep', klepKeepfileSchema);
+  return __keep;
 }
 
 function reload() {
