@@ -1,10 +1,8 @@
-# GAD: General-purpose Agnostic Dependency Resolution using Neural A\* Heuristics
-
-What a banger of a title, am I right? 🤜💥🤛
+# GAD: General-purpose Agnostic Dependency Resolution using Neural $A*$ Heuristics
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic recursive dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A\* optimization algorithm. This purpose-built adaptation of A\* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal dependency graphs. After, we will discuss the advantages and disadvantages of Neural A\* over traditional SMT-based approaches.
+In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A\* optimization algorithm. This purpose-built adaptation of A\* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal dependency graphs. After, we will discuss the advantages and disadvantages of Neural A\* over traditional SMT-based approaches.
 
 First, I'll begin by summarizing the general principles and purposes of A\* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
@@ -72,12 +70,29 @@ Both the industry and the individual stand to benefit from a general purpose sol
 - Greater precision in resolving exactly which version of which dependencies are needed for each project, down to individual commits if necessary.
 - The capacity to work with and standardize non-standard project layouts in your dependencies
 
-## The A\* Algorithm
+## Background
+
+### Related Research
+
+Disorganized, WIP: read, rank, and discard unrelated/out of scope research
+
+ - Learning to Solve SMT Formulas (FastSMT) - Balunovic et al., 2018
+ - Smart Pip https://dl.acm.org/doi/abs/10.1145/3551349.3560437
+ - Automatic CVE detection and resolution: https://dl.acm.org/doi/abs/10.1145/3475960.3475985
+ - Correlation between python version constraints and package incompatibility: https://www.sciencedirect.com/science/article/abs/pii/S0167642324000212
+ - B.S Thesis on BDD Rust Dependency Resolution: https://oparu.uni-ulm.de/server/api/core/bitstreams/d5255729-14fe-4c67-98aa-a4eaa041302f/content
+ - Maven Code Smell resolution: https://netlibrary.aau.at/obvuklhs/content/titleinfo/9718725/full.pdf
+ - ML Security Considerations in the Future: https://dl.acm.org/doi/full/10.1145/3708533
+ - Analysis of dynamic symmetries for SAT/SMT solvers: https://theses.hal.science/tel-03128926/
+ - proposal of several dependency resolution approaches: https://dspace.library.uvic.ca/server/api/core/bitstreams/08e884a4-fccf-4fdd-88f3-121121ba0db4/content
+ - Definitely Read & Cite this one: Literature Review of General-case dependency resolution (and why we lean towards SAT solvers): https://ieeexplore.ieee.org/abstract/document/9054837 (Feb, 2020)
+
+### The A\* Algorithm
 
 
 The A\* algorithm finds the optimal path between two nodes in a graph by maintaining two sets of nodes and using a scoring function to evaluate potential paths.
 
-### A\* Algorithm Steps
+#### A\* Algorithm Steps
 
 1. Define two ordinal sets of nodes:
    - $Q_{open}$: Open queue (nodes to be evaluated)
@@ -112,9 +127,9 @@ The A\* algorithm finds the optimal path between two nodes in a graph by maintai
 5. If loop exits without finding path:
    - **Return failure** (No path exists from $n_{start}$ to $n_{end}$)
 
-## Satisfiability and SMT
+### Satisfiability and SMT
 
-### Boolean Satisfiability (SAT)
+#### Boolean Satisfiability (SAT)
 
 Satisfiability describes a problem space where the goal is to determine if a given set of boolean clauses can be resolved to TRUE. These clauses are typically given in Conjunctive Normal Form (CNF), which is a normalized form where clauses are ANDed together, and each clause is a disjunction (OR) of literals. For example:
 
@@ -126,7 +141,7 @@ $$
 
 This is known as 3-SAT because each clause contains exactly three literals. The problem asks: "Is there an assignment of TRUE/FALSE values to the variables that makes the entire expression TRUE?"
 
-### Satisfiability Modulo Theories (SMT)
+#### Satisfiability Modulo Theories (SMT)
 
 While SAT deals with pure boolean logic, SMT extends this by allowing more complex predicates. Instead of just boolean variables, SMT can work with:
 
@@ -148,7 +163,7 @@ The key difference is that SMT solvers can reason about these more complex predi
 3. Test case generation
 4. And, in our case, dependency resolution
 
-### Why This Matters for Dependency Resolution
+#### Why This Matters for Dependency Resolution
 
 In dependency resolution, we can frame our constraints as SMT predicates:
 
@@ -194,7 +209,7 @@ Since the actual question behind dependency resolution is "How do I find a set o
    - When A\* finds a potential path
      - SMT checks if it satisfies all constraints
      - If not, A\* continues searching
-     - If yes, we've found our solution
+     - If yes, we've found a potential solution
 
 ### Example Scenario
 
@@ -510,6 +525,47 @@ This reduces the need for admissability in the heuristic from a hard requirement
 More accurate heuristics in A\* result in faster traversal of the configuration space, creating potential for an increase in not just quality of the resolution, but a decrease in time spent in the search space.
 
 In addition to this, leveraging A\* opens up the possibility of modeling the heuristic and updating it over time based on real world information, opening up the way for future improvements.
+
+#### Dataset Acquisition and Preparation
+
+- ***Generation:*** 
+  - Existing lockfiles and package manifests are translated into a globally recognizable pairing of inputs and outputs, with the existing graphs scored according to the distance metric defined above.
+- ***Sourcing:*** 
+  - All repositories used are confirmed to have an MIT or otherwise free and open source software (FOSS) license on the latest version of their main branches.
+  - Metadata regading the following is prepared and cached in a database accessible to the training and inference implementations. All data sources is anonymized and generalized. No source code other than manifests and lockfiles are considered.
+    - for each commit:
+      - dependencies
+      - resolutions
+      - publish date
+      - date since last publish
+      - commit # (since initial)
+      - repository size (in bytes)
+      - length of the readme
+      - what the tag is (if applicable)
+      - if there is an associated merge request
+    - repository-wide:
+      - number of maintainers
+      - number of releases
+      - number of favorites
+      - number of forks
+      - number of open issues
+      - number of closed issues
+- ***Synthesis:*** 
+  - To increase the robustness of the training process, the following data-synthesis and batch differentiation techniques will be considered
+    - Commit dropout: versions of repositories will be generated missing a % of commits in order to simulate a more poorly maintained version of a repository
+    - Metadata dropout: repository and commit-specific information will randomly be dropped or modified
+    - Slicing: Larger repositories will have slices taken out starting from the initial commit and have their metadata recalculated to simulate young repositories. For example:
+      - From v0.0.1 to v1.0.0 if applicable
+      - Dropping all commits but the first year of development from date of first publish
+    - Constraint Mangling: Existing repositories will have their version constraints loosened or tightened and their lockfiles regenerated. Occasional hard and soft conflicts are purposefully introduced.
+
+#### Addressing Concerns 
+- ***Determinism:*** The modeled heuristic is used to guide the search rather than calculate actual distance, so small variations in score due to platform-specific nuances of floating point arithmetic are unlikely to affect determinism. In addition, modern modelling techniques allow neural networks to be quantized into fixed-point arithmetic. Training may be done using floating point values, and verification and deployment can be done in a quantized manner, guaranteeing deterministic outputs across platforms. Known optimal dependency solutions for particular constraints are cached and and shareable through the traditional method of keeping a lockfile. 
+
+- ***Inference Time:*** Performance critical aspects of the algorithm such as the A* search and heuristic weighting inference are implemented using a choice of language known for compile-time optimizations and speed. In addition, the complexity of the model is purposefully limited so as to allow for deployment and reasonable inference times on lower end systems and non-accelerated hardware.
+
+- ***Retraining:*** As additional architectures and weights of the heuristic become available, existing models will be maintained for backwards compatibility. All updates to the model are considered major breaking changes.
+
 
 ## Common Questions and Concerns
 
