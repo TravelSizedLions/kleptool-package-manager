@@ -543,6 +543,7 @@ In addition to this, leveraging A\* opens up the possibility of modeling the heu
       - length of the readme
       - what the tag is (if applicable)
       - if there is an associated merge request
+      - whether automated tests pass (if relevant)
     - repository-wide:
       - number of maintainers
       - number of releases
