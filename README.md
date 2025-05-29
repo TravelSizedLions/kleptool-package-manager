@@ -2,7 +2,7 @@
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A\* optimization algorithm. This purpose-built adaptation of A\* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal dependency graphs. After, we will discuss the advantages and disadvantages of Neural A\* over traditional SMT-based approaches.
+In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A\* optimization algorithm. This purpose-built adaptation of A\* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features to construct a heuristic. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal (read, stable and low-risk) dependency graphs. After, we will discuss the advantages and disadvantages of Neural A\* over traditional SMT-based approaches.
 
 First, I'll begin by summarizing the general principles and purposes of A\* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
@@ -16,7 +16,14 @@ First, I'll begin by summarizing the general principles and purposes of A\* and 
 
 We'll then use these considerations and others to formulate our Neural A\* heuristic functions.
 
+
+### Scope
+
+The purpose of this document is to outline an alternative to language-specific and semver-dependent package management. It does not attempt to broach other aspects of a language-specific ecosystem, such as compiling, transpiling, bundling, hosting, or distributing code artifacts.
+
 ### Motivation
+
+There is no "Git for Package Management" yet, but there should be.
 
 If you're writing...
 
@@ -25,11 +32,13 @@ If you're writing...
 - A .NET or Rust application
 - Or something an unironic PHP-enjoyer would want to write in PHP
 
-...then you've already got a package ecosystem for that. Why would you ever use or need a package management system that isn't tailored to your language of choice?
+...then you've already got a package ecosystem that suits for needs. Why would you ever use or need a package management system that isn't tailored to your language of choice?
 
 Well, what if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
 
-An experienced developer might retort, mentioning that language agnostic dependency management tools like Gradle, Maven make it possible to manage dependencies and run builds for language contexts other than the Java landscape they were born in. In their minds such tools already exist.
+An experienced developer might retort, mentioning that language agnostic dependency management tools like Gradle and Maven make it possible to manage dependencies and run builds for language contexts other than the Java landscape they were born in. In their minds such tools already exist.
+
+However, these tools are almost always written with a specific language context in mind, then adapted to other language contexts later.
 
 Well, what if one's dependencies include build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment? 
 And what if the target versions you have to work with are such comforting values as `v0.0.1-alpha`, `>= sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, or my personal favorite, `latest`.
@@ -70,7 +79,49 @@ Both the industry and the individual stand to benefit from a general purpose sol
 - Greater precision in resolving exactly which version of which dependencies are needed for each project, down to individual commits if necessary.
 - The capacity to work with and standardize non-standard project layouts in your dependencies
 
+## Goals
+
+### What Would a "Git for Package Management" Look Like?
+
+- ***Language-agnostic:*** Works for any language, any project structure.
+
+- ***Versioning Ambivalent:*** Leverages semantic versioning schemas where they exist, but doesn't require them to incorporate or resolve dependencies.
+
+- ***Efficient and Safe:*** Minimizes risks from transitive dependencies, and does so *fast*
+
+- ***Decentralized:*** No single point of failure or central registry required.
+
+- ***Reproducible:*** Guarantees you get the same dependencies for the same specified requirements, every time, everywhere.
+
+- ***Composable:*** Lets you mix and match dependencies from any source (git, registries, local, etc.).
+
+- ***Minimal Friction:*** Easy to adopt, no need to rewrite your project or learn a new DSL.
+
 ## Background
+
+### A Review of Existing General Purpose Development Ecosystems
+- Gradle: Geared heavily towards android app development
+- Maven: Geared towards java development
+- Pants:
+  - Simple
+  - Tailored towards monorepos
+  - Language-specific needs implemented using the same API as their plugins
+  - Smaller Community
+  - Simplicity breaks down when learning advanced features
+  - Aims most specifically towards python, though there is definitely support for other languages
+  - Difficulty scaling on enterprise-sized monorepos
+- Bazel
+  - Highly scalable, geared specifically towards massive polyglot monorepos
+  - High learning curve
+  - First-class support for the most common languages
+  - Implements sandboxing of its resolver to guarantee build reproducibility
+  - Large ecosystem
+  - Lacking in Python support
+  - Opinionated
+  - Too complex for small projects
+  - Google-centric defaults
+- Buck: Deprecated
+- Nix: platform-specific, not a built as a project management system by default (though it can be used to set up reproducible project environments)
 
 ### Related Research
 
@@ -421,6 +472,7 @@ The distance between values of $\mathbf{k}$ is where we begin to re-enter the re
   - Does the new version have known breaking changes?
   - Does the new version have transitive dependencies that need to be cloned or additional commits to be pulled?
   - Are all dependencies in the new configuration compatible with the license of the project?
+  - Does this commit/project have a high/low CVE CVSS score? Or incorporate a number of CVE-laden transitive dependencies?
 
 - How restrictive are the constraints on the new version compared to the existing version?
   - Wider constraint ranges mean searching through more transitive dependencies for a candidate.
