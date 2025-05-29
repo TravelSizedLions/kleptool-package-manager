@@ -1,22 +1,22 @@
-# GAD: General-purpose Agnostic Dependency Resolution using Neural A* Heuristics
+# GAD: General-purpose Agnostic Dependency Resolution using Neural A\* Heuristics
 
 What a banger of a title, am I right? 🤜💥🤛
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic recursive dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A* optimization algorithm. This purpose-built adaptation of A* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal dependency graphs. After, we will discuss the advantages and disadvantages of Neural A* over traditional SMT-based approaches.
+In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic recursive dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A\* optimization algorithm. This purpose-built adaptation of A\* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal dependency graphs. After, we will discuss the advantages and disadvantages of Neural A\* over traditional SMT-based approaches.
 
-First, I'll begin by summarizing the general principles and purposes of A* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
+First, I'll begin by summarizing the general principles and purposes of A\* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
-- Building and maintaining the A* configuration space
+- Building and maintaining the A\* configuration space
 - The time and computational cost to cache and clone repositories
 - Resolving non-semantic version targets together with semantic targets
 - Architecting, initializing, training, and tuning a custom, locally deployable neural model
 - Updating dependencies from partial solutions
 - Recovering from expired or missing cached dependencies
-- Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A*-SMT resolver
+- Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A\*-SMT resolver
 
-We'll then use these considerations and others to formulate our Neural A* heuristic functions.
+We'll then use these considerations and others to formulate our Neural A\* heuristic functions.
 
 ### Motivation
 
@@ -53,13 +53,13 @@ Yet many of these environments have a desparate need for solid dependency resolu
 
 In addition to this, most small-scale projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development context can't rely on anything most popular languages and package managers take for granted.
 
-We in the development community have a core problem: the *.wheel keeps getting re-invented for specific languages in a limited capacity. The basic approach is almost always the same for every major package manager: 
+We in the development community have a core problem: the \*.wheel keeps getting re-invented for specific languages in a limited capacity. The basic approach is almost always the same for every major package manager: 
 - build a public source for packages to be published
 - enforce versioning on those publishes
 - enforce directory structures
 - enforce tooling
 - resolve dependencies with SAT solvers
-- *.lock resolved versions in place.
+- \*.lock resolved versions in place.
 
 Despite the approach always being the same, no-one's sought to actually, *fully* solve the general case problem of dependency management, i.e., for all project structures, sources, versioning schemes, and languages. 
 
@@ -72,12 +72,12 @@ Both the industry and the individual stand to benefit from a general purpose sol
 - Greater precision in resolving exactly which version of which dependencies are needed for each project, down to individual commits if necessary.
 - The capacity to work with and standardize non-standard project layouts in your dependencies
 
-## The A* Algorithm
+## The A\* Algorithm
 
 
-The A* algorithm finds the optimal path between two nodes in a graph by maintaining two sets of nodes and using a scoring function to evaluate potential paths.
+The A\* algorithm finds the optimal path between two nodes in a graph by maintaining two sets of nodes and using a scoring function to evaluate potential paths.
 
-### A* Algorithm Steps
+### A\* Algorithm Steps
 
 1. Define two ordinal sets of nodes:
    - $Q_{open}$: Open queue (nodes to be evaluated)
@@ -158,7 +158,7 @@ In dependency resolution, we can frame our constraints as SMT predicates:
 
 The SMT solver can then find a satisfying assignment that meets all these constraints, effectively finding a valid set of dependency versions. Many existing solvers use sophisticated heuristics, backtracking with contradiction memory, and 
 
-## SMT and A* Heuristic Dependency Resolution
+## SMT and A\* Heuristic Dependency Resolution
 
 ### The Core Problem
 
@@ -176,9 +176,9 @@ This creates a chicken-and-egg problem:
 1. To know what dependencies we need, we need to know the versions
 2. To know the versions, we need to know what dependencies we need
 
-### Combining SMT and A*
+### Combining SMT and A\*
 
-Thankfully, while "Can I find a set of X,Y,Z that fits my needs A,B,C?" is the only kind of problem SMT cares about solving, algorithms such as A* only cares about solving "What's the best thing to do and how do I do it?" kind of problems—in other words, optimization problems. 
+Thankfully, while "Can I find a set of X,Y,Z that fits my needs A,B,C?" is the only kind of problem SMT cares about solving, algorithms such as A\* only cares about solving "What's the best thing to do and how do I do it?" kind of problems—in other words, optimization problems. 
 
 Since the actual question behind dependency resolution is "How do I find a set of dependencies that satisfy constraints when I don't know what all of the dependencies are ahead of time?", that implies the answer is some amalgamate algorithm of the two approaches.
 
@@ -191,9 +191,9 @@ Since the actual question behind dependency resolution is "How do I find a set o
    - The full cost function considers version compatibility
 
 2. **SMT Validates Solutions**
-   - When A* finds a potential path
+   - When A\* finds a potential path
      - SMT checks if it satisfies all constraints
-     - If not, A* continues searching
+     - If not, A\* continues searching
      - If yes, we've found our solution
 
 ### Example Scenario
@@ -201,7 +201,7 @@ Since the actual question behind dependency resolution is "How do I find a set o
 Consider resolving dependencies for a project:
 
 1. Start with known direct dependencies
-2. A* explores version combinations
+2. A\* explores version combinations
 3. When a new dependency is discovered:
    - Add it to the SMT constraints
    - Update the search space
@@ -210,9 +210,9 @@ Consider resolving dependencies for a project:
 
 This approach gives us the best of both worlds:
 - SMT's ability to validate complex constraints
-- A*'s ability to efficiently search large spaces
+- A\*'s ability to efficiently search large spaces
 
-### Why use A* and an SMT solver together to search for satisfying dependency resolutions?
+### Why use A\* and an SMT solver together to search for satisfying dependency resolutions?
 
 Modern dependency resolvers use exclusively SMT satisfiability solvers to reach a valid set of dependencies. While this works, it comes with a few limitations:
 
@@ -220,13 +220,13 @@ Modern dependency resolvers use exclusively SMT satisfiability solvers to reach 
 - SMT solvers use static, predefined heuristics to prune the search space of possibilities. This is for the sake of efficiency rather than optimization
 - Even the best solvers for dependency resolution make the assumption that they will be handed semver-compliant version schemes.
 
-A* on the other hand, offers:
+A\* on the other hand, offers:
 
 - The same heuristic search space pruning approach, but with room for customizability and tunability
 - No assumptions about the nature of the search space other than the requirement that it be expressed as a graph with a defined start state and goal to reach.
 - Not just finding a valid solution, but finding the best solution for the distance and heuristic functions it's handed.
 
-As such, A* offers an advantage when building an adaptive dependency resolver designed to minimize the risks inherent to added dependencies, while not insisting that all candidates adhere strictly to semantic versioning. If the dependency resolver itself can assess and minimize risks, SemVer as a standard is no longer a strict necessity to acquire safe, dependable packages and addons, and we make it possible to fine-tune resolutions for desired goals, such as:
+As such, A\* offers an advantage when building an adaptive dependency resolver designed to minimize the risks inherent to added dependencies, while not insisting that all candidates adhere strictly to semantic versioning. If the dependency resolver itself can assess and minimize risks, SemVer as a standard is no longer a strict necessity to acquire safe, dependable packages and addons, and we make it possible to fine-tune resolutions for desired goals, such as:
 
 - Automatically limiting or even outright preventing vulnerable transitive dependencies
 - Limiting the number of installed transitive dependencies in the first place
@@ -235,11 +235,11 @@ As such, A* offers an advantage when building an adaptive dependency resolver de
 
 However, our algorithm will still need to verify that candidate solutions do in-fact satisfy the constraints placed upon them, and so SAT validation will still be used to validate the proposed solutions.
 
-Conveniently, A* also gracefully handles cases where no dependency resolution can be found.
+Conveniently, A\* also gracefully handles cases where no dependency resolution can be found.
 
 ## Formally Defining the Configuration Space
 
-As mentioned above, the configuration space for this problem is the set of all possible version configurations given a set of dependencies. In order to formulate this as a graph suitable for A*, we must define what constitutes the following:
+As mentioned above, the configuration space for this problem is the set of all possible version configurations given a set of dependencies. In order to formulate this as a graph suitable for A\*, we must define what constitutes the following:
 
 - The dimensions in the space
 - A node in the graph representing the space
@@ -263,7 +263,7 @@ So the range of each dimension $K_i$ describes the following about a particular 
 - A set of possible dependencies $D_i= \bigcup_{j=1}^{m} d_{i_j}$
 - A a set of possible constraints on those dependencies $C_i = \bigcup_{j=1}^{m}c_{i_j}$
 - A time-ordered set of hashes $T_i=\bigcup_{j=1}^{m}t_{i_j}$
-- A function $\delta_i(j) \rarr (t_{i_j}, d_{i_j}, c_{i_j})$ mapping $t_{i_j}$ to its tuple of related ordinal sets $d_{i_j}$ and $c_{i_j}$
+- A function $\delta_i(j) \rightarrow (t_{i_j}, d_{i_j}, c_{i_j})$ mapping $t_{i_j}$ to its tuple of related ordinal sets $d_{i_j}$ and $c_{i_j}$
   - For example: $\delta_i(5)$ returns the hash, dependencies, and constraints for the 5th commit in repo $i$
 
 
@@ -342,19 +342,19 @@ As mentioned [above](#dimensions-in-the-space), each point $t_{i_j}$ in a dimens
 
 To understand edges in the graph of $K_i'$, we also need to define what constitutes the neighborhood of a node $\mathbf{k}$. If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have a difference of one hash, either the one immediately prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
 
-## Application of A* on Bounded K-Space
+## Application of A\* on Bounded K-Space
 
-For an implementation of A* to search through the $K_i$
+For an implementation of A\* to search through the $K_i$
 
 ### The Initial Configuration
 
-The A* Algorithm calls for an initial configuration to place on its open queue (See the [algorithm steps](#a-algorithm-steps)).
+The A\* Algorithm calls for an initial configuration to place on its open queue (See the [algorithm steps](#a-algorithm-steps)).
 
-In modern software package management systems, the list of root dependencies of a project are specified in a manifest. These specified target versions conveniently serve as a A*'s starting node $n_{start}$. While the root dependencies in these types of manifests do not include all possible repositories serving as dimensions of $K_i'$, this is remediable by following the cascade of transitive dependencies until we fill out the initial configuration. Any remaining dimensions in $K_i'$ not intialized by this process are *possible* transitive dependencies that may not be explored during dependency resolution.
+In modern software package management systems, the list of root dependencies of a project are specified in a manifest. These specified target versions conveniently serve as a A\*'s starting node $n_{start}$. While the root dependencies in these types of manifests do not include all possible repositories serving as dimensions of $K_i'$, this is remediable by following the cascade of transitive dependencies until we fill out the initial configuration. Any remaining dimensions in $K_i'$ not intialized by this process are *possible* transitive dependencies that may not be explored during dependency resolution.
 
 #### Alternative Initializations
 
-As one key feature of dependency resolvers is the caching and reusing of partial resolutions, initialization should also weigh a variety of other possible starting places for a candidate graphs based on previous resolutions. (#TODO - add to this more later as I explore)
+As one key feature of dependency resolvers is the caching and reusing of partial resolutions, initialization should also weigh a variety of other possible starting places for a candidate graphs based on previous resolutions. (TODO - add to this more later as I explore)
 
 ### The Solution Set
 Formally, a point in the subspace $K_i'$ is a tuple $\mathbf{k} = (k_d)_{d \in D_i}$, where each $k_d \in T_d'$. A tuple $\mathbf{k}$ in which all constraints are satisfied for the root dependencies of the project represents a valid assignment (i.e., a candidate dependency graph) in $K_i'$. This makes $K_i'$ the search space of possible dependency resolutions for repository $K_i$. However, not every assignment of $\mathbf{k}$ is a valid dependency resolution, since not every $\mathbf{k}$ satisfies the constraints applied by dependencies in $\mathbf{k}$ for other dependencies in $\mathbf{k}$. 
@@ -366,7 +366,7 @@ $$
 \mathcal{V_i} = \{ \mathbf{k} \in K_i' \mid \mathbf{k} \text{ satisfies all constraints applied by values in } \mathbf{k} \}
 $$
 
-However, we're not happy just finding any member of this set. A* is designed to find an optimal solution.
+However, we're not happy just finding any member of this set. A\* is designed to find an optimal solution.
 
 ### Optimality
 
@@ -390,7 +390,7 @@ The true question is more about finding the balance between these considerations
 
 ### Distance
 
-The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors.
+The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A\* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors.
 
 - How does the neighbor affect the dependency graph?
   - How many new transitive dependencies are added and/or removed?
@@ -420,7 +420,7 @@ The distance between values of $\mathbf{k}$ is where we begin to re-enter the re
 
 ## Modeling the Heuristic
 
-When describing this project to a colleague of mine, he was fascinated by the proposition of using A* to search the space of dependency configurations for an optimal graph, however I was hesitant at first to mention the use of Machine Learning as a means of determining the heuristic.
+When describing this project to a colleague of mine, he was fascinated by the proposition of using A\* to search the space of dependency configurations for an optimal graph, however I was hesitant at first to mention the use of Machine Learning as a means of determining the heuristic.
 
 Eventually, though, asked him point blank what his opinion was of using neural modeling for the heuristic function. He had several concerns, though his immediate and primary concern was that of guaranteeing a deterministic solution, as well as finding examples that can be labeled for supervised training.
 
@@ -436,9 +436,9 @@ Here, our goal is to instead balance the optimization of several factors, includ
 - Reusing or quickly accessing areas of the search space that previous resolutions have found to be optimal.
 - Preferring safer subsets of the solution space (such as commits tagged with a semantic version) over non-versioned sections of the hash space.
 
-In order for A* to effectively search $K'$ and reach optimal solutions, we must define a search heuristic that is both admissable (guaranteed to be optimistic when compared to the actual cost of the path to the resolved dependency), and monotonically increasing from our initial starting configuration. The value of the heuristic score of a given $\mathbf{k}$ is inversely proportional to its desirability (i.e., lower scores are more valuable).
+In order for A\* to effectively search $K'$ and reach optimal solutions, we must define a search heuristic that is both admissable (guaranteed to be optimistic when compared to the actual cost of the path to the resolved dependency), and monotonically increasing from our initial starting configuration. The value of the heuristic score of a given $\mathbf{k}$ is inversely proportional to its desirability (i.e., lower scores are more valuable).
 
-Therefore, to create a robust adaptive approach, it must guarantee admissability and monotonic distance relationships. However, due to the nature of this particular problem and its existing attempts at a solution, we'll discuss why A* is a particularly evolution for dependency resolution compared to traditional SMT solvers.
+Therefore, to create a robust adaptive approach, it must guarantee admissability and monotonic distance relationships. However, due to the nature of this particular problem and its existing attempts at a solution, we'll discuss why A\* is a particularly evolution for dependency resolution compared to traditional SMT solvers.
 
 #### Dimension-wise Normalization
 
@@ -501,15 +501,15 @@ This formulation using $tanh$ as an activation ensures:
 - The output is always in $(0, 1)$, with pre- and post-sum normalization to encourage stable heuristic adaptation.
 - More optimal configurations are considered "closer" to their neighbors and the end goal than other, less optimal configurations.
 
-#### The True Advantage of A* for Dependency Resolution
+#### The True Advantage of A\* for Dependency Resolution
 
-We've discussed how an adaptive approach to A* is theoretically possible for dependency resolution, and that it offers a possible improvement over SAT-solvers. However, we've yet to discuss why Neural-A* is theoretically a far more valuable tool for this problem space than the traditional approach: Since SMT solvers are not concerned with finding an optimal solution, then should the A* algorithm fail to find the best solution due to a violation of admissability in the heuristic, the algorithm will have performed no worse than a SMT solver.
+We've discussed how an adaptive approach to A\* is theoretically possible for dependency resolution, and that it offers a possible improvement over SAT-solvers. However, we've yet to discuss why Neural-A\* is theoretically a far more valuable tool for this problem space than the traditional approach: Since SMT solvers are not concerned with finding an optimal solution, then should the A\* algorithm fail to find the best solution due to a violation of admissability in the heuristic, the algorithm will have performed no worse than a SMT solver.
 
-This reduces the need for admissability in the heuristic from a hard requirement to an ideal, making it much less risky to target modeling an A* heuristic to be as close as possible to the true final distance from the starting configuration to the optimal one.
+This reduces the need for admissability in the heuristic from a hard requirement to an ideal, making it much less risky to target modeling an A\* heuristic to be as close as possible to the true final distance from the starting configuration to the optimal one.
 
-More accurate heuristics in A* result in faster traversal of the configuration space, creating potential for an increase in not just quality of the resolution, but a decrease in time spent in the search space.
+More accurate heuristics in A\* result in faster traversal of the configuration space, creating potential for an increase in not just quality of the resolution, but a decrease in time spent in the search space.
 
-In addition to this, leveraging A* opens up the possibility of modeling the heuristic and updating it over time based on real world information, opening up the way for future improvements.
+In addition to this, leveraging A\* opens up the possibility of modeling the heuristic and updating it over time based on real world information, opening up the way for future improvements.
 
 ## Common Questions and Concerns
 
@@ -524,7 +524,7 @@ We're not here to spy on you. We're here to solve the dependency resolution prob
 
 Klep as a tool was designed with the both the little-guy and the professional team in mind.
 
-For small to mid-sized projects, Klep recommends publishing builds and artifacts as commits to dedicated git repositories separate from the source code of the project ([see why](#TODO))
+For small to mid-sized projects, Klep recommends publishing builds and artifacts as commits to dedicated git repositories separate from the source code of the project ([see why](TODO))
 
 For teams wishing to adopt Klep who already have a number of existing repositories, we've got you covered. Klep is designed to translate and interpret package manifests from pre-existing tools like yarn, npm, pip, and cargo. This means that for many teams, you can start managing new repositories using klep and retain interoperability with existing repositories, no additional effort required. Take a look at our [table of supported manifest files]() to see if klep's a good fit.
 
@@ -548,7 +548,7 @@ If you want to blow the cache or reset the AI model? `klep cache clear`
 
 Etc.
 
-And of course, we provide thorough `-h, --help` documentation and provide even more in depth help through our [online docs](#TODO).
+And of course, we provide thorough `-h, --help` documentation and provide even more in depth help through our [online docs](TODO).
 
 ### "X or Y Tool Already Lets you install packages from git!"
 
