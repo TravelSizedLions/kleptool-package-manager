@@ -1,7 +1,7 @@
 {
-  "link": "ln -s $CODE/kleptool-package-manager/src/index.ts $HOME/.local/bin/klep && chmod +x $HOME/.local/bin/klep",
-  "clean-rust": "rm -rf src/rust/pkg src/rust/target",
-  "build": "cd src/rust && wasm-pack build --target nodejs && cd ..",
-  "build-clean": "klep clean-rust && klep build",
-  "readme": "pandoc --pdf-engine=typst README.md -o README.pdf"
+  link: "ln -s $CODE/kleptool-package-manager/src/index.ts $HOME/.local/bin/klep && chmod +x $HOME/.local/bin/klep",
+  clean_rust: "rm -rf src/rust/pkg src/rust/target",
+  build: "cd src/rust && wasm-pack build --target nodejs && cd ..",
+  build_clean: "klep clean-rust && klep build",
+  readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi"
 }

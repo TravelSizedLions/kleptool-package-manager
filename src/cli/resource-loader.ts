@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { z } from "zod";
 import kerror from "./kerror.ts";
+import json5 from "json5";
 
 function __resolve(resourcePath: string) {
   return path.join(process.cwd(), resourcePath) 
@@ -26,7 +27,7 @@ export function load<T>(resourcePath: string, schema: z.ZodSchema): T {
 
   try {
     // Parse the content as JSON before validating against the schema
-    const parsedContent = JSON.parse(content);
+    const parsedContent = json5.parse(content);
     return schema.parse(parsedContent) as T
   } catch (e) {
     if (kerror.isKlepError(e)) {
