@@ -1,12 +1,12 @@
-# GAD: General-purpose Agnostic Dependency Resolution using Neural A* SMT Selection Heuristics
+# GAD: General-purpose Agnostic Dependency Resolution using Neural A* Heuristics
 
 What a banger of a title, am I right? 🤜💥🤛
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic recursive dependency resolver using a novel formulation of the A* optimization algorithm. This formulation of A* will leverage Stochastic Gradient Descent to weight the linear combination of its distance and heuristic functions to learn an efficient strategy for bounding and traversing a configuration space of candidate dependency graphs. We will also explore how this SGD-based heuristic function mauy be implemented to fine-tune itself to individual user and project needs and patterns over time.
+In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic recursive dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A* optimization algorithm. This purpose-built adaptation of A* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal dependency graphs. After, we will discuss the advantages and disadvantages of Neural A* over traditional SMT-based approaches.
 
-First, we'll explore a rigorous application of the theories of A* and SMT involved in this design, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
+First, I'll begin by summarizing the general principles and purposes of A* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
 - Building and maintaining the A* configuration space
 - The time and computational cost to cache and clone repositories
@@ -16,7 +16,7 @@ First, we'll explore a rigorous application of the theories of A* and SMT involv
 - Recovering from expired or missing cached dependencies
 - Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A*-SMT resolver
 
-We'll then use these considerations and others to formulate Neural A*-SMT distance and heuristic functions.
+We'll then use these considerations and others to formulate our Neural A* heuristic functions.
 
 ### Motivation
 
@@ -156,7 +156,7 @@ In dependency resolution, we can frame our constraints as SMT predicates:
 - Conflict avoidance: $\neg (version(dep1) = version(dep2))$
 - Feature requirements: $has\_feature(dep, feature) = true$
 
-The SMT solver can then find a satisfying assignment that meets all these constraints, effectively finding a valid set of dependency versions.
+The SMT solver can then find a satisfying assignment that meets all these constraints, effectively finding a valid set of dependency versions. Many existing solvers use sophisticated heuristics, backtracking with contradiction memory, and 
 
 ## SMT and A* Heuristic Dependency Resolution
 
@@ -366,6 +366,28 @@ $$
 \mathcal{V_i} = \{ \mathbf{k} \in K_i' \mid \mathbf{k} \text{ satisfies all constraints applied by values in } \mathbf{k} \}
 $$
 
+However, we're not happy just finding any member of this set. A* is designed to find an optimal solution.
+
+### Optimality
+
+What makes a dependency graph "optimal"? To start with, we have a few hard requirements:
+- Satisfaction of the actual version constraints defined by the root dependencies
+- No version conflicts
+- No breaking changes
+- Reproducibility
+
+A few considerations to improve on these bare minimum requirements include:
+- Minimizing Security Risk: no or minimal known security vulnerabilities
+- Minimizing Future Instability: avoids adding transitive dependencies that are more likely to introduce breaking changes in the future
+  - For example: avoiding transitive dependencies below semantic version 1.0.0 or which are otherwise relatively new and untested
+- Minimal bloat: Adding the least number of added transitive dependencies
+- Maximizing License compatibility: avoiding transitive dependencies with either no or incompatible licensing
+- Community Health: avoid adding transitive dependencies which are poorly maintained if possible
+
+At the risk of sounding cheeky, the most optimal dependency graphs are quite literally the graphs containing the most dependable dependencies.
+
+The true question is more about finding the balance between these considerations, though that discussion will be covered in a later section.
+
 ### Distance
 
 The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors.
@@ -395,10 +417,15 @@ The distance between values of $\mathbf{k}$ is where we begin to re-enter the re
   - When was the last commit or tagged version of this dependency?
   - How often on average are changes made to this dependency, and how big are they?
 
-### The Solution Heuristic
+
+## Modeling the Heuristic
+
+When describing this project to a colleague of mine, he was fascinated by the proposition of using A* to search the space of dependency configurations for an optimal graph, however I was hesitant at first to mention the use of Machine Learning as a means of determining the heuristic.
+
+Eventually, though, asked him point blank what his opinion was of using neural modeling for the heuristic function. He had several concerns, though his immediate and primary concern was that of guaranteeing a deterministic solution, as well as finding examples that can be labeled for supervised training.
 
 #### Observations
-For traditional dependency resolution, the problem space is to find one of potentially several sets of versions for dependencies which satisfy all constraints put in place by all sources in the space.
+For traditional dependency resolution, the goal is to find one of potentially several sets of versions for dependencies which satisfy all constraints put in place by all sources in the space.
 
 Here, our goal is to instead balance the optimization of several factors, including:
 
@@ -411,7 +438,7 @@ Here, our goal is to instead balance the optimization of several factors, includ
 
 In order for A* to effectively search $K'$ and reach optimal solutions, we must define a search heuristic that is both admissable (guaranteed to be optimistic when compared to the actual cost of the path to the resolved dependency), and monotonically increasing from our initial starting configuration. The value of the heuristic score of a given $\mathbf{k}$ is inversely proportional to its desirability (i.e., lower scores are more valuable).
 
-Therefore, to create a robust adaptive approach, it must guarantee admissability and monotonic distance relationships.
+Therefore, to create a robust adaptive approach, it must guarantee admissability and monotonic distance relationships. However, due to the nature of this particular problem and its existing attempts at a solution, we'll discuss why A* is a particularly evolution for dependency resolution compared to traditional SMT solvers.
 
 #### Dimension-wise Normalization
 
@@ -419,11 +446,21 @@ As the topology of $K_i'$ is non-uniform, distance measured between dimensions a
 
 #### Construction
 
-To start, our hypothetical heuristic $h(x)$ must produce values we can constrain to be monotonic and admissible. Candidate constraint filters for such a function include activation functions familiar to the machine learning community such as 
+To start, our hypothetical heuristic $h(x)$ must produce values we can constrain to be monotonic and admissible. Candidate constraint filters for such a function include activation functions familiar to the machine learning community such as
 
 - $tanh(h)$
 - $\sigma(h)$
 - $clamp(h, 0, 1)$
+
+To guarantee our network's monotonicity, we'll employ the following strategies in our network:
+- Predictions are used to weight the edge distance function, which is already monotonic.
+- Our weight initialization will be pulled from a uniform distribution scaled to the range of [0, 0.1]
+- all activations in the network will be monotonic. Specifically, hidden layers will use a ReLU activation function.
+
+To enforce admissability:
+- Our loss function must factor in a severe penalty for overestimation
+- Training samples will be enriched by scaling the true cost down, making the target prediction cost lower than the true cost by definition.
+
 
 However, for the sake of making the heuristic adaptive and tunable, there are some additional considerations:
 
@@ -464,18 +501,24 @@ This formulation using $tanh$ as an activation ensures:
 - The output is always in $(0, 1)$, with pre- and post-sum normalization to encourage stable heuristic adaptation.
 - More optimal configurations are considered "closer" to their neighbors and the end goal than other, less optimal configurations.
 
-## Stochastic Gradient Descent and Parameterizing A*
+#### The True Advantage of A* for Dependency Resolution
 
-Gradient 
+We've discussed how an adaptive approach to A* is theoretically possible for dependency resolution, and that it offers a possible improvement over SAT-solvers. However, we've yet to discuss why Neural-A* is theoretically a far more valuable tool for this problem space than the traditional approach: Since SMT solvers are not concerned with finding an optimal solution, then should the A* algorithm fail to find the best solution due to a violation of admissability in the heuristic, the algorithm will have performed no worse than a SMT solver.
+
+This reduces the need for admissability in the heuristic from a hard requirement to an ideal, making it much less risky to target modeling an A* heuristic to be as close as possible to the true final distance from the starting configuration to the optimal one.
+
+More accurate heuristics in A* result in faster traversal of the configuration space, creating potential for an increase in not just quality of the resolution, but a decrease in time spent in the search space.
+
+In addition to this, leveraging A* opens up the possibility of modeling the heuristic and updating it over time based on real world information, opening up the way for future improvements.
 
 ## Common Questions and Concerns
 
 ### Privacy
-Klep is an AI driven tool, but not in the way you think. Klep does not use large language models such as OpenAI. Rather, Klep uses its own smale-scale neural net models local to your machine, and can only see and learn from the dependencies you have cached in its (again local) database. Think of Klep's AI component as a handshake between Klep's CLI and a statistical model to help you resolve dependencies faster and more safely.
+Klep is an AI driven tool, but not in the way you think. Klep does not use large language models such as OpenAI. Rather, Klep uses its own small-scale neural net models local to your machine, and can only see and learn from the dependencies you have cached in its (again local) database. Think of Klep's AI component as a handshake between Klep's CLI and a statistical model to help you resolve dependencies faster and with fewer risks.
 
 However, Klep is also *opt-in* community driven. Your map of resolved dependencies can be shared with others on our public database of dependency maps if you so choose. This map includes metadata about versions, commit dates, and and high level properties for repositories you depend on, not details of implementation or parts of your local model.
 
-We're not here to spy on you. We're here to solve the dependency resolution problem in the same spirit as widespread open-source tools like git solved version control.
+We're not here to spy on you. We're here to solve the dependency resolution problem in the same spirit as widespread open-source tools like git solve their respective problems.
 
 ### Operational Complexity
 
@@ -483,7 +526,7 @@ Klep as a tool was designed with the both the little-guy and the professional te
 
 For small to mid-sized projects, Klep recommends publishing builds and artifacts as commits to dedicated git repositories separate from the source code of the project ([see why](#TODO))
 
-For teams wishing to adopt Klep who already have a number of existing repositories, we've got you covered. Klep is designed to translate and interpret package manifests from pre-existing tools like yarn, npm, pip, and cargo. This means that for many teams, you can start managing new repositories using klep and retain interoperability with existing repositories, no additional effort required. See our [table of supported manifest files]() to see if klep's a good fit.
+For teams wishing to adopt Klep who already have a number of existing repositories, we've got you covered. Klep is designed to translate and interpret package manifests from pre-existing tools like yarn, npm, pip, and cargo. This means that for many teams, you can start managing new repositories using klep and retain interoperability with existing repositories, no additional effort required. Take a look at our [table of supported manifest files]() to see if klep's a good fit.
 
 #### A note on Security Tools and Regulatory Compliance
 
@@ -513,7 +556,7 @@ Within their ecosystem, sure. But cross-ecosystem?
 
 Tools like cargo can indeed resolve dependencies sourced from public or private repositories outside of the dedicated [crates.io](crates.io) public package source. But they do so by assuming that the dependency you're looking for is a part of their ecosystem. Cargo will search for a cargo.toml and NPM will look for a package.json, but neither can look for the other, nor any other packaging system. On top of this, if you'd like to publish your code for others more conveniently, tools like NPM and Cargo have strict requirements for allowing packages to be published on their list of publicly available packages.
 
-Like these tools Klep supports reading from its own manifest file and resolving subdependencies, but if needed, it can be configured with plugins to translate npm, yarn, rust, and other manifest and lock files. This means you're not limited to installing the dependencies available to a single ecosystem, and if the dependencies for a project have already been resolved a certain way, Klep will leverage that, providing even more stability and speed.
+Like these tools, Klep supports reading from its own manifest file and resolving subdependencies, but if needed, it can be configured with plugins to translate npm, yarn, rust, and other manifest and lock files. This means you're not limited to installing the dependencies available to a single ecosystem, and if the dependencies for a project have already been resolved a certain way, Klep will leverage that, providing even more stability and speed.
 
 And unlike these tools, ***there's no global public list of repositories, and no need for tool specific setup to access private ones. If you have the permissions to clone it, Klep can access it.*** 
 
@@ -521,29 +564,29 @@ Therefore, there are no hard requirements to get your code published. However, w
 
 ### Migration
 
-Klep's core principle is not to force people into a single ecosystem or standard, but support those that do adhere existing standards. Part of our aim is to provide layers of backwards compatibility and hackability on top of existing package management systems like npm, pip, and cargo while paving the way forward to a future where language specific package managers are no longer a necessity.
+Klep's core principle is not to force people into a single ecosystem or standard, but support those that do adhere to existing standards while providing a unified alternative. Part of our aim is to provide layers of backwards compatibility and hackability on top of existing package management systems like npm, pip, and cargo, while paving the way forward to a future where language specific package managers are no longer a necessity.
 
 In the future, we have plans to support a `migrate` command, which will be designed to take an existing manifest file and lockfile from other package managers and construct the equivalent Klep configuration.
 
 ### Performance and Scalability
 
-Klep is a tool written as a hybrid of Rust and Node-based Typescript interfacing through Web Assembly. This allows us to leverage the raw speed and safety of Rust where it matters, and where it doesn't, instead take advantage of Typescript's ease of development and convenient CLI building and Database toolsets to get new features to you faster.
+Klep is a tool written as a hybrid of Rust and Node-based Typescript interfacing through Web Assembly. It's model is trained on models architected with Pytorch, and deployed through ONNX to its rust heuristic engine. This allows us to leverage the raw speed and safety of Rust where it matters, cutting edge machine learning tools for training and updating our heuristic, and leveraging Typescript's ease of development and convenient CLI building, Schematization, and Database toolsets to get new features to you faster. True to Klep's strengths, our tool is polyglot.
 
-Both languages were designed with scalability and robust architecture in mind, but as some might guess, is a somewhat unorthodox setup that means managing the dependencies of two languages at once.
+These languages were designed with scalability and robust architectures in mind, but as some might guess, it's a somewhat unorthodox setup that means managing the dependencies of three languages at once.
 
-However giving developers the freedom to explore niche, highly personalized project structures is exactly what Klep was designed to do, and as such, Klep adheres to the practice of [dogfooding](https://en.wikipedia.org/wiki/Eating_your_own_dog_food). In other words, Klep manages its own dual-language dependencies with itself. 
+However, giving developers the freedom to explore niche, highly personalized project structures is exactly what Klep was designed to do, and as such, Klep adheres to the practice of [dogfooding](https://en.wikipedia.org/wiki/Eating_your_own_dog_food). In other words, Klep manages its own tri-lingual dependencies with itself. 
 
-We believe this practice incentivizes us to prioritize features and fixes in a way that are actually useful for the wider development community.
+We believe this practice incentivizes us to prioritize features and fixes in a way that are actually useful for the wider development community and take advantage of what each programming language has to offer.
 
 ### Configurability and Extendability
 
 Klep is designed to be configurable and extendable. If you need to write a plugin to handle backwards compatibility with a less common package managers, we support that.
 
-If you need to patch dependencies or run certain scripts before or after dependency resolution, we support that.
+If you need to patch dependencies or run certain scripts before or after dependency resolution, we support that as well.
 
 ### Community and Ecosystem
 
-This tool is designed to live happily alongside existing language-specific package managers and workflows, but it's meant to be especially valuable for polyglot projects, niche languages, or environments where standard tooling falls short and needs less opinionated solutions.
+This tool is designed to live happily alongside existing language-specific package managers and workflows. It's meant to be especially valuable for polyglot projects, niche languages, or environments where standard tooling falls short and needs less opinionated solutions.
 
 *If you have additional concerns or use cases, please open an issue or contribute to the discussion! The goal is to build a tool that's genuinely useful for the community, and that means listening to feedback from all corners of the software galaxy.*
 

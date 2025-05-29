@@ -20,3 +20,6 @@ __pycache__
 
 # Project specific
 addons.json
+research/
+README.html
+README.pdf
