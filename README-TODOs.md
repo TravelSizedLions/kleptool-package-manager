@@ -1,0 +1,50 @@
+# GAD Document Improvement Tasks
+
+## High Priority
+- [ ] Add detail for calculating each feature and considering it's viability in the heuristic
+- [ ] Add a section on median-score feature backfilling
+- [ ] Expand the dimension-wise normalization section with concrete examples of how normalization prevents search space bias in the configuration space
+- [ ] Complete the "Alternative Initializations" section, detailing additional starting points for dependency resolution beyond manifest files
+- [ ] Elaborate on edge handling and weighting in the graph representation, particularly regarding version change types
+- [ ] Detail the specifics of how repository health metrics are scored and weighted in the distance calculation
+- [ ] Add a section explaining the decision to couple this toolset to git
+- [ ] Revisit the section on applying A* and SMT together, removing incorrect references to finding "a" solution rather than an optimal one.
+- [ ] Explore practical considerations for maintaining the configuration space
+  - When to expand and cache?
+  - When to invalidate?
+  - Data-structure design
+  - Updating median-scores
+  - Handling missing/deleted hashes
+- [ ] Add a section with considerations on how to most easily address portability and lockfile/manifest translation
+  - Core concerns: These files are extremely complex (especially the lockfiles)
+  - Build/Compilation may be strongly coupled to the project's structure (as with languages like Go)
+- [ ] Add a section on future considerations
+  - models tuned for specific optimizations (security vs fewest deps vs penalizing non-semver shemas)
+  - Early failure prediction
+  - Extensibility of the optimization
+  - Support for non-primary branches
+  - Support for static assets (avoid if at all possible due to strictness of the constraint, especially for downstream dependencies)
+- [ ] Add a section on practical architecture
+  - Passing data between layers of the application (performance will be key due to serialization)
+- [ ] Add a section explaining in more detail how semantic and non-semantic versions interact, and how they are scored
+- [ ] Add visualizations
+- [ ] Add a section for planned evaluation
+  - Post-training synthetic evaluation
+  - Real world evaluation and observation
+- [ ] Outline the architecture once features are set
+
+
+## Medium Priority
+
+- [ ]  Expand the dataset acquisition section with specific handling strategies for non-semantic versioning repositories
+- [ ]  Add concrete performance benchmarks and expected inference time impacts
+- [ ]  Develop more immediate transition strategies for migration from existing package management systems
+- [ ]  Detail the CVE scoring mechanism and how security vulnerability weights are updated over time
+- [ ] Revisit the introduction
+
+## Documentation & Clarity
+
+- [ ]  Add more examples throughout the mathematical notation sections to improve readability
+- [ ]  Create diagrams to illustrate the K-space configuration concepts
+- [ ]  Document the data synthesis process more thoroughly, including specific examples of commit dropout and constraint mangling
+- [ ]  Add implementation details about the polyglot architecture and how the different language components interact
