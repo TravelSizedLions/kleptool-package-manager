@@ -381,7 +381,6 @@ $$
 In other words, the configuration space is the set of all possible combinations of commit hashes (and their associated dependencies and constraints) across all repositories.
 
 ## Bounding K-Space
-<p>
 In practice, not all repositories that exist are needed as dependencies for every project (though seeing such a project would be entertaining)<sup>[citation needed]</sup>
 
 This means that to resolve the dependencies for any given repository, we only care about a specific subspace of $K$—namely, the part that includes just the dependencies (and their dependencies, and so on) that are actually relevant to our project. In other words, we want to "zoom in" on the part of $K$ that matters for $K_i$ and ignore the rest of the infinite space of possibilities.
@@ -411,8 +410,74 @@ Or, more explicitly,  $K_i' = \left\{ (t_d)_{K_d \in D_i} \;\middle|\; t_d \in T
 
 #### Example
 Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $D_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_i'$ is all possible assignments of hashes to these four repos, subject to the constraints that come from the initial dependency relationships imposed by $K_i$.
-</p>
 
+
+## Structural Inference: Unifying Disjointed Representations of K-Space
+
+In the wilds of package management, every ecosystem invents its own flavor of manifest and lockfile, each with its own quirks, assumptions, and deeply held opinions about how dependencies should be described. Most package managers start with strong coupling to a specific language, then bolt on a plugin system to  meet the definition of "flexible" while leaving the work of translation to other language contexts largely up to community interest.
+
+However, this approach has several severe weaknesses that make it unsuitable for a truly language agnostic tool:
+
+- The likely need to refactor underlying systems as new requirements are discovered when porting over functionality to other languages. This increases the risk and/or necessity of making breaking changes and affecting the existing userbase while likely creating technical debt that can slow down or bloat the toolset over time
+- If the plugin system is not created during the tool's initial design, languages after the initial language will inevitably be treated as second class.
+- Backfilling support for existing language ecosystems means most will never see any support at all
+- As new languages and approaches are released, the backlog of work continues to grow, making the work intractible and stunting adoption.
+
+Instead, we propose taking a less direct approach: structural inference.
+
+Rather than relying on a hardcoded list of known manifest formats and mapping them to a specialized, heavy duty, high risk, and heavy maintenence tooling dependency, a language-agnostic system must be able to *infer* the structure of an unknown manifest or lockfile by analyzing its shape, not just its surface details. 
+
+This section is dedicated to exploring possible approaches to achieving a more adaptive dependency syntax translation system.
+
+### Automated AST Translation Inferencing at a High Level
+
+1. **Parse to an Intermediate Structure:**
+  - Load the manifest or lockfile into a generic data structure (e.g., parse JSON, YAML, TOML, XML, or even INI into a tree or map).
+
+2. **Abstract Syntax Tree (AST) Generation:**
+  - Convert the intermediate structure into an AST, capturing the hierarchical relationships and data types present in the file.
+
+3. **Input AST Family Identification**
+  - Use unsupervised techniques to analyze the AST and identify likely dependency blocks, version constraints, and sources.
+  - AST family comparisons are performed
+    - The algorithm decides which cluster or "family" of AST structure the particular instance belongs to, identified from a prior training on a large corpus of manifests
+  - Possible approaches include:
+    - **Tree similarity:** Compare subtrees across many manifests to find recurring patterns we can identify as the dependency manifest or resolution structure
+    - **Tree edit distance / subtree isomorphism:** Quantify how similar two trees (or subtrees) are, even if the keys differ.
+    - **Embedding techniques (e.g., tree2vec):** Represent ASTs or subtrees as vectors in a latent space, then cluster or compare them to find common structures.
+
+4. **Universal AST Family Transformation is Calculated**
+  - Once the input's AST family has been identified, additional unsupervised comparisons are made to plan a translation from the existing AST family to the Universal K-Space family.
+
+5. **Universal AST Translation is Applied**
+  - Extract the minimal set of information needed for K-space:
+    - Dependency name
+    - Version constraint
+    - Source/repo (if specified)
+  - Optional: type (dev, optional, peer), if it can be inferred.
+  - Map these to Klep's universal representation, ready for dependency resolution.
+
+6. **The Translated AST is mapped back to Universal K-Space**
+  - The AST resulting from 5. is translated back into a standardized format and exported for review.
+
+### Differentiating Core Dependencies from Optional Dependencies
+
+TODO
+
+### Why Structural Inference?
+
+- **True Language Ambivalence:** By converting manifest and lockfiles to ASTs and using unsupervised techniques, we remove layers of unimportant language-specific detail to get to identify the structure we care about.
+- **Cross-language Clustering:** Some formats, such as those specified in javascript-centric package management system, are likely to end up in the same AST family
+- **Future-Proof:** As new languages and package managers emerge, Klep can handle them with minimal updates. If new families are discovered, the AutoAST Translator can be re-trained without extensive hard-coded mappings.
+- **User-Friendly:** Most users just want their dependencies resolved, not a deep dive into manifest archaeology. Structural inference keeps the magic behind the curtain.
+
+###
+
+### TODO: Open Questions & Next Steps
+
+- How robust are current tree similarity and embedding techniques for this kind of heterogeneous, real-world data?
+- What's the best way to handle ambiguous cases—should Klep prompt the user, or just make its best guess?
+- Can we build a feedback loop, so user corrections help improve future inference?
 
 
 ## The Graph Representation of Bounded K-Space
