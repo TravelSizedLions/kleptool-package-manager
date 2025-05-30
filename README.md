@@ -49,7 +49,7 @@ If you've run into this class of problem, then you've done actual development at
 
 In order to research and develop a robust solution, we must start from grounded observations. Below, we'll walk through several common development scenarios and analyze, compare, and contrast their needs. These examples purposely cross boundaries of common industry circles and treat niche cases with the same level of scrutiny as mainstream cases in order gain insight into the underlying patterns inherent to software development.
 
-#### Case Study #1: Game Engines
+#### Case Study #1: Godot
 
 Most game engines come with either limited (and proprietary) dependency management or none at all. 
 
@@ -58,7 +58,7 @@ If there is a way to get and install dependencies:
 - If it is recursively resolving, it doesn't effectively handle resolving version constraints on those transitive dependencies
 - Or if they do, the packages that support these things are locked behind the paywall of a proprietary asset store
 
-Yet many of these environments have a desparate need for solid dependency resolution outside of a closed ecosystem. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also contains a fraction of the assets that are actually available to all users of Godot, and has no concept of dependency resolution, so mid-sized projects have one of four options:
+Yet many of these environments have a desperate need for solid dependency resolution outside of a closed ecosystem. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also contains a fraction of the assets that are actually available to all users of Godot, and has no concept of dependency resolution, so mid-sized projects have one of four options:
 - Manage every dependency and namespace collision themselves
 - Use a tool like Gradle or Maven, which has no official support for GDScript
 - Eschew dependencies entirely and implement everything their project needs from scratch
@@ -103,7 +103,22 @@ With a decades-long schism in package management systems for javascript, new too
 
 #### Case Study #9: Groovy
 
-#### Case Study #10: 
+#### Case Study #10: MATLAB
+
+Why include a language that's exclusively tied to a single GUI application?
+
+Because it's tied to a single GUI application.
+
+MATLAB is an interesting ecosystem to consider, because unlike most languages in this review of ecosystems, many users of MATLAB don't even consider themselves software engineers. Instead, they're often researchers in fields such as aerospace engineering. However, they still share many of the same problems as more general purpose languages and development contexts when it comes to dependencies and re-using 3rd party code.
+
+MATLAB uses "toolboxes"  to describe it's formulation of libraries. There's no mainstream package manager and there isn't much by the way of packaging or distribution. It's not at all uncommon for MATLAB users to *email zipfiles* to coworkers in order to share their own code or code taken from 3rd parties.
+
+Similar to the circle of game engines and games development, the MATLAB IDE has as of April 2020 added an [addons explorer](https://www.mathworks.com/videos/add-on-explorer-106745.html) where developers can browse for and install verified third party toolboxes. The alternative to using this proprietary solution is to browse for privately curated collections of toolboxes on sites like GitHub ([example-1](https://github.com/Matlab-Toolbox),  [example-2](https://github.com/mikecroucher/awesome-MATLAB),  [example-3](https://github.com/gpeyre/matlab-toolboxes)) and manage installing the toolboxes yourself. However, the size, quality, and maintenance status of both the collection and its individual constituents isn't guaranteed.
+
+
+### Patterns and Takeaways
+
+
 
 ### Searching for a Better Wheel
 
