@@ -105,7 +105,7 @@ With a decades-long schism in package management systems for javascript, new too
 
 #### Case Study #10: 
 
-### In Search of a Better Wheel
+### Searching for a Better Wheel
 
 We in the development community have a problem: the \*.wheel keeps getting re-invented for specific languages, often  in a limited capacity. Yet the approach is always roughly the same for every major package manager: 
 
