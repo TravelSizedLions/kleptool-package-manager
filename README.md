@@ -1,9 +1,9 @@
 
-# GUDR: Git-derived Unified Dependency Resolution
+# GUDR: Git-Derived Unified Dependency Resolution
 
 ## Abstract
 
-In this document, we'll rigorously explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. We will discuss and analyze the development environments of a diverse set of languages and their large-scale and niche applications in order to understand their shared dependency resolution needs. After, we will devise a method for tackling this notoriously difficult problem using a novel formulation for translating dependency manifests into a unified representation, then proposing a resolution method by constructing an A* heuristic for dependability optimization. Due to the specific quirks of current solutions for dependency resolution and requirements for A* to reach optimal solutions, A* has a distinct theoretical advantage over SMT-based approaches, which we'll discuss. In short, this discourse will show that a purpose-built adaptation of A* leveraging a fully-connected feedforward network to fine-tune a traditional heuristic can be guaranteed to maintain monotonicity, and does not require maintaining admissibility in order to achieve similar results to SMT.
+In this document, we'll rigorously explore the practical and theoretical challenges of implementing a language- and versioning-agnostic dependency resolver. We will discuss and analyze the development environments of a diverse set of languages and their large-scale and niche applications in order to understand their shared dependency resolution needs. After, we will devise a method for tackling this notoriously difficult problem using a novel formulation for translating dependency manifests into a unified representation, then proposing a resolution method by constructing an A* heuristic for dependability optimization. Due to the specific quirks of current solutions for dependency resolution and requirements for A* to reach optimal solutions, A* has a distinct theoretical advantage over SMT-based approaches, which we'll discuss. In short, this discourse will show that a purpose-built adaptation of A* leveraging a fully-connected feedforward network to fine-tune a traditional heuristic can be guaranteed to maintain monotonicity, and does not require maintaining admissibility in order to achieve similar results to SMT.
 
 For those unfamiliar with this problem space and the background required to understand this methodology, I'll begin by reviewing well known development ecosystems and their similarities, differences, and challenges, then summarize the general principles, purposes, and requirements of A*, Neural Models, Unsupervised Learning, Abstract Syntax Trees and AST comparison algorithms, and SMT solvers, followed by a discussion of their synergies. Then, after establishing a common language and knowledge bases, we'll formalize the approach to unifying the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool and hypothetical limitations, including:
 
@@ -89,9 +89,24 @@ Here, we have a popular language where users of it are:
 
 Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications--all for a language which at its root was never intended for what it's become used for today. 
 
-With a decades-long schism in package management systems for javascript, new tools such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems, and each have their distinct downsides. (TODO -- give examples)
+With a decades-long schism in package management systems for JavaScript, new tools such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems, and each have their distinct downsides. (TODO -- give examples)
 
 #### Case Study #4: Python and Virtual Environments
+
+Python is the single most popular language in the world, and its tactics for dependency management and module importing are perhaps the most broken and convention-defying possible.
+
+By default, Python searches for packages on the system globally, so individual projects may incidentally be relying on a system-wide package. This creates multiple problems:
+
+- No guarantees that your project is properly isolated and reproducible
+- Versions for dependencies may clash from project to project
+
+The Python community's solution to this is *virtual environments*, or sandboxing individual projects by emulating a global install context.
+
+Instead of gathering, installing, and labeling dependencies as project-specific within the root project folder, a virtual environment outside the project is defined in a shared folder of other python environments, and then packages are installed there. 
+
+To use an analogy, think of organization for house projects and chores. Most languages set up your project’s needs right inside your house alongside where the actual work is being done. The sponges are by the sink, the tools for yardwork are in the shed out back, the plunger is in the bathroom, the laundry soap is by the laundry machines, and the baking supplies are in the fridge and pantry, with the mixing bowl and oven. Everything you need for the work is local to the place where the work is happening.
+
+Python, on the other hand, hands you a key to a massive building outside of your home. Each time you need to do a project, you have to build a room in that building, put the supplies you need for that project in that room, and then temporarily bring the supplies home with you to do the work. It's so isolated that it isolates the dependencies from the project itself, which feels inside-out.
 
 #### Case Study #5: Rust and Recursive Manifest Definitions
 
@@ -107,13 +122,15 @@ With a decades-long schism in package management systems for javascript, new too
 
 Why include a language that's exclusively tied to a single GUI application?
 
-Because it's tied to a single GUI application.
+Because it's tied to a single GUI application. 
 
-MATLAB is an interesting ecosystem to consider, because unlike most languages in this review of ecosystems, many users of MATLAB don't even consider themselves software engineers. Instead, they're often researchers in fields such as aerospace engineering. However, they still share many of the same problems as more general purpose languages and development contexts when it comes to dependencies and re-using 3rd party code.
+MATLAB illustrates how ubiquitous the need for dependency management is. It's an interesting ecosystem to consider, because unlike most languages in this review of ecosystems, many users of MATLAB don't even consider themselves software engineers. Instead, they're often researchers dedicated to fields such as aerospace engineering, and don't generally have a need to deploy code they've written. However, MATLAB users still share many of the same problems as more common languages and development contexts when it comes to sourcing and resolving dependencies and re-using 3rd party code. 
 
-MATLAB uses "toolboxes"  to describe it's formulation of libraries. There's no mainstream package manager and there isn't much by the way of packaging or distribution. It's not at all uncommon for MATLAB users to *email zipfiles* to coworkers in order to share their own code or code taken from 3rd parties.
+MATLAB uses "toolboxes"  to describe it's version of libraries. There's no mainstream package manager and there isn't much by the way of packaging or distribution. It's not at all uncommon for MATLAB users to *email zipfiles* to coworkers in order to share their own code or code taken from 3rd parties, and collaboration is typically limited to single research teams.
 
 Similar to the circle of game engines and games development, the MATLAB IDE has as of April 2020 added an [addons explorer](https://www.mathworks.com/videos/add-on-explorer-106745.html) where developers can browse for and install verified third party toolboxes. The alternative to using this proprietary solution is to browse for privately curated collections of toolboxes on sites like GitHub ([example-1](https://github.com/Matlab-Toolbox),  [example-2](https://github.com/mikecroucher/awesome-MATLAB),  [example-3](https://github.com/gpeyre/matlab-toolboxes)) and manage installing the toolboxes yourself. However, the size, quality, and maintenance status of both the collection and its individual constituents isn't guaranteed.
+
+An additional complication that's common to other languages is upgrades to MATLAB itself. Version upgrades of MATLAB's IDE and language can introduce breaking changes that go undeclared, and that invalidate existing versions of libraries. On top of this, MATLAB does not use semantic versioning in its own releases. This means that, just like more traditional languages, even MATLAB would stand to benefit from a system in which users can define dependencies and request particular versions of them.
 
 
 ### Patterns and Takeaways
