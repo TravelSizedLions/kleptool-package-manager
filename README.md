@@ -2,19 +2,19 @@
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A\* optimization algorithm. This purpose-built adaptation of A\* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features to construct a heuristic. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal (read, stable and low-risk) dependency graphs. After, we will discuss the advantages and disadvantages of Neural A\* over traditional SMT-based approaches.
+In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A* optimization algorithm. This purpose-built adaptation of A* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features to construct a heuristic. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal (read, stable and low-risk) dependency graphs. After, we will discuss the advantages and disadvantages of Neural A* over traditional SMT-based approaches.
 
-First, I'll begin by summarizing the general principles and purposes of A\* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
+First, I'll begin by summarizing the general principles and purposes of A* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
 
-- Building and maintaining the A\* configuration space
+- Building and maintaining the A* configuration space
 - The time and computational cost to cache and clone repositories
 - Resolving non-semantic version targets together with semantic targets
 - Architecting, initializing, training, and tuning a custom, locally deployable neural model
 - Updating dependencies from partial solutions
 - Recovering from expired or missing cached dependencies
-- Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A\*-SMT resolver
+- Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A*-SMT resolver
 
-We'll then use these considerations and others to formulate our Neural A\* heuristic functions.
+We'll then use these considerations and others to formulate our Neural A* heuristic functions.
 
 
 ### Scope
@@ -156,12 +156,12 @@ Disorganized, WIP: read, rank, and discard unrelated/out of scope research
  - proposal of several dependency resolution approaches: https://dspace.library.uvic.ca/server/api/core/bitstreams/08e884a4-fccf-4fdd-88f3-121121ba0db4/content
  - Definitely Read & Cite this one: Literature Review of General-case dependency resolution (and why we lean towards SAT solvers): https://ieeexplore.ieee.org/abstract/document/9054837 (Feb, 2020)
 
-### The A\* Algorithm
+### The A* Algorithm
 
 
-The A\* algorithm finds the optimal path between two nodes in a graph by maintaining two sets of nodes and using a scoring function to evaluate potential paths.
+The A* algorithm finds the optimal path between two nodes in a graph by maintaining two sets of nodes and using a scoring function to evaluate potential paths.
 
-#### A\* Algorithm Steps
+#### A* Algorithm Steps
 
 1. Define two ordinal sets of nodes:
    - $Q_{open}$: Open queue (nodes to be evaluated)
@@ -242,7 +242,7 @@ In dependency resolution, we can frame our constraints as SMT predicates:
 
 The SMT solver can then find a satisfying assignment that meets all these constraints, effectively finding a valid set of dependency versions. Many existing solvers use sophisticated heuristics, backtracking with contradiction memory, and 
 
-## SMT and A\* Heuristic Dependency Resolution
+## SMT and A* Heuristic Dependency Resolution
 
 ### The Core Problem
 
@@ -260,24 +260,24 @@ This creates a chicken-and-egg problem:
 1. To know what dependencies we need, we need to know the versions
 2. To know the versions, we need to know what dependencies we need
 
-### Combining SMT and A\*
+### Combining SMT and A*
 
-Thankfully, while "Can I find a set of X,Y,Z that fits my needs A,B,C?" is the only kind of problem SMT cares about solving, algorithms such as A\* only cares about solving "What's the best thing to do and how do I do it?" kind of problems—in other words, optimization problems. 
+Thankfully, while "Can I find a set of X,Y,Z that fits my needs A,B,C?" is the only kind of problem SMT cares about solving, algorithms such as A* only cares about solving "What's the best thing to do and how do I do it?" kind of problems—in other words, optimization problems. 
 
 Since the actual question behind dependency resolution is "How do I find a set of dependencies that satisfy constraints when I don't know what all of the dependencies are ahead of time?", that implies the answer is some amalgamate algorithm of the two approaches.
 
 #### How It Works
 
-1. **A\* Explores the space of possible dependency graphs**
+1. **A* Explores the space of possible dependency graphs**
    - Each node represents a potential dependency state
    - Edges and edge distance represent version changes and other time/risk costs
    - The heuristic estimates how close we are to a valid solution
    - The full cost function considers version compatibility
 
 2. **SMT Validates Solutions**
-   - When A\* finds a potential path
+   - When A* finds a potential path
      - SMT checks if it satisfies all constraints
-     - If not, A\* continues searching
+     - If not, A* continues searching
      - If yes, we've found a potential solution
 
 ### Example Scenario
@@ -285,7 +285,7 @@ Since the actual question behind dependency resolution is "How do I find a set o
 Consider resolving dependencies for a project:
 
 1. Start with known direct dependencies
-2. A\* explores version combinations
+2. A* explores version combinations
 3. When a new dependency is discovered:
    - Add it to the SMT constraints
    - Update the search space
@@ -294,9 +294,9 @@ Consider resolving dependencies for a project:
 
 This approach gives us the best of both worlds:
 - SMT's ability to validate complex constraints
-- A\*'s ability to efficiently search large spaces
+- A*'s ability to efficiently search large spaces
 
-### Why use A\* and an SMT solver together to search for satisfying dependency resolutions?
+### Why use A* and an SMT solver together to search for satisfying dependency resolutions?
 
 Modern dependency resolvers use exclusively SMT satisfiability solvers to reach a valid set of dependencies. While this works, it comes with a few limitations:
 
@@ -304,13 +304,13 @@ Modern dependency resolvers use exclusively SMT satisfiability solvers to reach 
 - SMT solvers use static, predefined heuristics to prune the search space of possibilities. This is for the sake of efficiency rather than optimization
 - Even the best solvers for dependency resolution make the assumption that they will be handed semver-compliant version schemes.
 
-A\* on the other hand, offers:
+A* on the other hand, offers:
 
 - The same heuristic search space pruning approach, but with room for customizability and tunability
 - No assumptions about the nature of the search space other than the requirement that it be expressed as a graph with a defined start state and goal to reach.
 - Not just finding a valid solution, but finding the best solution for the distance and heuristic functions it's handed.
 
-As such, A\* offers an advantage when building an adaptive dependency resolver designed to minimize the risks inherent to added dependencies, while not insisting that all candidates adhere strictly to semantic versioning. If the dependency resolver itself can assess and minimize risks, SemVer as a standard is no longer a strict necessity to acquire safe, dependable packages and addons, and we make it possible to fine-tune resolutions for desired goals, such as:
+As such, A* offers an advantage when building an adaptive dependency resolver designed to minimize the risks inherent to added dependencies, while not insisting that all candidates adhere strictly to semantic versioning. If the dependency resolver itself can assess and minimize risks, SemVer as a standard is no longer a strict necessity to acquire safe, dependable packages and addons, and we make it possible to fine-tune resolutions for desired goals, such as:
 
 - Automatically limiting or even outright preventing vulnerable transitive dependencies
 - Limiting the number of installed transitive dependencies in the first place
@@ -319,11 +319,11 @@ As such, A\* offers an advantage when building an adaptive dependency resolver d
 
 However, our algorithm will still need to verify that candidate solutions do in-fact satisfy the constraints placed upon them, and so SAT validation will still be used to validate the proposed solutions.
 
-Conveniently, A\* also gracefully handles cases where no dependency resolution can be found.
+Conveniently, A* also gracefully handles cases where no dependency resolution can be found.
 
 ## Formally Defining the Configuration Space
 
-As mentioned above, the configuration space for this problem is the set of all possible version configurations given a set of dependencies. In order to formulate this as a graph suitable for A\*, we must define what constitutes the following:
+As mentioned above, the configuration space for this problem is the set of all possible version configurations given a set of dependencies. In order to formulate this as a graph suitable for A*, we must define what constitutes the following:
 
 - The dimensions in the space
 - A node in the graph representing the space
@@ -412,7 +412,7 @@ Or, more explicitly,  $K_i' = \left\{ (t_d)_{K_d \in D_i} \;\middle|\; t_d \in T
 Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $D_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_i'$ is all possible assignments of hashes to these four repos, subject to the constraints that come from the initial dependency relationships imposed by $K_i$.
 
 
-## Structural Inference: Unifying Disjointed Representations of K-Space
+## Unifying Representations of K-Space
 
 In the wilds of package management, every ecosystem invents its own flavor of manifest and lockfile, each with its own quirks, assumptions, and deeply held opinions about how dependencies should be described. Most package managers start with strong coupling to a specific language, then bolt on a plugin system to  meet the definition of "flexible" while leaving the work of translation to other language contexts largely up to community interest.
 
@@ -431,34 +431,60 @@ This section is dedicated to exploring possible approaches to achieving a more a
 
 ### Automated AST Translation Inferencing at a High Level
 
-1. **Parse to an Intermediate Structure:**
-  - Load the manifest or lockfile into a generic data structure (e.g., parse JSON, YAML, TOML, XML, or even INI into a tree or map).
+#### 1. **Parse to an Intermediate Structure:**
 
-2. **Abstract Syntax Tree (AST) Generation:**
-  - Convert the intermediate structure into an AST, capturing the hierarchical relationships and data types present in the file.
+Load the manifest or lockfile into a generic data structure (e.g., parse JSON, YAML, TOML, XML, or even INI into a tree or map).
 
-3. **Input AST Family Identification**
-  - Use unsupervised techniques to analyze the AST and identify likely dependency blocks, version constraints, and sources.
-  - AST family comparisons are performed
-    - The algorithm decides which cluster or "family" of AST structure the particular instance belongs to, identified from a prior training on a large corpus of manifests
-  - Possible approaches include:
-    - **Tree similarity:** Compare subtrees across many manifests to find recurring patterns we can identify as the dependency manifest or resolution structure
-    - **Tree edit distance / subtree isomorphism:** Quantify how similar two trees (or subtrees) are, even if the keys differ.
-    - **Embedding techniques (e.g., tree2vec):** Represent ASTs or subtrees as vectors in a latent space, then cluster or compare them to find common structures.
+#### 2. **Abstract Syntax Tree (AST) Generation:**
 
-4. **Universal AST Family Transformation is Calculated**
-  - Once the input's AST family has been identified, additional unsupervised comparisons are made to plan a translation from the existing AST family to the Universal K-Space family.
+Convert the intermediate structure into an AST, capturing the hierarchical relationships and data types present in the file.
 
-5. **Universal AST Translation is Applied**
-  - Extract the minimal set of information needed for K-space:
-    - Dependency name
-    - Version constraint
-    - Source/repo (if specified)
-  - Optional: type (dev, optional, peer), if it can be inferred.
-  - Map these to Klep's universal representation, ready for dependency resolution.
+#### 3. **AST Family Identification**
 
-6. **The Translated AST is mapped back to Universal K-Space**
-  - The AST resulting from 5. is translated back into a standardized format and exported for review.
+Use unsupervised techniques to analyze the AST and identify likely dependency blocks, version constraints, and sources.
+
+AST family comparisons are performed
+
+- The algorithm decides which cluster or "family" of AST structure the particular instance belongs to, identified from a prior training on a large corpus of manifests
+
+Possible approaches include:
+
+- **Tree similarity:** Compare subtrees across many manifests to find recurring patterns we can identify as the dependency manifest or resolution structure
+  
+- **Tree edit distance / subtree isomorphism:** Quantify how similar two trees (or subtrees) are, even if the keys differ.
+
+- **Embedding techniques (e.g., tree2vec):** Represent ASTs or subtrees as vectors in a latent space, then cluster or compare them to find common structures.
+
+#### 4. **Universal AST Family Transformation is Calculated**
+
+Once the input's AST family has been identified, additional unsupervised comparisons are made to plan a translation from the existing AST family to the Universal K-Space family.
+
+This is done through a combination of meta-structural analysis on patterns identifiable between AST families as well as an exploration of a space of statically defined AST refactoring strategies (inspiration taken from row-reduction operations and boolean clause manipulation).
+
+We propose mapping the AST Family Transformation Problem onto a satisfiability or constraint-solving problem: given a set of allowed tree operations (renames, moves, merges, splits, type coercions, etc.) and a set of structural constraints defining the universal schema, a solver searches for a sequence of operations that transforms the input AST into one that satisfies all constraints.
+
+The information gleaned from step 3 (AST family identification) can be used to constrain the search space for the solver, focusing only on the most likely or relevant operations for that family and improving efficiency.
+
+- **Example 1: Key Name Normalization**
+  - If step 3 identifies the AST as belonging to an "npm-like" family (e.g., `package.json`), the solver can focus on keys like `dependencies`, `devDependencies`, and `peerDependencies` as likely candidates for dependency blocks. Instead of searching the entire tree, it can prioritize renaming or mapping these keys to a universal `dependencies` field, tagging them with a type if needed. This reduces the risk of misclassifying unrelated fields and speeds up the transformation.
+- **Example 2: List vs. Map Structure**
+  - If the AST family is "list-based" (like Python's `requirements.txt` or Rust's `Cargo.toml`), the solver can skip unnecessary map-to-list conversions and focus on extracting dependency names and version constraints from list elements. For "map-based" families (like npm), it can do the reverse. This ensures the transformation is direct and avoids unnecessary restructuring.
+
+Care must be taken to preserve important distinctions (e.g., dev vs. prod dependencies, peer dependencies, etc.) and avoid destructive operations that could lose information. Multiple satisfying transformations may exist; ranking heuristics or minimal edit distance can be used to select the best one.
+
+#### 5. **Universal AST Translation is Applied**
+
+Extract the minimal set of information needed for K-space:
+
+- Dependency name
+- Version constraint
+- Source/repo (if specified)
+- Optional: type (dev, optional, peer), if it can be inferred.
+- Map these to Klep's universal representation, ready for dependency resolution.
+
+#### 6. **The Translated AST is mapped back to Universal K-Space**
+
+The Standardized AST resulting from 5. is translated back into a standardized format and exported for review.
 
 ### Differentiating Core Dependencies from Optional Dependencies
 
@@ -471,7 +497,11 @@ TODO
 - **Future-Proof:** As new languages and package managers emerge, Klep can handle them with minimal updates. If new families are discovered, the AutoAST Translator can be re-trained without extensive hard-coded mappings.
 - **User-Friendly:** Most users just want their dependencies resolved, not a deep dive into manifest archaeology. Structural inference keeps the magic behind the curtain.
 
-###
+### Limitations
+
+While structural inference and constraint solvers can automate much of the translation process, it's not a silver bullet. For truly novel or highly custom formats, some human guidance or heuristics may still be required. The aim is to minimize the need for manual intervention as new languages and ecosystems emerge.
+
+In addition, this approach (and this paper) is targeted towards specifically dependency resolution, rather than build support, bundling, or other jobs frequently built-into language-specific package managers.
 
 ### TODO: Open Questions & Next Steps
 
@@ -491,15 +521,15 @@ As mentioned [above](#dimensions-in-the-space), each point $t_{i_j}$ in a dimens
 
 To understand edges in the graph of $K_i'$, we also need to define what constitutes the neighborhood of a node $\mathbf{k}$. If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have a difference of one hash, either the one immediately prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
 
-## Application of A\* on Bounded K-Space
+## Application of A* on Bounded K-Space
 
-For an implementation of A\* to search through the $K_i$
+For an implementation of A* to search through the $K_i$
 
 ### The Initial Configuration
 
-The A\* Algorithm calls for an initial configuration to place on its open queue (See the [algorithm steps](#a-algorithm-steps)).
+The A* Algorithm calls for an initial configuration to place on its open queue (See the [algorithm steps](#a-algorithm-steps)).
 
-In modern software package management systems, the list of root dependencies of a project are specified in a manifest. These specified target versions conveniently serve as a A\*'s starting node $n_{start}$. While the root dependencies in these types of manifests do not include all possible repositories serving as dimensions of $K_i'$, this is remediable by following the cascade of transitive dependencies until we fill out the initial configuration. Any remaining dimensions in $K_i'$ not intialized by this process are *possible* transitive dependencies that may not be explored during dependency resolution.
+In modern software package management systems, the list of root dependencies of a project are specified in a manifest. These specified target versions conveniently serve as a A*'s starting node $n_{start}$. While the root dependencies in these types of manifests do not include all possible repositories serving as dimensions of $K_i'$, this is remediable by following the cascade of transitive dependencies until we fill out the initial configuration. Any remaining dimensions in $K_i'$ not intialized by this process are *possible* transitive dependencies that may not be explored during dependency resolution.
 
 #### Alternative Initializations
 
@@ -515,7 +545,7 @@ $$
 \mathcal{V_i} = \{ \mathbf{k} \in K_i' \mid \mathbf{k} \text{ satisfies all constraints applied by values in } \mathbf{k} \}
 $$
 
-However, we're not happy just finding any member of this set. A\* is designed to find an optimal solution.
+However, we're not happy just finding any member of this set. A* is designed to find an optimal solution.
 
 ### Optimality
 
@@ -539,7 +569,7 @@ The true question is more about finding the balance between these considerations
 
 ### Distance
 
-The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A\* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors. As such, we need to employ a careful selection of features for our distance function, as these features will be reused as the basis of our guidance heuristic.
+The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors. As such, we need to employ a careful selection of features for our distance function, as these features will be reused as the basis of our guidance heuristic.
 
 #### Feature Trustworthiness
 
@@ -610,7 +640,7 @@ How big is the change in actual code from one commit to the next?
 
 ### Modeling the Heuristic
 
-When describing this project to a colleague of mine, he was fascinated by the proposition of using A\* to search the space of dependency configurations for an optimal graph, however I was hesitant at first to mention the use of Machine Learning as a means of determining the heuristic.
+When describing this project to a colleague of mine, he was fascinated by the proposition of using A* to search the space of dependency configurations for an optimal graph, however I was hesitant at first to mention the use of Machine Learning as a means of determining the heuristic.
 
 Eventually, though, asked him point blank what his opinion was of using neural modeling for the heuristic function. He had several concerns, though his immediate and primary concern was that of guaranteeing a deterministic solution, as well as finding examples that can be labeled for supervised training.
 
@@ -626,9 +656,9 @@ Here, our goal is to instead balance the optimization of several factors, includ
 - Reusing or quickly accessing areas of the search space that previous resolutions have found to be optimal.
 - Preferring safer subsets of the solution space (such as commits tagged with a semantic version) over non-versioned sections of the hash space.
 
-In order for A\* to effectively search $K'$ and reach optimal solutions, we must define a search heuristic that is both admissable (guaranteed to be optimistic when compared to the actual cost of the path to the resolved dependency), and monotonically increasing from our initial starting configuration. The value of the heuristic score of a given $\mathbf{k}$ is inversely proportional to its desirability (i.e., lower scores are more valuable).
+In order for A* to effectively search $K'$ and reach optimal solutions, we must define a search heuristic that is both admissable (guaranteed to be optimistic when compared to the actual cost of the path to the resolved dependency), and monotonically increasing from our initial starting configuration. The value of the heuristic score of a given $\mathbf{k}$ is inversely proportional to its desirability (i.e., lower scores are more valuable).
 
-Therefore, to create a robust adaptive approach, it must guarantee admissability and monotonic distance relationships. However, due to the nature of this particular problem and its existing attempts at a solution, we'll discuss why A\* is a particularly evolution for dependency resolution compared to traditional SMT solvers.
+Therefore, to create a robust adaptive approach, it must guarantee admissability and monotonic distance relationships. However, due to the nature of this particular problem and its existing attempts at a solution, we'll discuss why A* is a particularly evolution for dependency resolution compared to traditional SMT solvers.
 
 #### Dimension-wise Normalization
 
@@ -691,15 +721,15 @@ This formulation using $tanh$ as an activation ensures:
 - The output is always in $(0, 1)$, with pre- and post-sum normalization to encourage stable heuristic adaptation.
 - More optimal configurations are considered "closer" to their neighbors and the end goal than other, less optimal configurations.
 
-#### The True Advantage of A\* for Dependency Resolution
+#### The True Advantage of A* for Dependency Resolution
 
-We've discussed how an adaptive approach to A\* is theoretically possible for dependency resolution, and that it offers a possible improvement over SAT-solvers. However, we've yet to discuss why Neural-A\* is theoretically a far more valuable tool for this problem space than the traditional approach: Since SMT solvers are not concerned with finding an optimal solution, then should the A\* algorithm fail to find the best solution due to a violation of admissability in the heuristic, the algorithm will have performed no worse than a SMT solver.
+We've discussed how an adaptive approach to A* is theoretically possible for dependency resolution, and that it offers a possible improvement over SAT-solvers. However, we've yet to discuss why Neural-A* is theoretically a far more valuable tool for this problem space than the traditional approach: Since SMT solvers are not concerned with finding an optimal solution, then should the A* algorithm fail to find the best solution due to a violation of admissability in the heuristic, the algorithm will have performed no worse than a SMT solver.
 
-This reduces the need for admissability in the heuristic from a hard requirement to an ideal, making it much less risky to target modeling an A\* heuristic to be as close as possible to the true final distance from the starting configuration to the optimal one.
+This reduces the need for admissability in the heuristic from a hard requirement to an ideal, making it much less risky to target modeling an A* heuristic to be as close as possible to the true final distance from the starting configuration to the optimal one.
 
-More accurate heuristics in A\* result in faster traversal of the configuration space, creating potential for an increase in not just quality of the resolution, but a decrease in time spent in the search space.
+More accurate heuristics in A* result in faster traversal of the configuration space, creating potential for an increase in not just quality of the resolution, but a decrease in time spent in the search space.
 
-In addition to this, leveraging A\* opens up the possibility of modeling the heuristic and updating it over time based on real world information, opening up the way for future improvements.
+In addition to this, leveraging A* opens up the possibility of modeling the heuristic and updating it over time based on real world information, opening up the way for future improvements.
 
 #### Dataset Acquisition and Preparation
 
