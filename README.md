@@ -110,6 +110,22 @@ Python, on the other hand, hands you a key to a massive building outside of your
 
 This is beginning to shift to more traditional package management strategies with the advent of tools like poetry, but by default, it's still a hybrid approach of trying to create reproducible project dependency structures through a manifest, and storing the resolved and installed dependencies outside of the project itself.
 
+However, standardized adoption for internal storage of project dependencies has seen pushback from Python's core development team. A [proposal](https://discuss.python.org/t/pep-582-python-local-packages-directory/963/430) for the introduction of a project-specific `__pypackages__` directory was recently rejected in March of 2023, citing concerns with backwards compatibility for existing workflows and project security. In a quote pulled from the meeting notes regarding PEP-582:
+
+> Python's Core Developers:
+> “If it ain’t broke, don’t fix it.”
+>
+> Python's user base:
+> “Then why didn’t you do it the way everyone else was already doing it for years before you ever existed, Python?”
+>
+> Python's Core Developers:
+> “It was broken. We fixed it.”
+>
+> Python's user base:
+> “No. No you definitely did not.”
+
+The result is similar to that seen in JavaScript's community: a schism in the ecosystem regarding dependency management and resolution, with no accepted universal approach.
+
 #### Case Study #5: Rust and Recursive Manifest Definitions
 
 #### Case Study #6: Java, Kotlin, Gradle, and Maven
