@@ -1,6 +1,4 @@
 # GAD Document Improvement Tasks
-
-## High Priority
 - [ ] Add detail for calculating each feature and considering it's viability in the heuristic
 - [ ] Add a section on median-score feature backfilling
 - [ ] Expand the dimension-wise normalization section with concrete examples of how normalization prevents search space bias in the configuration space
@@ -32,18 +30,11 @@
   - Post-training synthetic evaluation
   - Real world evaluation and observation
 - [ ] Outline the architecture once features are set
-
-
-## Medium Priority
-
 - [ ]  Expand the dataset acquisition section with specific handling strategies for non-semantic versioning repositories
 - [ ]  Add concrete performance benchmarks and expected inference time impacts
 - [ ]  Develop more immediate transition strategies for migration from existing package management systems
 - [ ]  Detail the CVE scoring mechanism and how security vulnerability weights are updated over time
 - [ ] Revisit the introduction
-
-## Documentation & Clarity
-
 - [ ]  Add more examples throughout the mathematical notation sections to improve readability
 - [ ]  Create diagrams to illustrate the K-space configuration concepts
 - [ ]  Document the data synthesis process more thoroughly, including specific examples of commit dropout and constraint mangling

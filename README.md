@@ -23,31 +23,34 @@ The purpose of this document is to outline an alternative to language-specific a
 
 ### Motivation
 
-There is no "Git for Package Management" yet, but there should be.
+There is no "Git, but for Package Management" yet, but there should be.
 
-If you're writing...
+If you are preparing to write:
 
 - A python tool
 - A web or mobile application
-- A .NET or Rust application
-- Or something an unironic PHP-enjoyer would want to write in PHP
+- A .NET application
+- A Rust server
+- Or something an unironic PHP enjoyer would want to write in PHP
 
-...then you've already got a package ecosystem that suits for needs. Why would you ever use or need a package management system that isn't tailored to your language of choice?
+Then you've already got a package ecosystem that suits your needs. Why would you ever use or need a package management system that isn't tailored to your language of choice?
 
-Well, what if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
+What if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
 
 An experienced developer might retort, mentioning that language agnostic dependency management tools like Gradle and Maven make it possible to manage dependencies and run builds for language contexts other than the Java landscape they were born in. In their minds such tools already exist.
 
-However, these tools are almost always written with a specific language context in mind, then adapted to other language contexts later.
+However, these tools are almost always written with a specific language context in mind, then adapted to other languages later.
 
 Well, what if one's dependencies include build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment? 
 And what if the target versions you have to work with are such comforting values as `v0.0.1-alpha`, `>= sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, or my personal favorite, `latest`.
 
-If you've run into this, then you've probably done hobby development at some point in your life. You use languages and tools with small, scrappy, dedicated communities that may not have the time or the energy to build proper CI/CD for their projects, and certainly don't have the capacity to write their own packaging toolset.
+If you've run into this, then you've probably done hobby development at some point in your life. You have ended up using languages and libraries with small, scrappy, dedicated communities that may not have the time or the energy to build proper CI/CD for their projects, and certainly don't have the capacity to write their own packaging toolset.
 
-Personally, I know this pain from wanting to develop games. Most game engines come with either limited (and proprietary) dependency management or basically none at all. 
+#### Case Study #1: Godot & Games Development
 
-If they do have a way to get and install dependencies:
+Personally, I know this pain from wanting to develop games. Most game engines come with either limited (and proprietary) dependency management or none at all. 
+
+If there is a way to get and install dependencies:
 - It's not recursive, so it has no concept of transitive dependencies
 - Or if it is, it doesn't handle resolving version constraints on those transitive dependencies
 - Or if they do, the packages that support these things are locked behind the paywall of a proprietary asset store
@@ -56,11 +59,26 @@ Yet many of these environments have a desparate need for solid dependency resolu
 - Manage every dependency and namespace collision themselves
 - Use a tool like Gradle or Maven, which has no official Godot support
 - Eschew dependencies entirely and implement everything their project needs from scratch
-- Or switch to a language binding like C# or Rust with better tooling.
+- Or switch to a language binding like C# or Rust which has marginally better tooling.
 
-In addition to this, most small-scale projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development context can't rely on anything most popular languages and package managers take for granted.
+In addition to this, most Godot projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development context can't rely on anything most popular languages and package managers take for granted.
 
-We in the development community have a core problem: the \*.wheel keeps getting re-invented for specific languages in a limited capacity. The basic approach is almost always the same for every major package manager: 
+#### Case Study #2: Lua
+
+According to the 2024 Stack Overflow Developer Survey, Lua was ranked the 16th most used language overall at 6.2% of respondents saying they either use the language professionally or are currently learning it, placing close in ranking to languages with much more mature ecosystems like Ruby (19th/5.8%), Rust (14th/12.6%), Go (13th/13.5%), and even the venerable PHP (11th/18.2%). It's also one of the fastest growing, with 10% of programmers in 2024 learning to code with Lua (up from 6.97% in [2023](https://survey.stackoverflow.co/2023/#most-popular-technologies-language-learn))
+
+Despite this, Lua's built-in package manager is underdeveloped, and its ecosystem under served, having fewer than 6,000 available packages on its [official registry](https://luarocks.org/modules) as of June, 2025.
+
+In addition, Lua's niche as a language is to provide a minimalistic but modern interface for writing extensions to existing products or  embedded systems. This means that much of the time, Lua [must co-exist with other languages](https://www.lua.org/about.html) like C, C#, and Java within their ecosystem, without the built up support and documentation of these heavier hitting general purpose languages. It's a language most commonly used in a multi-lingual context.
+
+#### Case Study #3: JavaScript
+
+Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications. With a decades-long schism in package management systems, new formats of dependency resolution and package management such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems.
+
+#### In Search of a Better Wheel
+
+We in the development community have a problem: the \*.wheel keeps getting re-invented for specific languages, often  in a limited capacity. The basic approach is almost always the same for every major package manager: 
+
 - build a public source for packages to be published
 - enforce versioning on those publishes
 - enforce directory structures
@@ -81,7 +99,7 @@ Both the industry and the individual stand to benefit from a general purpose sol
 
 ## Goals
 
-### What Would a "Git for Package Management" Look Like?
+### What Would the "Git of Package Management" Look Like?
 
 - ***Language-agnostic:*** Works for any language, any project structure.
 
@@ -456,16 +474,29 @@ The true question is more about finding the balance between these considerations
 
 ### Distance
 
-The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A\* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors.
+The distance between values of $\mathbf{k}$ is where we begin to re-enter the realm of practicality. For a real life implementation of an A\* Neural Resolver, the cost factor of exploring one node in the configuration space over another could include multiple factors. As such, we need to employ a careful selection of features for our distance function, as these features will be reused as the basis of our guidance heuristic.
 
-- How does the neighbor affect the dependency graph?
-  - How many new transitive dependencies are added and/or removed?
-  - Do the added/modified transitive dependencies contain riskier requirements or safer ones? Do removed transitive dependencies reduce the number of risky requirements?
+#### Feature Trustworthiness
 
-- How big is the change from one version to the next?
-  - Major > Minor > Patch > Meta (as in meta information appended to the tag such as `rc1`, `alpha`, and `beta`), and single commit differences are closest of all
+Some metadata such as the number of downloads of the source, number of forks or watches, number of open or resolved issues appear to be useful for our heuristic at first glance. However, site-specific information like this comes with issues which cast doubt on their reliability:
 
-- How big is the change in actual code from one commit to the next?
+- Inflated download counts due to automated install scripts (e.g., via CI/CD)
+- The ability for maintainers to open and close issues at will, or fork their own code.
+- Favorites or watches, even if available for all remotes, would not be like-for-like comparable, since not all sources for a remote will have the same global popularity.
+
+For this reason, we chose to favor features that can be gathered directly from git in addition to a few relevant, well defined, industry trusted datasets, and explicitly aim to avoid the use of dedicated web scrapers or other site-specific data collection. This has the triple benefit of 
+
+1. Making our features directly comparable between repositories, regardless of the remote the source is hosted on
+2. Simple to acquire
+3. Tautologically representative of features available to the algorithm in a realistic environment.
+
+#### Feature Availability
+
+In practice, repositories can be messy or ill-maintained. Even in cases were a repository is generally well maintained, not all features we would like to inspect for the sake of our distance calculation are going to be available. To maximize the number of features we can use to understand the dependability of the repository while not explicitly punishing repositories for missing metadata that may not be critical, we use the median value of the metric in question taken over the whole of the active configuration space to backfill the missing data.
+
+#### Candidate Distance Features
+
+##### CVE/CVSS
 
 - What's the change in risk?
   - Does the new version have known security vulnerabilities?
@@ -474,18 +505,45 @@ The distance between values of $\mathbf{k}$ is where we begin to re-enter the re
   - Are all dependencies in the new configuration compatible with the license of the project?
   - Does this commit/project have a high/low CVE CVSS score? Or incorporate a number of CVE-laden transitive dependencies?
 
-- How restrictive are the constraints on the new version compared to the existing version?
-  - Wider constraint ranges mean searching through more transitive dependencies for a candidate.
-  - Smaller constaint ranges mean less space to search, but provides fewer potential opportunities for optimization
-- Popularity of the dependency
-  - More widely used dependencies tend to score better and have fewer compatibility problems than rarely used dependencies)
+##### Strictness
+
+How restrictive are the constraints on the new version compared to the existing version?
+
+- Wider constraint ranges mean searching through more transitive dependencies for a candidate.
+- Smaller constaint ranges mean less space to search, but provides fewer potential opportunities for optimization
+
+##### Affect on the Dependency Graph
+
+- How does the neighbor affect the dependency graph?
+  - How many new transitive dependencies are added and/or removed?
+  - Do the added/modified transitive dependencies contain riskier requirements or safer ones? Do removed transitive dependencies reduce the number of risky requirements?
+
+##### Scale of the Change
+
+How big is the change in actual code from one commit to the next?
+
+- number of bytes in the diff
+- number of lines in the diff 
+  - added
+  - removed
+  - changed
+- number of files added/removed/changed
+
+##### Commit Documentation
+
+- Is there a tag?
+- Quality of the commit message
+- How big is the change from one version to the next?
+  - Major > Minor > Patch > Meta (as in meta information appended to the tag such as `rc1`, `alpha`, and `beta`), and single commit differences are closest of all
+
+##### Commit Freshness
+
 - Maintenence Status of the dependency
 
   - When was the last commit or tagged version of this dependency?
   - How often on average are changes made to this dependency, and how big are they?
 
-
-## Modeling the Heuristic
+### Modeling the Heuristic
 
 When describing this project to a colleague of mine, he was fascinated by the proposition of using A\* to search the space of dependency configurations for an optimal graph, however I was hesitant at first to mention the use of Machine Learning as a means of determining the heuristic.
 
