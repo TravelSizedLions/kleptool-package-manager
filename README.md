@@ -1,12 +1,15 @@
-# GAD: General-purpose Agnostic Dependency Resolution using Neural $A*$ Heuristics
+
+# GUDR: Git-derived Unified Dependency Resolution
 
 ## Abstract
 
-In this document, we'll explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. I propose tackling this notoriously difficult problem using a novel formulation of the A* optimization algorithm. This purpose-built adaptation of A* will leverage a monotonic fully-connected feedforward network to weight a linear combination of repository features to construct a heuristic. This adaptive heuristic will be used to learn an efficient strategy for discovering optimal (read, stable and low-risk) dependency graphs. After, we will discuss the advantages and disadvantages of Neural A* over traditional SMT-based approaches.
+In this document, we'll rigorously explore the theoretical and technical challenges of implementing a language- and versioning-agnostic dependency resolver. We will discuss and analyze the development environments of a diverse set of languages and their large-scale and niche applications in order to understand their shared dependency resolution needs. After, we will devise a method for tackling this notoriously difficult problem using a novel formulation for translating dependency manifests into a unified representation, then proposing a resolution method by constructing an A* heuristic for dependability optimization. Due to the specific quirks of current solutions for dependency resolution and requirements for A* to reach optimal solutions, A* has a distinct theoretical advantage over SMT-based approaches, which we'll discuss. In short, this discourse will show that a purpose-built adaptation of A* leveraging a fully-connected feedforward network to fine-tune a traditional heuristic can be guaranteed to maintain monotonicity, and does not require maintaining admissibility in order to achieve similar results to SMT.
 
-First, I'll begin by summarizing the general principles and purposes of A* and SMT solvers as background for the solution proposed, followed by a discussion of their synergies. Then, we'll formalize the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool, including:
+For those unfamiliar with this problem space and the background required to understand this methodology, I'll begin by reviewing well known development ecosystems and their similarities, differences, and challenges, then summarize the general principles, purposes, and requirements of A*, Neural Models, Unsupervised Learning, Abstract Syntax Trees and AST comparison algorithms, and SMT solvers, followed by a discussion of their synergies. Then, after establishing a common language and knowledge bases, we'll formalize the approach to unifying the dependency resolution process and end goals. After, we'll go on to discuss practical requirements for such a tool and hypothetical limitations, including:
 
 - Building and maintaining the A* configuration space
+- Gathering data reliably to train the heuristic and create a model for categorizing dependency manifests and resolutions into AST families
+- Allowing for user insight into the manifest translation and resolution process, and direct intervention in unexpected cases
 - The time and computational cost to cache and clone repositories
 - Resolving non-semantic version targets together with semantic targets
 - Architecting, initializing, training, and tuning a custom, locally deployable neural model
@@ -14,14 +17,9 @@ First, I'll begin by summarizing the general principles and purposes of A* and S
 - Recovering from expired or missing cached dependencies
 - Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A*-SMT resolver
 
-We'll then use these considerations and others to formulate our Neural A* heuristic functions.
+We'll then use these considerations and others to consider future work.
 
-
-### Scope
-
-The purpose of this document is to outline an alternative to language-specific and semver-dependent package management. It does not attempt to broach other aspects of a language-specific ecosystem, such as compiling, transpiling, bundling, hosting, or distributing code artifacts.
-
-### Motivation
+## Motivation
 
 There is no "Git, but for Package Management" yet, but there should be.
 
@@ -35,49 +33,81 @@ If you are preparing to write:
 
 Then you've already got a package ecosystem that suits your needs. Why would you ever use or need a package management system that isn't tailored to your language of choice?
 
+This dismissal ignores the realities of software development, both at an enterprise and individual level.
+
 What if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
 
-An experienced developer might retort, mentioning that language agnostic dependency management tools like Gradle and Maven make it possible to manage dependencies and run builds for language contexts other than the Java landscape they were born in. In their minds such tools already exist.
+An experienced developer might respond that language agnostic dependency management tools like Gradle, Maven, and smaller ecosystems like Pants already make it possible to manage dependencies and run builds for multiple languages. However, tools like this are almost always written with a specific language context in mind, then adapted to other languages later using community-driven plugins. Later, I'll explain in more detail why this approach is doomed to fail if the goal is to create a truly universal tool.
 
-However, these tools are almost always written with a specific language context in mind, then adapted to other languages later.
+In the case of more modern tools like Bazel, they're geared towards the needs of massive organizations and doesn't scale down well to smaller repositories and personal projects.
 
-Well, what if one's dependencies include build tools and design tools with release versions numbered by year, or that have a GUI component? Or what if they're just some github repo a community member dumped on Reddit at some point with no official release version? What if you don't really have much choice if you want or need to write your software in that limited environment? 
-And what if the target versions you have to work with are such comforting values as `v0.0.1-alpha`, `>= sufjw0n9273lklksjf72kdfjsy8`, `feature-x-branch-do-not-merge`, or my personal favorite, `latest`.
+In addition, nearly every tool has an over-reliance on semantic versioning. While SemVer is a major blessing in the worlds of enterprise and FOSS development, it's never guaranteed that a dependency needed for a project follows semantic versioning. Outside of mainstream enterprise development, a project may need build tools and libraries with release versions numbered by year and quarter, or that have a GUI interface under alpha development with a number of additional in-progress dependencies required to build the interface, not to mention your actual project. Other projects still are dependent on repositories with no version scheme or official release process at all, and have no better alternatives due to lack of historical support, or even design features of the language itself. In these cases, target versions for a dependency are such comforting values as `v0.0.1-alpha`, `=sufjw0n9273lklksjf72kdfjsy8`, `feature/branch-experimental`, or my personal favorite, `latest`.
 
-If you've run into this, then you've probably done hobby development at some point in your life. You have ended up using languages and libraries with small, scrappy, dedicated communities that may not have the time or the energy to build proper CI/CD for their projects, and certainly don't have the capacity to write their own packaging toolset.
+If you've run into this class of problem, then you've done actual development at some point in your life. You may have ended up using languages and libraries with small, scrappy, dedicated communities that may not have the time or the energy to build proper CI/CD for their projects, and certainly don't have the capacity to write their own packaging toolset or following strict tagging, versioning, and publishing workflows, or even dead and dying communities that your project is unfortunately chained to for historical reasons.
 
-#### Case Study #1: Godot & Games Development
+### Case Studies
 
-Personally, I know this pain from wanting to develop games. Most game engines come with either limited (and proprietary) dependency management or none at all. 
+In order to research and develop a robust solution, we must start from grounded observations. Below, we'll walk through several common development scenarios and analyze, compare, and contrast their needs. These examples purposely cross boundaries of common industry circles and treat niche cases with the same level of scrutiny as mainstream cases in order gain insight into the underlying patterns inherent to software development.
+
+#### Case Study #1: Game Engines
+
+Most game engines come with either limited (and proprietary) dependency management or none at all. 
 
 If there is a way to get and install dependencies:
-- It's not recursive, so it has no concept of transitive dependencies
-- Or if it is, it doesn't handle resolving version constraints on those transitive dependencies
+- It's not recursive, and so has no concept of transitive or peer dependencies
+- If it is recursively resolving, it doesn't effectively handle resolving version constraints on those transitive dependencies
 - Or if they do, the packages that support these things are locked behind the paywall of a proprietary asset store
 
 Yet many of these environments have a desparate need for solid dependency resolution outside of a closed ecosystem. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also contains a fraction of the assets that are actually available to all users of Godot, and has no concept of dependency resolution, so mid-sized projects have one of four options:
 - Manage every dependency and namespace collision themselves
-- Use a tool like Gradle or Maven, which has no official Godot support
+- Use a tool like Gradle or Maven, which has no official support for GDScript
 - Eschew dependencies entirely and implement everything their project needs from scratch
-- Or switch to a language binding like C# or Rust which has marginally better tooling.
+- Or switch to a language binding like C# or Rust which has marginally better tooling due to their pre-existing ecosystem.
 
 In addition to this, most Godot projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development context can't rely on anything most popular languages and package managers take for granted.
 
 #### Case Study #2: Lua
 
-According to the 2024 Stack Overflow Developer Survey, Lua was ranked the 16th most used language overall at 6.2% of respondents saying they either use the language professionally or are currently learning it, placing close in ranking to languages with much more mature ecosystems like Ruby (19th/5.8%), Rust (14th/12.6%), Go (13th/13.5%), and even the venerable PHP (11th/18.2%). It's also one of the fastest growing, with 10% of programmers in 2024 learning to code with Lua (up from 6.97% in [2023](https://survey.stackoverflow.co/2023/#most-popular-technologies-language-learn))
+According to the 2024 Stack Overflow Developer Survey, Lua was ranked the 16th most used language overall at 6.2% of respondents saying they either use the language professionally or are currently learning it, placing close in ranking to languages with much more mature ecosystems like Ruby (19th/5.8%), Rust (14th/12.6%), Go (13th/13.5%), and even sharing the top 20 with the venerable PHP (11th/18.2%). Lua is also one of the fastest growing, with 10% of programmers in 2024 learning to code with Lua (up from 6.97% in [2023](https://survey.stackoverflow.co/2023/#most-popular-technologies-language-learn)).
 
-Despite this, Lua's built-in package manager is underdeveloped, and its ecosystem under served, having fewer than 6,000 available packages on its [official registry](https://luarocks.org/modules) as of June, 2025.
+Despite this, Lua's built-in package manager is underdeveloped and its ecosystem under served, having fewer than 6,000 available packages on its [official registry](https://luarocks.org/modules) as of June, 2025. Lua was first released in July of 1994, and so the likelihood of it ever being a strongly supported language like Javascript, Go, or Python is minimal.
 
-In addition, Lua's niche as a language is to provide a minimalistic but modern interface for writing extensions to existing products or  embedded systems. This means that much of the time, Lua [must co-exist with other languages](https://www.lua.org/about.html) like C, C#, and Java within their ecosystem, without the built up support and documentation of these heavier hitting general purpose languages. It's a language most commonly used in a multi-lingual context.
+In addition,  Lua is a language designed for and most commonly used in a multi-lingual context. Lua's niche is to provide a minimalistic but modern interface for writing extensions to existing applications and embedded systems. This means that much of the time, Lua must co-exist with other languages like C, C#, and Java within their ecosystem, without the built up support and documentation of these heavier hitting general purpose languages. From their [own site](https://www.lua.org/about.html):
+
+> Lua has been used in many industrial applications (e.g., Adobe's Photoshop Lightroom), with an emphasis on embedded systems (e.g., the Ginga middleware for digital TV in Brazil) and games (e.g., World of Warcraft and Angry Birds)....
+>
+> ...Lua runs on all flavors of Unix and Windows, on mobile devices (running Android, iOS, BREW, Symbian, Windows Phone), on embedded microprocessors (such as ARM and Rabbit, for applications like Lego MindStorms), on IBM mainframes, etc.
+
+Here, we have a popular language where users of it are:
+
+- Growing in number
+- Commonly using it for an industry famous for its non-modular, closed system solutions
+- Limited in packaging options and standard libraries
+- Using it specifically for its synergy with more popular ecosystems
 
 #### Case Study #3: JavaScript
 
-Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications. With a decades-long schism in package management systems, new formats of dependency resolution and package management such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems.
+Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications--all for a language which at its root was never intended for what it's become used for today. 
 
-#### In Search of a Better Wheel
+With a decades-long schism in package management systems for javascript, new tools such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems, and each have their distinct downsides. (TODO -- give examples)
 
-We in the development community have a problem: the \*.wheel keeps getting re-invented for specific languages, often  in a limited capacity. The basic approach is almost always the same for every major package manager: 
+#### Case Study #4: Python and Virtual Environments
+
+#### Case Study #5: Rust and Recursive Manifest Definitions
+
+#### Case Study #6: Java, Kotlin, Gradle, and Maven
+
+#### Case Study #7: C and C++
+
+#### Case Study #8: Assembly and Machine Code
+
+#### Case Study #9: Groovy
+
+#### Case Study #10: 
+
+### In Search of a Better Wheel
+
+We in the development community have a problem: the \*.wheel keeps getting re-invented for specific languages, often  in a limited capacity. Yet the approach is always roughly the same for every major package manager: 
 
 - build a public source for packages to be published
 - enforce versioning on those publishes
@@ -86,18 +116,19 @@ We in the development community have a problem: the \*.wheel keeps getting re-in
 - resolve dependencies with SAT solvers
 - \*.lock resolved versions in place.
 
-Despite the approach always being the same, no-one's sought to actually, *fully* solve the general case problem of dependency management, i.e., for all project structures, sources, versioning schemes, and languages. 
+Despite the approach always being similar, no-one's sought to actually, *fully* solve the general case problem of dependency management, i.e., for all project structures, sources, versioning schemes, and languages. 
 
-And, as much as the core motivation for my efforts started with helping the hobby developer, small-scale projects aren't the only context in which this is an issue. Even larger organizations using standardized tools will sink significant portions of their budget re-inventing and maintaining tooling built on top of the standard tools, and this includes solutions for package management and publishing. Entire businesses and products have been built up around the need for organizations to privately store publish artifacts for internal use. However, if organizations are given a tool that allows them to use their own remote git repositories as sources for published dependencies, then paying for external package hosting services such as artifactory or GitHub Packages becomes unecessary. We don't need artifact stores when remote repositories already exist and are perfectly capable of hosting production builds of your source code for distribution.
-
-Both the industry and the individual stand to benefit from a general purpose solution to package management and dependency resolution, one that can handle a complex or non-ideal development environment. The benefits that would come from a language and versioning agnostic dependency resolver are numerous:
+Both the industry and the individual stand to benefit from a general purpose solution to package management and dependency resolution, one that can handle complex or non-ideal development environments at both small and large scale. The potential benefits that would come from a language and versioning agnostic dependency resolver are numerous:
 - No more need for dedicated package stores
 - No need to re-learn CLIs and tooling when hopping from language to language or project to project
 - Support for semantic version tags when they exist, and other schemes when they don't.
-- Greater precision in resolving exactly which version of which dependencies are needed for each project, down to individual commits if necessary.
+- Greater precision in resolving dependencies are needed for each project, down to individual commits if necessary.
+- Automatically filtering out or avoiding versions based on CVE records
 - The capacity to work with and standardize non-standard project layouts in your dependencies
 
 ## Goals
+
+The purpose of this document is to outline an alternative to language-specific and semver-dependent package management. It does not attempt to broach other aspects of a language-specific ecosystem, such as compiling, transpiling, bundling, hosting, or distributing code artifacts. Instead, this proposal is purposely scoped down in order to create a single, unified solution for dependency management, with inspiration taken from multiple off-the-shelf approaches to common problems in development. It aims to outline a path towards creating the `git` of package management.
 
 ### What Would the "Git of Package Management" Look Like?
 
@@ -244,21 +275,21 @@ The SMT solver can then find a satisfying assignment that meets all these constr
 
 ## SMT and A* Heuristic Dependency Resolution
 
-### The Core Problem
-
 To solve a problem like dependency resolution, the question becomes "Can I find a set of dependency versions that won't break the consumers of those dependencies and also do not conflict with one another?"
 
 Thankfully, this is exactly the kind of problem SMT and Semantic Versioning was designed to solve.
 
 Except…It's not. Not quite.
 
-### The Recursion Problem
+### The Problem of Recursion in Search-Spaces
 
-There's a complication to finding a set of dependencies whose versions do not conflict with one another and satisfy the needs of their consumers, and that complication is *recursion*. **Because dependencies can add and remove additional dependencies from version to version**, there's no telling what dependencies actually need to be installed for a given version until we try it.
+There's a complication to finding a set of dependencies whose versions do not conflict with one another and satisfy the needs of their consumers, and that complication is *recursion*. **Because dependencies can add and remove additional dependencies from version to version**, there's no telling what dependencies actually need to be installed for a given version ahead of time.
 
-This creates a chicken-and-egg problem:
+This creates a chicken-and-egg scenario:
 1. To know what dependencies we need, we need to know the versions
 2. To know the versions, we need to know what dependencies we need
+
+In addition, recursion opens up the possibility of cyclical dependencies.
 
 ### Combining SMT and A*
 
@@ -459,7 +490,7 @@ Possible approaches include:
 
 Once the input's AST family has been identified, additional unsupervised comparisons are made to plan a translation from the existing AST family to the Universal K-Space family.
 
-This is done through a combination of meta-structural analysis on patterns identifiable between AST families as well as an exploration of a space of statically defined AST refactoring strategies (inspiration taken from row-reduction operations and boolean clause manipulation).
+This is done through a combination of meta-structural analysis on patterns identifiable between AST families as well as an exploration of a space of statically defined AST refactoring strategies (inspiration taken from row-reducSome formats are ambiguous by design (e.g., fields that can mean different things depending on context, or keys that are overloaded for multiple purposes)tion operations and boolean clause manipulation).
 
 We propose mapping the AST Family Transformation Problem onto a satisfiability or constraint-solving problem: given a set of allowed tree operations (renames, moves, merges, splits, type coercions, etc.) and a set of structural constraints defining the universal schema, a solver searches for a sequence of operations that transforms the input AST into one that satisfies all constraints.
 
