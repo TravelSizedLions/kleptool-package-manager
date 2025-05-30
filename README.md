@@ -106,7 +106,7 @@ Instead of gathering, installing, and labeling dependencies as project-specific 
 
 To use an analogy, think of organization for house projects and chores. Most languages set up your project’s needs right inside your house alongside where the actual work is being done. The sponges are by the sink, the tools for yardwork are in the shed out back, the plunger is in the bathroom, the laundry soap is by the laundry machines, and the baking supplies are in the fridge and pantry, with the mixing bowl and oven. Everything you need for the work is local to the place where the work is happening.
 
-Python, on the other hand, hands you a key to a massive building outside of your home. Each time you need to do a project, you have to build a room in that building, put the supplies you need for that project in that room, and then temporarily bring the supplies home with you to do the work. It's so isolated that it isolates the dependencies from the project itself, which feels inside-out.
+Python, on the other hand, hands you a key to a massive building outside of your home. Each time you need to do a project, you have to build a room in that building, put the supplies you need for that project in that room, and then temporarily bring the supplies home with you to do the work. It's so isolated that it isolates the dependencies from the project itself, which feels inside-out. It also leads to problems like trying to remember which environment maps to which project or set of projects. And speaking of which--virtual envs aren't a one-to-one relationship with projects, making them subpar for isolation, reproducibility, and portability.
 
 #### Case Study #5: Rust and Recursive Manifest Definitions
 
