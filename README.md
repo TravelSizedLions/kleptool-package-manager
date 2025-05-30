@@ -475,7 +475,7 @@ $$
 Or, more explicitly,  $K_i' = \left\{ (t_d)_{K_d \in D_i} \;\middle|\; t_d \in T_d',\ \forall K_d \in D_i \right\}$
 
 
-#### Example
+### Example
 Suppose $K_i$ depends on $K_a$ and $K_b$, and $K_a$ depends on $K_c$. Then $D_i = \{ K_i, K_a, K_b, K_c \}$, and the subspace $K_i'$ is all possible assignments of hashes to these four repos, subject to the constraints that come from the initial dependency relationships imposed by $K_i$.
 
 
@@ -495,6 +495,12 @@ Instead, we propose taking a less direct approach: structural inference.
 Rather than relying on a hardcoded list of known manifest formats and mapping them to a specialized, heavy duty, high risk, and heavy maintenence tooling dependency, a language-agnostic system must be able to *infer* the structure of an unknown manifest or lockfile by analyzing its shape, not just its surface details. 
 
 This section is dedicated to exploring possible approaches to achieving a more adaptive dependency syntax translation system.
+
+### Recursive Dependency Manifests: K-Space Constellations
+
+In theory, the subspace $K_i \in K$ is a unified graph structure. However, in practice dependency manifests can be recursively defined in a project structure, dividing the graph up into logical chunks. Language specific package managers such as Rust's crate system are a prime example. Here, subsections of a repository may contain more than one crate, and therefore more than one Cargo.toml dependency manifest file, outlining parent/child and sibling relationships from some regions of $K_i$ to others. Practically speaking, when translating $K_i$ into a standard representation, these logical chunks and their implicit and explicit relationships must be preserved to avoid breaking existing project requirements.
+
+(TODO: expand)
 
 ### Automated AST Translation Inferencing at a High Level
 
