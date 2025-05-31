@@ -1,28 +1,38 @@
 import kerror from './kerror.ts';
 import sh from './sh.ts';
 import { GlobEntry, globby } from 'globby';
+import path from 'path';
 
-type Tree<K extends (string | number | symbol), V> = {
-  [key in K]: Tree<K, V> | V;
+
+type RustClient = {
+  [module: string]: {
+    [api: string]: Dispatcher;
+  }
+} & {
+  help: () => string;
 }
-
-type RustClient = Tree<string, Dispatcher>;
 
 let __backend: RustClient | null = null;
 
-type Dispatcher = <I, O>(blob: I) => Promise<O>;
+type Dispatcher = <I = undefined, O = undefined>(blob?: I) => Promise<O>;
 
-function __createDispatcher(path: string) {
-  return async <I, O>(blob: I): Promise<O> => {
+function __createDispatcher(binPath: string) {
+  const resolved = path.resolve(binPath);
+  return async <I, O>(blob?: I): Promise<O> => {
     // TODO add type checking/input + output validation
-    return await sh(path, { args: [JSON.stringify(blob)] }) as O;
+    return await sh(resolved, { 
+      args: [blob !== undefined ? JSON.stringify(blob) : ''],
+      streamOutput: true 
+    }) as O;
   }
 }
 
 async function __constructor() {
   const binaries = await globby('src/rust/target/release/**/bin-*--*', {objectMode: true});
 
-  return binaries.reduce((modules: RustClient, entry) => {
+  const modules = binaries
+  .filter((entry) => !entry.name.endsWith('.d'))
+  .reduce((modules: RustClient, entry) => {
     const module = entry.name.split('--')[0].split('bin-')[1];
     if (!modules[module]) {
       modules[module] = {};
@@ -30,11 +40,26 @@ async function __constructor() {
 
     const apiName = entry.name.split('--')[1];
     const dispatcher = __createDispatcher(entry.path.toString());
-
     (modules[module] as Record<string, Dispatcher>)[apiName] = dispatcher;
 
     return modules;
   }, {} as RustClient);
+
+  Object.defineProperty(modules, 'help', {
+      value: () => {
+        const help = `Available APIs:\n` + Object.entries(modules).map(([module, apis]) => {
+          return Object.entries(apis).map(([api, _]) => {
+            return `${module}.${api}`;
+          }).join('\n');
+        }).join('\n');
+
+        return help;
+    },
+    writable: false,
+    configurable: false,
+  });
+
+  return modules;
 }
 
 async function __singleton(): Promise<RustClient> {

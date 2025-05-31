@@ -108,9 +108,7 @@ program
   .action(
     kerror.boundary(async () => {
       const client = await rustClient();
-      const res = await client.std.add([5, 7]);
-      const res2 = await client.imported.subtract([5, 7]);
-      console.log(`Result from native Rust: ${res} and ${res2}`);
+      console.log(client.help());
     })
   )
 
