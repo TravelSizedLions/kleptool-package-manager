@@ -10,7 +10,6 @@ import defaults from './cli/defaults.ts';
 import taskRunner from './cli/task-runner.ts';
 import rustClient from './cli/rust-client.ts';
 
-
 const DEFAULT_SUBFOLDER = defaults.depsfile.entry.dependencyFolder;
 
 const description = `I can't believe people aren't using language-agnostic dependency management.
@@ -108,7 +107,8 @@ program
   .action(
     kerror.boundary(async () => {
       const client = await rustClient();
-      console.log(client.help());
+      const res = await client.std.identity(['hello', 'world'])
+      console.log({res})
     })
   )
 

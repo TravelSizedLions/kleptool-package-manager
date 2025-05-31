@@ -3,7 +3,7 @@ import kerror from './kerror.ts';
 
 type StreamType = 'inherit' | 'pipe' | 'ignore';
 
-type ExecOptions = {
+export type ExecOptions = {
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
@@ -44,11 +44,8 @@ export default (cmd: string, options: ExecOptions = {}): Promise<string> => {
     let stderr = '';
     
     // Handle streaming or collecting output
-    if (streamOutput && childProcess.stdout && childProcess.stderr) {
-      // Stream output in real-time
-      childProcess.stdout.pipe(process.stdout);
-      childProcess.stderr.pipe(process.stderr);
-    } else if (childProcess.stdout && childProcess.stderr) {
+    
+    if (childProcess.stdout && childProcess.stderr) {
       // Collect output
       childProcess.stdout.on('data', (data) => {
         stdout += data.toString();
@@ -57,6 +54,11 @@ export default (cmd: string, options: ExecOptions = {}): Promise<string> => {
       childProcess.stderr.on('data', (data) => {
         stderr += data.toString();
       });
+
+      if (streamOutput) {
+        childProcess.stdout.pipe(process.stdout);
+        childProcess.stderr.pipe(process.stderr);
+      }
     }
 
     childProcess.on('close', (code) => {

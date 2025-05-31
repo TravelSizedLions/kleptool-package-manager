@@ -1,3 +1,4 @@
+import { ExecOptions } from './sh.ts';
 import kerror from './kerror.ts';
 import sh from './sh.ts';
 import { GlobEntry, globby } from 'globby';
@@ -14,15 +15,15 @@ type RustClient = {
 
 let __backend: RustClient | null = null;
 
-type Dispatcher = <I = undefined, O = undefined>(blob?: I) => Promise<O>;
+type Dispatcher = <I = undefined, O = undefined>(blob?: I, options?: ExecOptions) => Promise<O>;
 
 function __createDispatcher(binPath: string) {
   const resolved = path.resolve(binPath);
-  return async <I, O>(blob?: I): Promise<O> => {
+  return async <I, O>(blob?: I, options: ExecOptions = {}): Promise<O> => {
     // TODO add type checking/input + output validation
     return await sh(resolved, { 
       args: [blob !== undefined ? JSON.stringify(blob) : ''],
-      streamOutput: true 
+      ...options,
     }) as O;
   }
 }
