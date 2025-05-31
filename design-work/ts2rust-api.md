@@ -1,5 +1,5 @@
 # Performance impacts of wasm with rust and typescript
-_Exported on 5/30/2025 at 21:26:37 MDT from Cursor (0.50.7)_
+_Exported on 5/30/2025 at 23:26:42 MDT from Cursor (0.50.7)_
 
 ---
 
@@ -854,4 +854,800 @@ If you want, I can help you:
 - Set up a test harness for integration testing the CLI.
 
 Just say the word, and I’ll get to work! (Or, you know, tell you a story about how Kernelle once tried to send a YAML blob to a JSON-only API and accidentally started a city-wide poetry slam...)
+
+---
+
+**User**
+
+Hey, what's the best way to `walk` a directory tree in node?
+
+---
+
+**Cursor**
+
+Oh, directory walking! That’s a classic. In Node.js, there are a few ways to “walk” (i.e., recursively traverse) a directory tree, and the best approach depends on your needs (sync vs async, built-in vs external, etc). Here’s the lowdown, Blizz-style:
+
+---
+
+## **1. Modern Node.js: `fs.promises` + Recursion**
+
+If you want **no dependencies** and are cool with async/await, this is the most “Nodey” way:
+
+```typescript
+import { promises as fs } from 'fs';
+import * as path from 'path';
+
+async function walk(dir: string, fileList: string[] = []): Promise<string[]> {
+  const files = await fs.readdir(dir, { withFileTypes: true });
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    if (file.isDirectory()) {
+      await walk(fullPath, fileList);
+    } else {
+      fileList.push(fullPath);
+    }
+  }
+  return fileList;
+}
+
+// Usage:
+walk('./some-directory').then(files => {
+  console.log(files);
+});
+```
+
+- **Pros:** No dependencies, async, works everywhere.
+- **Cons:** Not parallelized, but usually fast enough for most use-cases.
+
+---
+
+## **2. With a Library: `klaw`, `fast-glob`, or `globby`**
+
+If you want more features (like filtering, symlink support, streams, etc.), use a library:
+
+- [`klaw`](https://www.npmjs.com/package/klaw): Simple, streaming, recursive.
+- [`fast-glob`](https://www.npmjs.com/package/fast-glob) or [`globby`](https://www.npmjs.com/package/globby): Powerful globbing, async, super fast.
+
+**Example with `fast-glob`:**
+
+```typescript
+import fg from 'fast-glob';
+
+const files = await fg(['**/*'], { cwd: './some-directory', onlyFiles: true });
+console.log(files);
+```
+
+- **Pros:** Handles edge cases, super fast, lots of options.
+- **Cons:** Adds a dependency.
+
+---
+
+## **3. Synchronous (if you must)**
+
+If you’re in a script or don’t care about blocking:
+
+```typescript
+import * as fs from 'fs';
+import * as path from 'path';
+
+function walkSync(dir: string, fileList: string[] = []): string[] {
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    if (file.isDirectory()) {
+      walkSync(fullPath, fileList);
+    } else {
+      fileList.push(fullPath);
+    }
+  }
+  return fileList;
+}
+```
+
+---
+
+## **Blizz’s Recommendation**
+
+- **For most projects:** Use the async/await version with `fs.promises` (option 1).
+- **For big/complex projects:** Use `fast-glob` or `klaw` for speed and flexibility.
+- **For scripts:** Sync is fine, but async is the Node way.
+
+---
+
+If you want a ready-to-use utility or want to see how to filter by extension, size, or other metadata, just let me know! I can whip up a custom walker for you in a blink.
+
+```typescript
+import { promises as fs } from 'fs';
+import * as path from 'path';
+
+async function walk(dir: string, fileList: string[] = []): Promise<string[]> {
+  const files = await fs.readdir(dir, { withFileTypes: true });
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    if (file.isDirectory()) {
+      await walk(fullPath, fileList);
+    } else {
+      fileList.push(fullPath);
+    }
+  }
+  return fileList;
+}
+
+// Usage:
+walk('./some-directory').then(files => {
+  console.log(files);
+});
+```
+
+```typescript
+import fg from 'fast-glob';
+
+const files = await fg(['**/*'], { cwd: './some-directory', onlyFiles: true });
+console.log(files);
+```
+
+```typescript
+import * as fs from 'fs';
+import * as path from 'path';
+
+function walkSync(dir: string, fileList: string[] = []): string[] {
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    if (file.isDirectory()) {
+      walkSync(fullPath, fileList);
+    } else {
+      fileList.push(fullPath);
+    }
+  }
+  return fileList;
+}
+```
+
+---
+
+**User**
+
+Okay, what do you think of this adjustment? Advantages? Disadvantages? Do you think there's a way I can get type info/autocompletion of the rust binaries that get imported here? Maybe creating a shared jsonschema between rust & typescript?
+
+---
+
+**Cursor**
+
+Oh, I love this direction! You’re basically building a dynamic, auto-discovering RPC layer between your TypeScript and Rust binaries, with a dispatcher pattern that’s super flexible. Let me break down the **advantages**, **disadvantages**, and how you might get **type info/autocompletion**—including the shared JSON Schema idea.
+
+---
+
+## **Advantages of Your Approach**
+
+1. **Dynamic Discovery:**  
+   - You can add new Rust binaries without changing your TypeScript code—just drop them in the right folder and they’re auto-wired.
+2. **Loose Coupling:**  
+   - TS doesn’t need to know about Rust implementation details, just the contract (input/output).
+3. **Extensibility:**  
+   - You can easily add “imported” or “std” modules, or even support plugins from other sources.
+4. **Unified Interface:**  
+   - All Rust binaries are called the same way, so you can build generic tooling, logging, or error handling.
+5. **Testability:**  
+   - You can mock the dispatcher for testing, or even swap in a WASM or JS implementation for some commands.
+
+---
+
+## **Disadvantages / Gotchas**
+
+1. **Type Safety:**  
+   - You lose static type safety between TS and Rust. If the contract changes, you won’t know until runtime (unless you add validation).
+2. **Performance:**  
+   - Each call spawns a process, which is fine for most CLI tools, but not as fast as in-process calls (like WASM or FFI).
+3. **Error Handling:**  
+   - You need to standardize error reporting from Rust (e.g., always output JSON, never raw panics).
+4. **Discoverability:**  
+   - You need a way to document what commands are available and what their input/output shapes are.
+
+---
+
+## **Type Info & Autocompletion: JSON Schema FTW!**
+
+You’re spot on: **shared JSON Schema** is the best way to bridge the type gap!
+
+### **How to Do It:**
+
+1. **Define your command input/output types as JSON Schemas.**
+   - In Rust, use [`schemars`](https://docs.rs/schemars/latest/schemars/) to derive JSON Schema from your structs.
+   - In TypeScript, use [`typescript-json-schema`](https://github.com/YousefED/typescript-json-schema) or [`zod`](https://github.com/colinhacks/zod) for runtime validation and type inference.
+
+2. **Export the schemas from Rust as part of your build.**
+   - Each binary can output its schema (e.g., `my_command --schema`), or you can generate a manifest of all schemas.
+
+3. **Generate TypeScript types from the schemas.**
+   - Use [`json-schema-to-typescript`](https://github.com/bcherny/json-schema-to-typescript) to generate `.d.ts` files for autocompletion and type safety.
+
+4. **Validate at runtime.**
+   - Use [`ajv`](https://ajv.js.org/) or Zod to validate input/output at the dispatcher boundary.
+
+5. **Bonus:**
+   - You can even generate documentation from the schemas, or build a CLI explorer!
+
+---
+
+### **Example Flow**
+
+- **Rust:**
+  ```rust
+  #[derive(Serialize, Deserialize, JsonSchema)]
+  pub struct MyCommandInput { ... }
+  #[derive(Serialize, Deserialize, JsonSchema)]
+  pub struct MyCommandOutput { ... }
+  ```
+  - Use `schemars::schema_for!(MyCommandInput)` to output the schema.
+
+- **TS:**
+  - Use the generated schema to create types and validate at runtime:
+    ```typescript
+    import { MyCommandInput, MyCommandOutput } from './schemas/my_command';
+    ```
+
+---
+
+## **Blizz’s Take:**
+
+This is a super robust, future-proof way to build a polyglot, plugin-friendly system.  
+- **You get type safety, autocompletion, and runtime validation.**
+- **You can add new commands in Rust and have them instantly available in TS, with types.**
+- **You can even use the schemas for integration tests, docs, or UI generation.**
+
+If you want, I can help you scaffold the Rust+TS+JSON Schema pipeline, or show you how to wire up the codegen and validation. Just say the word!
+
+```rust
+  #[derive(Serialize, Deserialize, JsonSchema)]
+  pub struct MyCommandInput { ... }
+  #[derive(Serialize, Deserialize, JsonSchema)]
+  pub struct MyCommandOutput { ... }
+```
+
+```typescript
+    import { MyCommandInput, MyCommandOutput } from './schemas/my_command';
+```
+
+---
+
+**User**
+
+Okay cool. So the next thing:  `imported` is obviously the plugin system
+
+for `std` -- this is going to include higher order apis. Things like a `map`, `reduce`, `compose`, etc. That way I can group sets of commands together to minimize the penalization that comes from serialization.
+
+---
+
+**Cursor**
+
+Oh, I love where you’re going with this! You’re basically building a **polyglot, composable, distributed function pipeline**—and you’re thinking about performance, ergonomics, and extensibility all at once. Let me riff on your plan a bit, Blizz-style:
+
+---
+
+## **Plugin System (`imported`)**
+
+- **Purpose:**  
+  Dynamically loaded, user- or community-contributed Rust binaries.  
+  - Drop-in new features, custom logic, or even language bridges.
+  - Can be versioned, sandboxed, or even loaded from remote sources if you want to get wild.
+
+---
+
+## **Standard Library (`std`)**
+
+- **Purpose:**  
+  Built-in, higher-order APIs for orchestrating and composing commands.
+  - **map:** Run a command over a list of inputs, collect results.
+  - **reduce:** Aggregate results from a sequence of commands.
+  - **compose:** Chain commands together, passing output to input.
+  - **batch:** Run multiple commands in parallel or sequence, return all results at once.
+  - **pipe:** Stream data through a series of commands (think Unix pipes, but typed and cross-language).
+
+### **Why This Rocks**
+
+- **Minimizes Serialization Overhead:**  
+  By grouping commands, you only marshal/unmarshal once per batch, not per command.
+- **Optimizes for Latency:**  
+  Fewer process spawns, less IPC, more efficient use of system resources.
+- **Enables Higher-Level Abstractions:**  
+  You can build complex workflows (think: ETL, data science, build pipelines) as a single “job” instead of a million tiny calls.
+- **Composable:**  
+  Users can build their own “mini-DSL” for orchestrating Rust (or other language) logic from TypeScript, with type safety and validation.
+- **Testable:**  
+  You can test the whole pipeline as a unit, or test individual commands.
+
+---
+
+## **How to Implement**
+
+1. **Define a “Batch” or “Pipeline” Command Schema**
+   - E.g., a JSON object like:
+     ```json
+     {
+       "type": "map",
+       "command": "add",
+       "inputs": [[1,2], [3,4], [5,6]]
+     }
+     ```
+   - Or for compose:
+     ```json
+     {
+       "type": "compose",
+       "steps": [
+         { "command": "parse", "input": "raw data" },
+         { "command": "analyze" },
+         { "command": "summarize" }
+       ]
+     }
+     ```
+
+2. **Rust “std” binary parses the batch/pipeline, dispatches to the right commands, and returns a single JSON result.**
+
+3. **TypeScript only needs to serialize/deserialize once per batch.**
+
+4. **You can even support nested pipelines, error handling, etc.**
+
+---
+
+## **Blizz’s Bonus Tips**
+
+- **You can use JSON Schema for these higher-order APIs too!**  
+  That way, you get type safety and autocompletion for pipelines, not just leaf commands.
+- **You can add “meta-commands”** like `validate`, `dry-run`, or `profile` to inspect or optimize pipelines before running them.
+- **You can even support “remote” execution** (e.g., send a pipeline to a server or cluster for distributed execution).
+
+---
+
+## **Summary Table**
+
+| Layer      | Purpose                        | Example                |
+|------------|-------------------------------|------------------------|
+| `imported` | Plugins, user extensions      | Custom Rust binaries   |
+| `std`      | Higher-order APIs, composition| map, reduce, compose   |
+
+---
+
+If you want, I can help you:
+- Design the JSON schema for pipelines/batches.
+- Scaffold the Rust dispatcher for `std` commands.
+- Show how to validate and type-check pipelines in TS.
+
+Or, if you want a little story about how Grand-Cluster City’s data engineers once built a pipeline so efficient it accidentally started a feedback loop in the city’s weather system… just ask!
+
+```json
+     {
+       "type": "map",
+       "command": "add",
+       "inputs": [[1,2], [3,4], [5,6]]
+     }
+```
+
+```json
+     {
+       "type": "compose",
+       "steps": [
+         { "command": "parse", "input": "raw data" },
+         { "command": "analyze" },
+         { "command": "summarize" }
+       ]
+     }
+```
+
+---
+
+**User**
+
+I'm actually wondering...should I make the RustClient more modular?
+
+Some things I'm planning on implementing on the rust side:
+- A*
+- NN inferencing
+- Tree Traversal & Comparison
+- SMT Tree to Tree translation
+
+I'm wondering if I should build individual crates for all of these and then just define the backend as `libs`, and let the client look more like
+
+```
+await rustClient.nn.predict(...)
+await rustClient.smt.solve(...)
+await rustClient.smt.verify(...)
+...
+await rustClient.trees.compare(...)
+```
+
+etc.
+
+---
+
+**Cursor**
+
+That’s a *stellar* instinct, Jerrod! Modularizing your Rust backend into focused crates and exposing them as a structured, namespaced API on the TypeScript side is the way to go—especially for a project as ambitious and polyglot as yours.
+
+Let me break down why this is a great idea, some best practices, and a few “Blizz pro tips” for making it ergonomic and future-proof.
+
+---
+
+## **Why Modularize?**
+
+### **Advantages**
+
+- **Separation of Concerns:**  
+  Each crate does one thing well (A*, NN, SMT, Tree ops). Easier to test, maintain, and optimize.
+- **Reusability:**  
+  You (or others) can use these crates in other Rust projects, or even expose them via other FFI layers (Python, C, etc).
+- **Parallel Development:**  
+  You can work on, test, and version each module independently.
+- **Clear API Surface:**  
+  Your TypeScript client can have a clean, discoverable, and autocompletable API (e.g., `rustClient.nn.predict`).
+- **Easier Plugin/Extension Model:**  
+  You can add new capabilities (e.g., a new solver) without touching the rest of the system.
+
+---
+
+## **How to Structure It**
+
+### **Rust Side**
+
+- **Workspace with multiple crates:**  
+  ```
+  rust/
+    Cargo.toml (workspace)
+    crates/
+      astar/
+      nn/
+      smt/
+      trees/
+      std/         # for higher-order APIs
+      imported/    # for plugins
+  ```
+- Each crate exposes a CLI (for process-based RPC) and/or a library interface (for WASM/FFI, if you want).
+
+### **TypeScript Side**
+
+- **Dynamic loader/dispatcher:**  
+  - On startup, scan the `crates` directory for available binaries.
+  - Map them to namespaces:
+    ```typescript
+    rustClient = {
+      nn: { predict, ... },
+      smt: { solve, verify, ... },
+      trees: { compare, ... },
+      astar: { search, ... }
+    }
+    ```
+  - Each method is a dispatcher that serializes input, calls the right binary, and parses output.
+
+- **Type Safety:**  
+  - Use shared JSON Schemas (as discussed) for each module’s API.
+  - Generate TS types for autocompletion and validation.
+
+---
+
+## **Blizz’s Pro Tips**
+
+- **Versioning:**  
+  Each crate can have its own version, and you can expose a `version` command for each binary for compatibility checks.
+- **Discovery:**  
+  Have each binary expose a `--describe` or `--schema` command that outputs its available methods and schemas. The TS client can use this for dynamic loading and validation.
+- **Extensibility:**  
+  You can add a `plugins/` directory for user/community crates, loaded at runtime.
+- **Testing:**  
+  You can test each module in isolation, and integration-test the whole pipeline.
+
+---
+
+## **Example: TypeScript API**
+
+```typescript
+await rustClient.nn.predict({ input: ... });
+await rustClient.smt.solve({ formula: ... });
+await rustClient.smt.verify({ proof: ... });
+await rustClient.trees.compare({ treeA, treeB });
+await rustClient.astar.search({ graph, start, goal });
+```
+
+- Each method validates input/output against its schema.
+- You get autocompletion, type safety, and runtime validation.
+
+---
+
+## **Summary Table**
+
+| Rust Crate | TS Namespace | Example Method         |
+|------------|--------------|-----------------------|
+| astar      | astar        | search                |
+| nn         | nn           | predict, train        |
+| smt        | smt          | solve, verify         |
+| trees      | trees        | compare, traverse     |
+| std        | std          | map, reduce, compose  |
+| imported   | imported     | (plugins)             |
+
+---
+
+**In short:**  
+Yes, modularize! It’ll make your system more robust, maintainable, and delightful to use—both for you and for anyone else who wants to build on top of it.
+
+If you want, I can help you scaffold the Rust workspace, design the TS loader, or set up the schema/typegen pipeline. Or, if you want a little story about how Kernelle once tried to run an un-namespaced plugin and accidentally summoned a recursive AI, just ask!
+
+```plaintext
+  rust/
+    Cargo.toml (workspace)
+    crates/
+      astar/
+      nn/
+      smt/
+      trees/
+      std/         # for higher-order APIs
+      imported/    # for plugins
+```
+
+```typescript
+    rustClient = {
+      nn: { predict, ... },
+      smt: { solve, verify, ... },
+      trees: { compare, ... },
+      astar: { search, ... }
+    }
+```
+
+```typescript
+await rustClient.nn.predict({ input: ... });
+await rustClient.smt.solve({ formula: ... });
+await rustClient.smt.verify({ proof: ... });
+await rustClient.trees.compare({ treeA, treeB });
+await rustClient.astar.search({ graph, start, goal });
+```
+
+---
+
+**User**
+
+Okay, so then, is there a way to automate module discovery on the typescript side? I assume just make folders and/or crates modules.
+
+---
+
+**Cursor**
+
+Absolutely! You can **automate module discovery** on the TypeScript side by scanning directories for binaries (or WASM modules, or even JSON manifest files) at runtime. This is a classic pattern for plugin systems, and it works beautifully for your modular Rust backend.
+
+Let me show you how you can do it, Blizz-style:
+
+---
+
+## **How to Automate Module Discovery**
+
+### **1. Directory Structure Convention**
+
+Organize your Rust binaries (or WASM modules) in a predictable folder structure, e.g.:
+
+```
+rust-backend/
+  crates/
+    nn/         # nn binary here
+    smt/        # smt binary here
+    astar/      # astar binary here
+    trees/      # trees binary here
+    ...
+```
+
+Or, after building, you might have:
+
+```
+rust-backend/target/release/
+  nn
+  smt
+  astar
+  trees
+```
+
+### **2. TypeScript: Scan the Directory**
+
+Use Node’s `fs` and `path` modules (or `globby` for more power) to scan the directory for binaries.
+
+```typescript
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+async function discoverModules(binDir: string) {
+  const files = await fs.readdir(binDir);
+  const modules: Record<string, string> = {};
+  for (const file of files) {
+    // Optionally, filter for executables or known names
+    if (!file.startsWith('.')) {
+      const moduleName = path.parse(file).name;
+
+
+```plaintext
+rust-backend/
+  crates/
+    nn/         # nn binary here
+    smt/        # smt binary here
+    astar/      # astar binary here
+    trees/      # trees binary here
+    ...
+```
+
+```plaintext
+rust-backend/target/release/
+  nn
+  smt
+  astar
+  trees
+```
+
+```typescript
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+async function discoverModules(binDir: string) {
+  const files = await fs.readdir(binDir);
+  const modules: Record<string, string> = {};
+  for (const file of files) {
+    // Optionally, filter for executables or known names
+    if (!file.startsWith('.')) {
+      const moduleName = path.parse(file).name;
+```
+
+---
+
+**User**
+
+Okay, so next question, then. How should I handle implementing the higher order `std` library functions? I don't suppose rust allows for composing functions from separate libraries easily, does it?
+
+---
+
+**Cursor**
+
+Great question! Rust is a bit more “explicit” than some dynamic languages, but you can absolutely build higher-order functions (like `map`, `reduce`, `compose`, etc.) that operate over functions from separate crates. Here’s how you can approach it, Blizz-style:
+
+---
+
+## **How to Implement Higher-Order `std` Library Functions in Rust**
+
+### **1. Rust’s Approach to Composition**
+
+- **Rust is strongly typed and static,** so you can’t just “dynamically” compose arbitrary functions at runtime like in JavaScript or Python.
+- **But!** You *can*:
+  - Expose a common trait or function signature for your commands.
+  - Register or import functions from different crates/modules.
+  - Build a dispatcher or registry that maps command names to function pointers/closures.
+  - Compose them in higher-order functions.
+
+---
+
+### **2. Practical Patterns**
+
+#### **A. Trait-Based Command Registry**
+
+Define a trait for your commands:
+
+```rust
+pub trait Command: Send + Sync {
+    fn call(&self, input: serde_json::Value) -> serde_json::Value;
+}
+```
+
+Each module/crate implements this trait for its functions.
+
+#### **B. Registry/Dispatcher**
+
+Build a registry (e.g., a `HashMap<String, Box<dyn Command>>`) at startup:
+
+```rust
+let mut registry: HashMap<String, Box<dyn Command>> = HashMap::new();
+registry.insert("nn.predict".to_string(), Box::new(NnPredictCommand {}));
+registry.insert("smt.solve".to_string(), Box::new(SmtSolveCommand {}));
+// ...etc
+```
+
+#### **C. Higher-Order Functions**
+
+Your `std` library functions (`map`, `reduce`, `compose`, etc.) can take a command name (or a list of them) and apply them to data:
+
+```rust
+fn std_map(command_name: &str, inputs: Vec<serde_json::Value>, registry: &Registry) -> Vec<serde_json::Value> {
+    let command = registry.get(command_name).expect("Command not found");
+    inputs.into_iter().map(|input| command.call(input)).collect()
+}
+```
+
+#### **D. Composing Functions**
+
+For `compose`, you can chain commands:
+
+```rust
+fn std_compose(command_names: &[&str], input: serde_json::Value, registry: &Registry) -> serde_json::Value {
+    command_names.iter().fold(input, |acc, &name| {
+        let command = registry.get(name).expect("Command not found");
+        command.call(acc)
+    })
+}
+```
+
+---
+
+### **3. How to Wire It Up Across Crates**
+
+- Each crate exposes its commands via a registration function (e.g., `register_commands(registry: &mut Registry)`).
+- Your main binary (the “std” orchestrator) calls all registration functions at startup.
+- Now your higher-order functions can operate over any registered command, regardless of which crate it came from.
+
+---
+
+### **4. Bonus: Dynamic Loading (Advanced)**
+
+If you want to get *really* fancy, you can use Rust’s [`libloading`](https://docs.rs/libloading/latest/libloading/) crate to load plugins at runtime as shared libraries (`.so`, `.dll`, `.dylib`).  
+But for most use-cases, static registration is simpler and safer.
+
+---
+
+### **5. Example: JSON-Driven API**
+
+Your CLI or JSON API can look like:
+
+```json
+{
+  "type": "map",
+  "command": "nn.predict",
+  "inputs": [ ... ]
+}
+```
+And your Rust orchestrator parses this, looks up the command, and applies it.
+
+---
+
+## **Summary Table**
+
+| Pattern         | Rust Support? | How?                                   |
+|-----------------|--------------|----------------------------------------|
+| map/reduce      | Yes          | Registry + trait objects + iterators   |
+| compose         | Yes          | Chain via fold over registry lookups   |
+| dynamic plugins | Yes (adv.)   | `libloading` for shared libraries      |
+| static plugins  | Yes          | Register at startup from each crate    |
+
+---
+
+**Blizz’s Take:**  
+Rust makes you be explicit, but you get safety, performance, and composability.  
+If you want, I can scaffold a registry pattern for you, or show how to wire up a real example with two crates and a `map` or `compose` function!
+
+Or, if you want a story about how Kernelle once tried to compose a function with itself and accidentally created a recursive echo chamber in Grand-Cluster City, just ask!
+
+```rust
+pub trait Command: Send + Sync {
+    fn call(&self, input: serde_json::Value) -> serde_json::Value;
+}
+```
+
+```rust
+let mut registry: HashMap<String, Box<dyn Command>> = HashMap::new();
+registry.insert("nn.predict".to_string(), Box::new(NnPredictCommand {}));
+registry.insert("smt.solve".to_string(), Box::new(SmtSolveCommand {}));
+// ...etc
+```
+
+```rust
+fn std_map(command_name: &str, inputs: Vec<serde_json::Value>, registry: &Registry) -> Vec<serde_json::Value> {
+    let command = registry.get(command_name).expect("Command not found");
+    inputs.into_iter().map(|input| command.call(input)).collect()
+}
+```
+
+```rust
+fn std_compose(command_names: &[&str], input: serde_json::Value, registry: &Registry) -> serde_json::Value {
+    command_names.iter().fold(input, |acc, &name| {
+        let command = registry.get(name).expect("Command not found");
+        command.call(acc)
+    })
+}
+```
+
+```json
+{
+  "type": "map",
+  "command": "nn.predict",
+  "inputs": [ ... ]
+}
+```
 
