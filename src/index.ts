@@ -8,7 +8,8 @@ import process from 'node:process';
 const program = new Command();
 import defaults from './cli/defaults.ts';
 import taskRunner from './cli/task-runner.ts';
-import klepBackend from './cli/klep-backend.ts';
+import rustClient from './cli/rust-client.ts';
+
 
 const DEFAULT_SUBFOLDER = defaults.depsfile.entry.dependencyFolder;
 
@@ -102,12 +103,14 @@ program
   );
 
 program
-  .command('thing')
-  .description('Build the project')
+  .command('demo')
+  .description('Demo the cross-language pipeline')
   .action(
     kerror.boundary(async () => {
-      const backend = await klepBackend();
-      console.log('Result: ', backend.add(1, 2));
+      const client = await rustClient();
+      const res = await client.std.add([5, 7]);
+      const res2 = await client.imported.subtract([5, 7]);
+      console.log(`Result from native Rust: ${res} and ${res2}`);
     })
   )
 
