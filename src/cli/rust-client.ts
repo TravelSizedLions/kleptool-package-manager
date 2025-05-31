@@ -2,10 +2,11 @@ import kerror from './kerror.ts';
 import sh from './sh.ts';
 import { GlobEntry, globby } from 'globby';
 
-type RustClient = {
-  std: Record<string, Dispatcher>;
-  imported: Record<string, Dispatcher>;
+type Tree<K extends (string | number | symbol), V> = {
+  [key in K]: Tree<K, V> | V;
 }
+
+type RustClient = Tree<string, Dispatcher>;
 
 let __backend: RustClient | null = null;
 
