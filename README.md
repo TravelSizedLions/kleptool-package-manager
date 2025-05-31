@@ -1,4 +1,3 @@
-
 # GUD: Git-Derived Unified Dependency Resolution
 
 ## Abstract
@@ -17,7 +16,7 @@ For those unfamiliar with this problem space and the background required to unde
 - Recovering from expired or missing cached dependencies
 - Extracting and normalizing disjointed project structures, and how such structures affect the implementation of the Neural A*-SMT resolver
 
-We'll then use these considerations and others to consider future work.
+We'll then use these considerations and others to discuss future work.
 
 ## Motivation
 
