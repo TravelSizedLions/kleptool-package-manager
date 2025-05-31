@@ -1,5 +1,5 @@
 
-# GUDR: Git-Derived Unified Dependency Resolution
+# GUD: Git-Derived Unified Dependency Resolution
 
 ## Abstract
 
