@@ -87,9 +87,29 @@ Here, we have a popular language where users of it are:
 
 #### Case Study #3: JavaScript
 
-Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications--all for a language which at its root was never intended for what it's become used for today. 
+Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications--all for a language which at its root was never intended for what it's become used for today.
 
-With a decades-long schism in package management systems for JavaScript, new tools such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems, and each have their distinct downsides. (TODO -- give examples)
+With a decades-long schism in package management systems for JavaScript, new tools such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems, and each have their distinct downsides:
+
+- `npm`: The original and still most widely used, but notorious for massive node_modules folders, slow installs, and a history of security incidents (remember the left-pad debacle?).
+
+- `yarn`: Introduced to address npm’s speed and determinism issues, but added its own lockfile format and quirks. Yarn v1 and v2+ are almost different ecosystems.
+
+- `pnpm`: Aims to solve the disk space problem by using a content-addressable store and symlinks, but can trip up tooling that expects the traditional node_modules layout.
+- `deno`: Created by the original author of Node.js, Deno ditches node_modules entirely and fetches dependencies directly from URLs, but this breaks compatibility with the vast npm ecosystem and requires a different mental model.
+- `bun`: A newer, ultra-fast runtime and package manager, but still maturing and not yet as widely adopted or as stable as the others.
+
+Each of these tools tries to fix pain points in the ecosystem, but the result is a development landscape where:
+
+- Projects may require specific package managers or even specific versions of those managers.
+
+- Lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml) are not interchangeable, making collaboration and migration between tools tricky.
+
+- Some packages or tools only work with certain managers or certain versions, leading to “dependency manager lock-in.”
+
+- The sheer number of transitive dependencies in a typical project can number in the thousands, increasing the attack surface for vulnerabilities and making reproducibility a challenge.
+
+On top of that, JavaScript’s *flexibility-above-all* approach means that it's most popular package manifest, `package.json`, can be used in wildly different ways, and the ecosystem’s rapid evolution means that best practices are constantly shifting. The result is a dependency resolution and build environment that’s unwieldy for even experienced developers.
 
 #### Case Study #4: Python and Virtual Environments
 
@@ -113,6 +133,12 @@ This is beginning to shift to more traditional package management strategies wit
 However, standardized adoption for internal storage of project dependencies has seen pushback from Python's core development team. A [proposal](https://discuss.python.org/t/pep-582-python-local-packages-directory/963/430) for the introduction of a project-specific `__pypackages__` directory was recently rejected in March of 2023, citing concerns with backwards compatibility for existing workflows and project security. The result is similar to that seen in JavaScript's community: a schism in the ecosystem regarding dependency management and resolution, with no accepted universal approach and a hesitance to create one.
 
 #### Case Study #5: Rust and Recursive Manifest Definitions
+
+Rust is one of the newest and fastest-growing system programming languages released in the recent past. It's a language whose package management and dependency resolution is held up as a gold standard among those who are familiar with it. It features first-class support for recursive dependency manifest structures, allowing for clean, isolated subsections defined within the context of a monorepo. While other ecosystems offer similar solutions, the crates system takes advantage of its tight coupling with the language to offer a strong solution for pure rust repositories.
+
+In addition, built-in support
+
+While
 
 #### Case Study #6: Java, Kotlin, Gradle, and Maven
 
