@@ -19,19 +19,22 @@ function __createDispatcher(path: string) {
   }
 }
 
-function __mapToDispatchers(entries: GlobEntry[]): Record<string, Dispatcher> {
-  return entries.reduce((dispatchers, entry) => {
-    dispatchers[entry.name] = __createDispatcher(entry.path.toString());
-    return dispatchers;
-  }, {} as Record<string, Dispatcher>)
-}
-
 async function __constructor() {
-  // TODO: add actual paths
-  return await (async () => ({
-    std: __mapToDispatchers(await globby('path/to/std/**/*', {objectMode: true})),
-    imported: __mapToDispatchers(await globby('path/to/imported/**/*', {objectMode: true})),
-  }))();
+  const binaries = await globby('src/rust/target/release/**/bin-*--*', {objectMode: true});
+
+  return binaries.reduce((modules: RustClient, entry) => {
+    const module = entry.name.split('--')[0].split('bin-')[1];
+    if (!modules[module]) {
+      modules[module] = {};
+    }
+
+    const apiName = entry.name.split('--')[1];
+    const dispatcher = __createDispatcher(entry.path.toString());
+
+    (modules[module] as Record<string, Dispatcher>)[apiName] = dispatcher;
+
+    return modules;
+  }, {} as RustClient);
 }
 
 async function __singleton(): Promise<RustClient> {

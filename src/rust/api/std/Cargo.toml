@@ -1,0 +1,15 @@
+[package]
+name = "gud_std"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+name = "gud_std"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+paste = "1.0.14"
+lazy_static = "1.4.0"
