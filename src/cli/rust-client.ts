@@ -44,14 +44,19 @@ async function __constructor() {
   const binaries = await globby('src/rust/target/release/**/bin-*--*', { objectMode: true });
 
   const modules = binaries
-    .filter((entry) => !entry.name.endsWith('.d'))
+    .filter((entry) => {
+      // Exclude .d files (debug symbols) and .pdb files (Windows debug info)
+      return !entry.name.endsWith('.d') && !entry.name.endsWith('.pdb');
+    })
     .reduce((modules: RustClient, entry) => {
-      const module = entry.name.split('--')[0].split('bin-')[1];
+      // Remove .exe extension on Windows for parsing
+      const baseName = entry.name.replace(/\.exe$/, '');
+      const module = baseName.split('--')[0].split('bin-')[1];
       if (!modules[module]) {
         modules[module] = {};
       }
 
-      const apiName = entry.name.split('--')[1];
+      const apiName = baseName.split('--')[1];
       const dispatcher = __createDispatcher(entry.path.toString());
       (modules[module] as Record<string, Dispatcher>)[apiName] = dispatcher;
 
