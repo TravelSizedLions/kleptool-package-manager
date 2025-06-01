@@ -46,7 +46,7 @@ jobs:
       run: klep ci:tidy
 
     - name: Run TypeScript Type Check
-      run: npx tsc --noEmit
+      run: klep ci:typecheck
 
   security-audit:
     name: Security Audit
@@ -67,6 +67,9 @@ jobs:
       with:
         toolchain: stable
         cache-workspaces: src/rust
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit --locked
 
     - name: Install Node dependencies
       run: yarn install --frozen-lockfile
