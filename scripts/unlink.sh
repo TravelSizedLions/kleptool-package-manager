@@ -23,13 +23,13 @@ else
     # Unix-like systems (Linux, macOS)
     FOUND=false
     
-    if [[ -L "$HOME/.local/bin/klep" ]]; then
+    if [[ -f "$HOME/.local/bin/klep" ]]; then
         rm "$HOME/.local/bin/klep"
         echo "✅ Removed ~/.local/bin/klep"
         FOUND=true
     fi
     
-    if [[ -L "/usr/local/bin/klep" ]]; then
+    if [[ -f "/usr/local/bin/klep" ]]; then
         rm "/usr/local/bin/klep"
         echo "✅ Removed /usr/local/bin/klep"
         FOUND=true
@@ -46,4 +46,4 @@ else
     fi
 fi
 
-echo "🧹 klep unlinked successfully!" 
+echo "🧹 klep has been unlinked" 
