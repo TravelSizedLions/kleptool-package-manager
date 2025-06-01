@@ -29,6 +29,15 @@ jobs:
     - name: Build Project
       run: klep ci:build
 
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts-${{ matrix.os }}
+        path: |
+          dist
+          src/rust/target/release
+        retention-days: 1
+
     - name: Test Rust
       run: |
         cd src/rust
@@ -46,8 +55,10 @@ jobs:
     - name: Setup Development Environment
       uses: ./.github/actions/setup-environment
 
-    - name: Build project
-      run: klep ci:build
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: build-artifacts-ubuntu-latest
 
     - name: Test klep CLI
       run: klep demo
