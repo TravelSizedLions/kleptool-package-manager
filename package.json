@@ -39,16 +39,6 @@
     "tsx": "^4.7.1",
     "typescript": "5.8.3"
   },
-  "scripts": {
-    "start": "tsx src/index.ts",
-    "link": "yarn link",
-    "build": "bun build src/index.ts --outdir dist --target node --format esm --outfile klep",
-    "build:standalone": "bun run scripts/build-standalone.ts",
-    "build:all": "npm run build:rust && npm run build",
-    "build:rust": "cd src/rust && cargo build --release",
-    "dev": "bun run src/index.ts",
-    "test": "bun test"
-  },
   "engines": {
     "node": ">=20.0.0",
     "bun": ">=1.0.0"

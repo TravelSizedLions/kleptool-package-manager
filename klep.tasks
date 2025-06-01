@@ -67,7 +67,7 @@
 
   // Build and/or clean the TypeScript code (Node.js)
   'ts:build': "npx tsc --build",
-  'ts:clean': "rm -rf node_modules && yarn install --frozen-lockfile",
+  'ts:clean': "rm -rf node_modules && bun install",
   'ts:build:clean': "klep ts:clean && klep ts:build",
 
   // Build and/or clean with Bun
@@ -79,7 +79,7 @@
 
   // Security Audit
   'rust:audit': 'cd src/rust && cargo audit && cd ../..',
-  'ts:audit': 'yarn audit --level moderate',
+  'ts:audit': 'bun audit',
   'bun:audit': 'bun audit',
 
   // CI/CD Tasks (Node.js)
