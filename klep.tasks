@@ -34,7 +34,7 @@
   // Sub-tasks
   // ------------------------------------------------------------
   // Lint & Format (Fix)
-  'ts:lint': 'klep ts:lint:assert --fix',
+  'ts:lint': 'npx eslint . --ext .ts --fix',
   'ts:format': 'npx prettier --write \"src/**/*.ts\"',
   'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
   'rust:format': 'cd src/rust && cargo fmt --all',
