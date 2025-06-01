@@ -1,26 +1,24 @@
+#![allow(missing_docs)]
+
 use gud_common::{debug_log, ipc_main_no_input};
 use serde::Serialize;
 
 #[derive(Serialize)]
 struct ComposeInfo {
-  available_functions: Vec<String>,
   version: String,
-  description: String,
+  available_functions: Vec<String>,
 }
 
 fn get_compose_info() -> Result<ComposeInfo, Box<dyn std::error::Error>> {
-  debug_log("Getting composition function information");
+  debug_log("Getting compose function information");
 
   Ok(ComposeInfo {
+    version: "0.1.0".to_string(),
     available_functions: vec![
       "map".to_string(),
       "filter".to_string(),
       "reduce".to_string(),
-      "compose".to_string(),
-      "pipe".to_string(),
     ],
-    version: "0.1.0".to_string(),
-    description: "Functional composition utilities".to_string(),
   })
 }
 

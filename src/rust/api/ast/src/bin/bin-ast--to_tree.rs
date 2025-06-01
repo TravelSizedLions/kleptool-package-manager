@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use gud_common::{debug_log, ipc_main_required_input};
 use serde::{Deserialize, Serialize};
 
