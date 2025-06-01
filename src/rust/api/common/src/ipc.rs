@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
+
+// Platform-specific imports for file descriptor handling
+#[cfg(unix)]
 use std::os::fd::FromRawFd;
+#[cfg(windows)]
+use std::os::windows::io::{FromRawHandle, RawHandle};
 
 /// Error type for IPC operations
 #[derive(Debug)]
@@ -71,6 +76,7 @@ where
 
 /// Write raw string output to file descriptor 3
 pub fn write_fd3_raw(data: &str) -> Result<(), IpcError> {
+  #[cfg(unix)]
   unsafe {
     let mut fd3 = std::fs::File::from_raw_fd(3);
     fd3.write_all(data.as_bytes())?;
@@ -78,6 +84,16 @@ pub fn write_fd3_raw(data: &str) -> Result<(), IpcError> {
     // Don't let the file be dropped and closed
     std::mem::forget(fd3);
   }
+
+  #[cfg(windows)]
+  {
+    // On Windows, we'll use stdout as a fallback since fd3 doesn't exist
+    // In a real Windows environment, you might want to use named pipes or other IPC mechanisms
+    use std::io::Write;
+    std::io::stdout().write_all(data.as_bytes())?;
+    std::io::stdout().flush()?;
+  }
+
   Ok(())
 }
 

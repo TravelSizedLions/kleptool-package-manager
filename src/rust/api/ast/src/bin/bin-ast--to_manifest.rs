@@ -16,6 +16,7 @@ struct ManifestOutput {
   scripts: Vec<String>,
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn process_ast_to_manifest(
   input: Option<AstInput>,
 ) -> Result<ManifestOutput, Box<dyn std::error::Error>> {

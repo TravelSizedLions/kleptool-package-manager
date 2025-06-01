@@ -9,6 +9,7 @@ struct ComposeInfo {
   available_functions: Vec<String>,
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn get_compose_info() -> Result<ComposeInfo, Box<dyn std::error::Error>> {
   debug_log("Getting compose function information");
 

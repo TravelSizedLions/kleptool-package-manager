@@ -38,6 +38,7 @@ struct TreeMetadata {
   parse_time_ms: f64,
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn parse_to_ast_tree(input: ParseInput) -> Result<AstTree, Box<dyn std::error::Error>> {
   let include_comments = input.include_comments.unwrap_or(false);
 
