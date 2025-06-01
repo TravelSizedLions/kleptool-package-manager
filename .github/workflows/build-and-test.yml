@@ -89,10 +89,6 @@ jobs:
 
     - name: Test klep CLI
       run: |
-        # Create a symlink to test the CLI
-        ln -s $(pwd)/src/index.ts $(pwd)/klep-test
-        chmod +x $(pwd)/klep-test
-        
-        # Test basic functionality (add actual tests here)
-        echo "CLI integration tests would go here" 
-        $(pwd)/klep-test demo
+        # Test basic functionality using npx tsx directly
+        echo "Running CLI integration tests..."
+        npx tsx src/index.ts demo
