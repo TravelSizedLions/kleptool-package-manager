@@ -23,31 +23,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js from .nvmrc
-      uses: actions/setup-node@v4
-      with:
-        node-version-file: '.nvmrc'
-        cache: 'yarn'
-
-    - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-        cache-workspaces: src/rust
-
-    - name: Install Node dependencies
-      run: yarn install --frozen-lockfile
-
-    - name: Bootstrap klep
-      run: npx tsx src/index.ts link
-
-    - name: Add klep to PATH (Unix)
-      if: runner.os != 'Windows'
-      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-    - name: Add klep to PATH (Windows)
-      if: runner.os == 'Windows'
-      run: echo "${{ github.workspace }}" >> $env:GITHUB_PATH
+    - name: Setup Development Environment
+      uses: ./.github/actions/setup-environment
 
     - name: Build Project
       run: klep ci:build
@@ -66,26 +43,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js from .nvmrc
-      uses: actions/setup-node@v4
-      with:
-        node-version-file: '.nvmrc'
-        cache: 'yarn'
-
-    - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-        cache-workspaces: src/rust
-
-    - name: Install Node dependencies
-      run: yarn install --frozen-lockfile
-
-    - name: Bootstrap klep
-      run: npx tsx src/index.ts link
-
-    - name: Add klep to PATH
-      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+    - name: Setup Development Environment
+      uses: ./.github/actions/setup-environment
 
     - name: Build project
       run: klep ci:build
