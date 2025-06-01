@@ -4,8 +4,6 @@ use std::io::{self, Read, Write};
 // Platform-specific imports for file descriptor handling
 #[cfg(unix)]
 use std::os::fd::FromRawFd;
-#[cfg(windows)]
-use std::os::windows::io::{FromRawHandle, RawHandle};
 
 /// Error type for IPC operations
 #[derive(Debug)]
