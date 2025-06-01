@@ -27,7 +27,7 @@ If applicable, add screenshots to help explain your problem.
 
 ## Environment
 - OS: [e.g. Ubuntu 22.04, macOS 13.0, Windows 11]
-- Node.js version: [e.g. 18.17.0]
+- Node.js version: [e.g. 20.0.0]
 - Rust version: [e.g. 1.70.0]
 - Klep version: [e.g. 0.0.1]
 
