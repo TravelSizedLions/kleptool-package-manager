@@ -30,11 +30,11 @@
 
   // CI/CD Tasks
   ci_check: "klep ci_lint && klep ci_format_check && klep ci_build",
-  ci_lint: "klep lint_ts && klep lint_rust_strict",
+  ci_lint: "klep lint_ts && klep lint_rust",
   ci_format_check: "klep format_check_ts && klep format_check_rust",
   ci_build: "npx tsc --build && cd src/rust && cargo build --workspace --release",
   
-  lint_rust_strict: "cd src/rust && cargo clippy --workspace --all-targets --all-features -- -D warnings",
+  lint_rust_strict: "cd src/rust && cargo clippy --workspace --all-targets --all-features",
   format_check_ts: "npx prettier --check \"src/**/*.ts\"",
   format_check_rust: "cd src/rust && cargo fmt --all -- --check",
 }

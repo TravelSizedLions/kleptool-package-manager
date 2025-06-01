@@ -92,3 +92,4 @@ jobs:
         
         # Test basic functionality (add actual tests here)
         echo "CLI integration tests would go here" 
+        $(pwd)/klep-test demo

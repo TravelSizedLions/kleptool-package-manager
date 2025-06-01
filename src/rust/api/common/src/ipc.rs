@@ -5,8 +5,11 @@ use std::os::fd::FromRawFd;
 /// Error type for IPC operations
 #[derive(Debug)]
 pub enum IpcError {
+  /// IO operation failed
   IoError(io::Error),
+  /// JSON serialization/deserialization failed
   SerializationError(serde_json::Error),
+  /// Invalid input provided to IPC function
   InvalidInput(String),
 }
 

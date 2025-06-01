@@ -1,4 +1,4 @@
-import git from 'simple-git';
+import { simpleGit } from 'simple-git';
 import semver from 'semver';
 import kerror from './kerror.ts';
 import process from './process.ts';
@@ -45,7 +45,7 @@ export async function isRemoteRepository(url: string) {
 
 export async function isLocalRepository(url: string) {
   try {
-    await git(url, { timeout: { block: 10000 } });
+    await simpleGit(url, { timeout: { block: 10000 } });
     return true;
   } catch {
     return false;
@@ -77,22 +77,32 @@ export async function repositoryStat(url: string): Promise<RepositoryStat> {
   return {
     isLocal,
     isRemote,
-    tags: isLocal ? (await git(url).tags()).all : await __getRemoteTags(url),
-    branches: isLocal ? (await git(url).branch()).all : await __getRemoteBranches(url),
+    tags: isLocal ? (await simpleGit(url).tags()).all : await __getRemoteTags(url),
+    branches: isLocal ? (await simpleGit(url).branch()).all : await __getRemoteBranches(url),
   };
 }
 
 export async function getLatestCommit(url: string) {
   const repo = await repositoryStat(url);
   if (!repo) {
-    return;
+    throw kerror(kerror.type.Argument, 'invalid-repository', {
+      message: 'Could not get repository information',
+      context: {
+        repository: url,
+      },
+    });
   }
 
   if (repo.isLocal) {
-    const repo = await git(url);
+    const repo = await simpleGit(url);
     const commits = await repo.log();
 
     try {
+      if (!commits.latest) {
+        throw kerror(kerror.type.Git, 'empty-local-repository', {
+          message: 'Repository appears to be empty',
+        });
+      }
       return commits.latest.hash;
     } catch {
       throw kerror(kerror.type.Git, 'empty-local-repository', {
@@ -166,7 +176,11 @@ function semanticVersionIsAvailable(stat: RepositoryStat, _url: string, version:
 
   return stat.tags.some((tag) => {
     const normalizedTag = semver.coerce(tag);
-    return normalizedTag === normalized || normalizedTag === version;
+    return (
+      (normalizedTag && normalized && normalizedTag.toString() === normalized.toString()) ||
+      (normalizedTag && normalizedTag.toString() === version) ||
+      (normalized && normalized.toString() === tag)
+    );
   });
 }
 

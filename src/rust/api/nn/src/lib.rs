@@ -20,7 +20,5 @@ pub mod network {
   }
 }
 
-// Neural network utilities for gud system
-pub const fn placeholder() {
-  // Placeholder function for the neural network module
-}
+/// Placeholder function for neural network operations
+pub const fn placeholder() {}
