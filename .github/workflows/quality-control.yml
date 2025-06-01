@@ -36,27 +36,14 @@ jobs:
     - name: Install Node dependencies
       run: yarn install --frozen-lockfile
 
-    - name: Build Rust backend
-      run: |
-        cd src/rust
-        cargo build --release
-        cd ../..
+    - name: Bootstrap klep
+      run: npx tsx src/index.ts link
 
-    - name: TypeScript Linting
-      run: npx eslint . --ext .ts
+    - name: Add klep to PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-    - name: TypeScript Formatting Check
-      run: npx prettier --check "src/**/*.ts"
-
-    - name: Rust Linting
-      run: |
-        cd src/rust
-        cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-    - name: Rust Formatting Check
-      run: |
-        cd src/rust
-        cargo fmt --all -- --check
+    - name: Run Quality Control Tasks
+      run: klep ci:tidy
 
     - name: Run TypeScript Type Check
       run: npx tsc --noEmit
@@ -84,11 +71,11 @@ jobs:
     - name: Install Node dependencies
       run: yarn install --frozen-lockfile
 
-    - name: Node.js Security Audit
-      run: yarn audit --level moderate
+    - name: Bootstrap klep
+      run: npx tsx src/index.ts link
 
-    - name: Rust Security Audit
-      run: |
-        cargo install cargo-audit
-        cd src/rust
-        cargo audit 
+    - name: Add klep to PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Run Security Audit
+      run: klep ci:secure 

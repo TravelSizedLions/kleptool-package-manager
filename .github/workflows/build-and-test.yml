@@ -39,18 +39,19 @@ jobs:
     - name: Install Node dependencies
       run: yarn install --frozen-lockfile
 
-    - name: Build TypeScript
-      run: npx tsc --build
+    - name: Bootstrap klep
+      run: npx tsx src/index.ts link
 
-    - name: Build Rust (Debug)
-      run: |
-        cd src/rust
-        cargo build --workspace
+    - name: Add klep to PATH (Unix)
+      if: runner.os != 'Windows'
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-    - name: Build Rust (Release)
-      run: |
-        cd src/rust
-        cargo build --workspace --release
+    - name: Add klep to PATH (Windows)
+      if: runner.os == 'Windows'
+      run: echo "${{ github.workspace }}" >> $env:GITHUB_PATH
+
+    - name: Build Project
+      run: klep ci:build
 
     - name: Test Rust
       run: |
@@ -81,14 +82,14 @@ jobs:
     - name: Install Node dependencies
       run: yarn install --frozen-lockfile
 
+    - name: Bootstrap klep
+      run: npx tsx src/index.ts link
+
+    - name: Add klep to PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
     - name: Build project
-      run: |
-        npx tsc --build
-        cd src/rust
-        cargo build --workspace --release
+      run: klep ci:build
 
     - name: Test klep CLI
-      run: |
-        # Test basic functionality using npx tsx directly
-        echo "Running CLI integration tests..."
-        npx tsx src/index.ts demo
+      run: klep demo
