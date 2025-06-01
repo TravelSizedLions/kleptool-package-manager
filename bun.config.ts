@@ -10,8 +10,8 @@ const config: BunConfig = {
   minify: false, // Keep readable for debugging initially
   external: [
     // We'll need to bundle the Rust binaries separately
-    'src/rust/target/release/**/*'
-  ]
+    'src/rust/target/release/**/*',
+  ],
 };
 
-export default config; 
+export default config;

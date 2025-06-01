@@ -36,8 +36,11 @@
   // Security Audit
   audit: 'klep ts:audit && klep rust:audit',
 
-  // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:secure',
+  // Simulate a CI pipeline (Bun-compatible)
+  ci: 'klep ci:bun:tidy && klep ci:bun:build && klep ci:bun:secure',
+  
+  // Legacy CI pipeline (Node.js)
+  'ci:node': 'klep ci:tidy && klep ci:build && klep ci:secure',
 
   // Delete all branches except for dev
   'git:del:all': 'git checkout dev | git branch | grep -v "dev" | xargs git branch -D',
@@ -68,19 +71,26 @@
   'ts:build:clean': "klep ts:clean && klep ts:build",
 
   // Build and/or clean with Bun
-  'bun:build': "bun build src/index.ts --outdir dist --target node --format esm --outfile klep",
+  'bun:build': "bun build src/index.ts --outdir dist --target node --format esm && mv dist/index.js dist/klep",
   'bun:compile': "bun build src/index.ts --compile --outfile dist/klep",
   'bun:clean': "rm -rf dist && rm -rf bun.lockb",
-  'bun:build:clean': "klep bun:clean && klep bun:build",
+  'bun:build:clean': "klep bun:clean && klep bun:install && klep bun:build",
   'bun:install': "bun install",
 
   // Security Audit
   'rust:audit': 'cd src/rust && cargo audit && cd ../..',
   'ts:audit': 'yarn audit --level moderate',
+  'bun:audit': 'bun audit',
 
-  // CI/CD Tasks
+  // CI/CD Tasks (Node.js)
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'npx tsc --noEmit',
+  
+  // CI/CD Tasks (Bun)
+  'ci:bun:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
+  'ci:bun:build': 'klep build:bun',
+  'ci:bun:secure': 'klep bun:audit && klep rust:audit',
+  'ci:bun:typecheck': 'bun --bun tsc --noEmit',
 }

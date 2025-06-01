@@ -43,7 +43,7 @@ function __createDispatcher(binPath: string) {
 
 function __getBinarySearchPaths(): string[] {
   const paths: string[] = [];
-  
+
   // Development mode: look in the usual Rust target directory
   const devPath = 'src/rust/target/release/**/bin-*--*';
   if (existsSync('src/rust/target/release')) {
@@ -68,13 +68,15 @@ function __getBinarySearchPaths(): string[] {
 
 async function __constructor() {
   const searchPaths = __getBinarySearchPaths();
-  
+
   if (searchPaths.length === 0) {
-    throw new Error('No Rust binary directories found. Ensure the project is built or binaries are distributed.');
+    throw new Error(
+      'No Rust binary directories found. Ensure the project is built or binaries are distributed.'
+    );
   }
 
-  let binaries: any[] = [];
-  
+  let binaries: Array<{ name: string; path: string }> = [];
+
   // Try each search path until we find binaries
   for (const searchPath of searchPaths) {
     try {
