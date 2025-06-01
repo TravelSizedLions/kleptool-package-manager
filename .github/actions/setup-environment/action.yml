@@ -49,6 +49,6 @@ runs:
       shell: bash
       run: npx tsx src/index.ts link
 
-    - name: Add klep to PATH
+    - name: Setup PATH for klep
       shell: bash
-      run: echo "$HOME/.local/bin" >> $GITHUB_PATH 
+      run: npx tsx src/index.ts ci:ensurepath
