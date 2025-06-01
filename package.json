@@ -18,7 +18,7 @@
     "jsonschema": "^1.4.1",
     "semver": "^7.5.4",
     "simple-git": "^3.22.0",
-    "zod": "^3.25.26"
+    "zod": "^3.25.45"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
