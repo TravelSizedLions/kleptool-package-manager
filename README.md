@@ -620,6 +620,16 @@ As mentioned [above](#dimensions-in-the-space), each point $t_{i_j}$ in a dimens
 
 To understand edges in the graph of $K_i'$, we also need to define what constitutes the neighborhood of a node $\mathbf{k}$. If $\mathbf{k}$ is a single node in the graph $K_i'$, then $\mathbf{k}$'s neighbors are nodes in $K_i'$ which are only one step away from $\mathbf{k}$ in a single dimension. In practical terms, neighbors of $\mathbf{k}$ have a difference of one hash, either the one immediately prior to or immediately succeeding the commit specified by that repository's dimension in $\mathbf{k}$.
 
+[jerrod]
+Important Thoughts on neighbors!!
+
+If the above paragraph is true, then the upper bound on the branching factor for each node is (2x <the number of dependencies>)
+
+That...is not good. And that's before considering the fact that `extract` rules in the dependency schema mean that a single repository can spawn more than one dependency.
+
+...Oh, hold on...that might be a vector for optimization. We can potentially de-duplicate dimensions by merging their extract rules. I think I remember considering this quirk when mapping out the lockfile schema...
+[/jerrod]
+
 ## Application of A* on Bounded K-Space
 
 For an implementation of A* to search through the $K_i$
@@ -762,6 +772,16 @@ Therefore, to create a robust adaptive approach, it must guarantee admissability
 #### Dimension-wise Normalization
 
 As the topology of $K_i'$ is non-uniform, distance measured between dimensions and values within dimensions varies. This means that what would be considered a small distance between one step in one dimension may be comparitively small or comparitively large when used in conjunction with distances in other dimensions. Depending on the construction of our heuristic, this may cause bias towards or against undesirable sections of the search space. As such, a dimension-wise normalization vector or function may need to be applied in order to reduce the likelihood of wasted searches.
+
+[jerrod]
+Side-note: One other method of normalization to consider is to consider the repository-wise percentage increase or decrease of code. That way, we're not comparing lines directly.
+
+This comes in 2 flavors:
+- increase/decrease % from the last commit
+- increase/decrease % compared to the size of the repository at its largest
+
+Both seem like they could be useful features for the heuristic, especially since they give us a concrete way of measuring risk for repositories without a versioning scheme. In fact, both of these are probably going to give better signal than SemVer considering how loose the definition of a "patch" and "minor version" are in practice.
+[/jerrod]
 
 #### Construction
 
