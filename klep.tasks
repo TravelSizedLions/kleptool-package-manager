@@ -63,4 +63,5 @@
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
+  'ci:typecheck': 'npx tsc --noEmit',
 }
