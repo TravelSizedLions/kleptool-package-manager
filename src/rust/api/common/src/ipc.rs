@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 
 // Platform-specific imports for file descriptor handling
 #[cfg(unix)]
@@ -76,6 +76,7 @@ where
 pub fn write_fd3_raw(data: &str) -> Result<(), IpcError> {
   #[cfg(unix)]
   unsafe {
+    use std::io::Write;
     let mut fd3 = std::fs::File::from_raw_fd(3);
     fd3.write_all(data.as_bytes())?;
     fd3.flush()?;
