@@ -19,8 +19,14 @@
   // Build the entire project
   build: "klep rust:build:clean && klep ts:build:clean",
 
+  // Build with Bun
+  "build:bun": "klep rust:build:clean && klep bun:build:clean",
+
+  // Build standalone executable
+  "build:standalone": "bun run scripts/build-standalone.ts",
+
   // Clean the project
-  clean: "klep rust:clean && klep ts:clean",
+  clean: "klep rust:clean && klep ts:clean && klep bun:clean",
 
   // Lint & Format the project
   lint: "klep ts:lint && klep rust:lint",
@@ -56,10 +62,17 @@
   'rust:clean': "rm -rf src/rust/pkg src/rust/target",
   'rust:build:clean': "klep rust:clean && klep rust:build",
 
-  // Build and/or clean the TypeScript code
+  // Build and/or clean the TypeScript code (Node.js)
   'ts:build': "npx tsc --build",
   'ts:clean': "rm -rf node_modules && yarn install --frozen-lockfile",
   'ts:build:clean': "klep ts:clean && klep ts:build",
+
+  // Build and/or clean with Bun
+  'bun:build': "bun build src/index.ts --outdir dist --target node --format esm --outfile klep",
+  'bun:compile': "bun build src/index.ts --compile --outfile dist/klep",
+  'bun:clean': "rm -rf dist && rm -rf bun.lockb",
+  'bun:build:clean': "klep bun:clean && klep bun:build",
+  'bun:install': "bun install",
 
   // Security Audit
   'rust:audit': 'cd src/rust && cargo audit && cd ../..',

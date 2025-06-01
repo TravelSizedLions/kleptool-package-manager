@@ -1,0 +1,22 @@
+# Bun configuration
+[install]
+# Use package.json for compatibility
+registry = "https://registry.npmjs.org/"
+auto = "auto" # Automatically detect package manager
+
+[run]
+# Use system shell for our bash scripts
+shell = "system"
+
+[build]
+# Default build configuration
+target = "bun"
+format = "esm"
+splitting = false
+sourcemap = "external"
+
+[compile]
+# Settings for standalone executable compilation
+minify = true
+sourcemap = false
+target = "bun" 

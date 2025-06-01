@@ -10,6 +10,13 @@
     "type": "git",
     "url": "https://github.com/TravelSizedLions/kleptool-package-manager"
   },
+  "bin": {
+    "klep": "./dist/klep"
+  },
+  "files": [
+    "dist/",
+    "src/rust/target/release/"
+  ],
   "dependencies": {
     "commander": "^14.0.0",
     "es-toolkit": "^1.0.0",
@@ -34,6 +41,16 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
-    "link": "yarn link"
+    "link": "yarn link",
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --outfile klep",
+    "build:standalone": "bun run scripts/build-standalone.ts",
+    "build:all": "npm run build:rust && npm run build",
+    "build:rust": "cd src/rust && cargo build --release",
+    "dev": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.0.0"
   }
 }
