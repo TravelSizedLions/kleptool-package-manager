@@ -1,0 +1,91 @@
+name: Quality Control
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  quality-control:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: Install Node dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Build Rust backend
+      run: |
+        cd src/rust
+        cargo build --release
+        cd ../..
+
+    - name: TypeScript Linting
+      run: npx eslint . --ext .ts
+
+    - name: TypeScript Formatting Check
+      run: npx prettier --check "src/**/*.ts"
+
+    - name: Rust Linting
+      run: |
+        cd src/rust
+        cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+    - name: Rust Formatting Check
+      run: |
+        cd src/rust
+        cargo fmt --all -- --check
+
+    - name: Run TypeScript Type Check
+      run: npx tsc --noEmit
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'yarn'
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: Install Node dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Node.js Security Audit
+      run: yarn audit --level moderate
+
+    - name: Rust Security Audit
+      run: |
+        cargo install cargo-audit
+        cd src/rust
+        cargo audit 
