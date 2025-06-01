@@ -1,10 +1,9 @@
 # Pull Request
 
-## Description
 Brief description of the changes in this PR.
 
 ## Testing
-- [ ] I have run `klep tidy` and all checks pass
+- [ ] I have run `klep ci` and all checks pass
 - [ ] New and existing unit tests pass locally with my changes
 
 ## Checklist
