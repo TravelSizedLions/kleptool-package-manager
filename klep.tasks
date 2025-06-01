@@ -11,7 +11,7 @@
   unlink: "bash scripts/unlink.sh",
 
   // Ensure the PATH is set up for the klep CLI
-  ensurepath: './scripts/setup-path.sh',
+  ensurepath: 'npx tsx src/index.ts ensurepath',
 
   // Render the README as a PDF
   readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi",
