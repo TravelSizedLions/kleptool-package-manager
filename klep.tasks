@@ -14,14 +14,14 @@
   readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi",
 
   // Build the entire project
-  build: "klep 'rust:build:clean' && klep 'ts:build:clean'",
+  build: "klep rust:build:clean && klep ts:build:clean",
 
   // Clean the project
-  clean: "klep 'rust:clean' && klep 'ts:clean'",
+  clean: "klep rust:clean && klep ts:clean",
 
   // Lint & Format the project
-  lint: "klep 'ts:lint' && klep 'rust:lint'",
-  format: "klep 'ts:format' && klep 'rust:format'",
+  lint: "klep ts:lint && klep rust:lint",
+  format: "klep ts:format && klep rust:format",
   tidy: 'klep lint && klep format',
 
   // Security Audit
@@ -48,12 +48,12 @@
   // Build and/or clean the Rust code
   'rust:build': "cd src/rust && cargo build --release && cd ..",
   'rust:clean': "rm -rf src/rust/pkg src/rust/target",
-  'rust:build:clean': "klep 'rust:clean' && klep 'rust:build'",
+  'rust:build:clean': "klep rust:clean && klep rust:build",
 
   // Build and/or clean the TypeScript code
   'ts:build': "npx tsc --build",
   'ts:clean': "rm -rf node_modules && yarn install --frozen-lockfile",
-  'ts:build:clean': "klep 'ts:clean' && klep 'ts:build'",
+  'ts:build:clean': "klep ts:clean && klep ts:build",
 
   // Security Audit
   'rust:audit': 'cd src/rust && cargo audit && cd ../..',
