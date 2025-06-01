@@ -1,0 +1,24 @@
+[package]
+name = "gud_astar"
+version = "0.0.1"
+edition = "2021"
+description = "A* pathfinding algorithms for the Kleptool package manager"
+license = "MIT"
+repository = "https://github.com/user/kleptool-package-manager"
+readme = "README.md"
+keywords = ["astar", "pathfinding", "algorithms"]
+categories = ["development-tools", "algorithms"]
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+name = "gud_astar"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+paste = "1.0.14"
+lazy_static = "1.4.0"

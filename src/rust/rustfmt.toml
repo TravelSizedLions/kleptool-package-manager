@@ -1,0 +1,43 @@
+# Rust formatting configuration
+edition = "2021"
+max_width = 100
+hard_tabs = false
+tab_spaces = 2
+newline_style = "Unix"
+use_small_heuristics = "Default"
+
+# Imports
+reorder_imports = true
+
+# Function formatting
+fn_params_layout = "Tall"
+
+# Misc
+remove_nested_parens = true
+use_field_init_shorthand = true
+force_explicit_abi = true
+
+# Comments and strings
+comment_width = 80
+wrap_comments = true
+normalize_comments = true
+normalize_doc_attributes = true
+
+# Function formatting
+fn_args_layout = "Tall"
+brace_style = "SameLineWhere"
+control_brace_style = "AlwaysSameLine"
+
+# Misc
+empty_item_single_line = true
+struct_lit_single_line = true
+fn_single_line = false
+where_single_line = false
+
+# Trailing comma
+trailing_comma = "Vertical"
+trailing_semicolon = true
+
+# Spaces
+spaces_around_ranges = false
+type_punctuation_density = "Wide" 

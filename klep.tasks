@@ -1,0 +1,40 @@
+{
+  link: "ln -s $CODE/kleptool-package-manager/src/index.ts $HOME/.local/bin/klep && chmod +x $HOME/.local/bin/klep",
+  clean_rust: "rm -rf src/rust/pkg src/rust/target",
+  build: "cd src/rust && cargo build --release && cd ..",
+  build_clean: "klep clean_rust && klep build",
+  readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi",
+  
+  // Quality Control Tasks
+  lint: "klep lint_ts && klep lint_rust",
+  lint_ts: "npx eslint . --ext .ts",
+  lint_rust: "cd src/rust && cargo clippy --workspace --all-targets --all-features",
+  
+  lint_fix: "klep lint_fix_ts && klep lint_fix_rust",
+  lint_fix_ts: "npx eslint . --ext .ts --fix",
+  lint_fix_rust: "cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged",
+  
+  format: "klep format_ts && klep format_rust",
+  format_ts: "npx prettier --write \"src/**/*.ts\"",
+  format_rust: "cd src/rust && cargo fmt --all",
+  
+  format_check: "klep format_check_ts && klep format_check_rust",
+  format_check_ts: "npx prettier --check \"src/**/*.ts\"",
+  format_check_rust: "cd src/rust && cargo fmt --all -- --check",
+  
+  check: "klep lint && klep format_check",
+  build_rust: "cd src/rust && cargo build --workspace --all-targets",
+  quality: "klep check && klep build_rust",
+
+  tidy: "klep lint_fix && klep format",
+
+  // CI/CD Tasks
+  ci: "klep ci_lint && klep ci_format_check && klep ci_build",
+  ci_lint: "klep lint_ts && klep lint_rust",
+  ci_format_check: "klep format_check_ts && klep format_check_rust",
+  ci_build: "npx tsc --build && cd src/rust && cargo build --workspace --release",
+  
+  lint_rust_strict: "cd src/rust && cargo clippy --workspace --all-targets --all-features",
+  format_check_ts: "npx prettier --check \"src/**/*.ts\"",
+  format_check_rust: "cd src/rust && cargo fmt --all -- --check"
+}

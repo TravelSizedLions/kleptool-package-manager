@@ -1,0 +1,24 @@
+[package]
+name = "gud_nn"
+version = "0.0.1"
+edition = "2021"
+description = "Neural network utilities for the Kleptool package manager"
+license = "MIT"
+repository = "https://github.com/user/kleptool-package-manager"
+readme = "README.md"
+keywords = ["neural-network", "machine-learning", "ai"]
+categories = ["development-tools", "science"]
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+name = "gud_nn"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+paste = "1.0.14"
+lazy_static = "1.4.0"

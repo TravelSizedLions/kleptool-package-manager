@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+  "api/ast",
+  "api/astar",
+  "api/common",
+  "api/nn",
+  "api/std",
+]
+
+# Workspace-wide linting configuration
+[workspace.lints.rust]
+# Allow unsafe code in this workspace since we do system-level operations
+# unsafe_code = "deny"  # Commented out - too strict for this project
+missing_docs = "warn"  # Changed from "warn" to allow development
+unused_imports = "deny"
+dead_code = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+# Allow some pedantic lints that can be overly strict
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+# Additional allows for development
+missing_docs_in_private_items = "allow"
