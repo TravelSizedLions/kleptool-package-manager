@@ -20,7 +20,7 @@ We'll then use these considerations and others to discuss future work.
 
 ## Motivation
 
-There is no "Git, but for Package Management" yet, but there should be.
+*There is no "Git, but for Package Management" yet, but there should be.*
 
 If you are preparing to write:
 
@@ -32,21 +32,21 @@ If you are preparing to write:
 
 Then you've already got a package ecosystem that suits your needs. Why would you ever use or need a package management system that isn't tailored to your language of choice?
 
-This dismissal ignores the realities of software development, both at an enterprise and individual level.
+This dismisses the realities of software development, both at an enterprise and individual level.
 
 What if you're writing a tool in multiple languages? What if one or more of those languages have a small following and don't have a dedicated package manager or a community big enough or experienced enough to build one?
 
-An experienced developer might respond that language agnostic dependency management tools like Gradle, Maven, and smaller ecosystems like Pants already make it possible to manage dependencies and run builds for multiple languages. However, tools like this are almost always written with a specific language context in mind, then adapted to other languages later using community-driven plugins. Later, I'll explain in more detail why this approach is doomed to fail if the goal is to create a truly universal tool.
+An experienced developer might respond that language agnostic dependency management tools like Gradle, Maven, and smaller ecosystems like Pants already make it possible to manage polyglot repositories. However, tools like this are almost always written with a specific language context in mind, then adapted to other languages later using community-driven plugins. While this approach "works," it has hard limitations on how universal these tools can actually be in practice.
 
-In the case of more modern tools like Bazel, they're geared towards the needs of massive organizations and doesn't scale down well to smaller repositories and personal projects.
+In the case of a more modern general-purpose tools like Bazel, they're generally geared towards the needs of massive organizations and don't scale down well to smaller repositories and personal projects. For professional developers, they can ask "what's the problem?" To which I respond: Do you know what the term *general-purpose* actually implies?
 
-In addition, nearly every tool has an over-reliance on semantic versioning. While SemVer is a major blessing in the worlds of enterprise and FOSS development, it's never guaranteed that a dependency needed for a project follows semantic versioning. Outside of mainstream enterprise development, a project may need build tools and libraries with release versions numbered by year and quarter, or that have a GUI interface under alpha development with a number of additional in-progress dependencies required to build the interface, not to mention your actual project. Other projects still are dependent on repositories with no version scheme or official release process at all, and have no better alternatives due to lack of historical support, or even design features of the language itself. In these cases, target versions for a dependency are such comforting values as `v0.0.1-alpha`, `=sufjw0n9273lklksjf72kdfjsy8`, `feature/branch-experimental`, or my personal favorite, `latest`.
+In addition, nearly every tool has an over-reliance on semantic versioning. While SemVer is a major blessing for both enterprise and FOSS development, it's never guaranteed that a dependency needed for a project follows semantic versioning. Outside of mainstream enterprise development, a project may need build tools and libraries with release versions numbered by year and quarter, or that have a GUI interface under alpha development with a number of additional in-progress dependencies required to build the interface, not to mention your actual project. Other, smaller projects are dependent on repositories with no version scheme or official release process at all, and have no better alternatives due to lack of historical support. In all of these cases, target versions for a dependency are such comforting values as `v2021.3`, `v0.0.1-alpha`, `=sufjw0n9273lklksjf72kdfjsy8`, `feature/branch-experimental`, or my personal favorite, `latest`.
 
-If you've run into this class of problem, then you've done actual development at some point in your life. You may have ended up using languages and libraries with small, scrappy, dedicated communities that may not have the time or the energy to build proper CI/CD for their projects, and certainly don't have the capacity to write their own packaging toolset or following strict tagging, versioning, and publishing workflows, or even dead and dying communities that your project is unfortunately chained to for historical reasons.
+If you've run into this class of problem, then you know why we need a more universal answer to dependency management. The problem is so persistent and the thought of a solution so tantalizing that there's a decent chance you've considered writing a git-based package manager yourself. But the after the first few commits into such a project, most see why "the git of package managers" still doesn't exist. The list of practical problems to solve seems intractable for even the largest teams to crack, let alone someone who just misses `pip` while working on their MATLAB project at work. But to eventually reach that "git of package managers," we need to start chipping away at that list of problems and insist that there's a better way even the most dedicated research and development teams may not have considered.
 
 ### Case Studies
 
-In order to research and develop a robust solution, we must start from grounded observations. Below, we'll walk through several common development scenarios and analyze, compare, and contrast their needs. These examples purposely cross boundaries of common industry circles and treat niche cases with the same level of scrutiny as mainstream cases in order gain insight into the underlying patterns inherent to software development.
+In order to understand the needs a universal package manager must solve, we should start from grounded observations. Below, we'll walk through over a dozen common languages and development scenarios to analyze, compare, and contrast their needs. These examples purposely cross boundaries of common industry circles and treat niche cases with the same level of scrutiny as more mainstream cases. This is done in the effort to gain deeper insights into the underlying patterns inherent to software development of all varieties.
 
 #### Case Study #1: Godot
 
@@ -57,21 +57,21 @@ If there is a way to get and install dependencies:
 - If it is recursively resolving, it doesn't effectively handle resolving version constraints on those transitive dependencies
 - Or if they do, the packages that support these things are locked behind the paywall of a proprietary asset store
 
-Yet many of these environments have a desperate need for solid dependency resolution outside of a closed ecosystem. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also contains a fraction of the assets that are actually available to all users of Godot, and has no concept of dependency resolution, so mid-sized projects have one of four options:
+Yet many of these environments have a desperate need for solid dependency resolution outside of a closed ecosystem. For instance, Godot's otherwise-brilliant GDScript language and free asset store lacks namespacing, and so every named class in your project, addon or not, is *global.* Godot's asset store also contains a fraction of the assets that are actually available to all users of Godot through public remote repositories, and has no concept of dependency resolution, so mid-sized projects have one of four options:
 - Manage every dependency and namespace collision themselves
 - Use a tool like Gradle or Maven, which has no official support for GDScript
 - Eschew dependencies entirely and implement everything their project needs from scratch
 - Or switch to a language binding like C# or Rust which has marginally better tooling due to their pre-existing ecosystem.
 
-In addition to this, most Godot projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects that don't follow any real standard, let alone have official releases tagged with semantic versioning . This development context can't rely on anything most popular languages and package managers take for granted.
+In addition to this, most Godot projects are developed by at most a handful of individuals working part-time, and many useful dependencies end up coming from barely maintained projects. These projects and their dependencies typically don't follow any formal standard, let alone have official releases tagged with semantic versioning . This development context is useful, as it teaches us right out the gate that we can't rely on anything that most popular languages and package managers take for granted, such as global registries, semantic versioning, standard project structures, or isolated namespaces.
 
 #### Case Study #2: Lua
 
-According to the 2024 Stack Overflow Developer Survey, Lua was ranked the 16th most used language overall at 6.2% of respondents saying they either use the language professionally or are currently learning it, placing close in ranking to languages with much more mature ecosystems like Ruby (19th/5.8%), Rust (14th/12.6%), Go (13th/13.5%), and even sharing the top 20 with the venerable PHP (11th/18.2%). Lua is also one of the fastest growing, with 10% of programmers in 2024 learning to code with Lua (up from 6.97% in [2023](https://survey.stackoverflow.co/2023/#most-popular-technologies-language-learn)).
+According to the 2024 Stack Overflow Developer Survey, Lua was ranked the 16th most used language overall at 6.2% of respondents saying they either use the language professionally or are currently learning it, placing close in ranking to languages with much more mature ecosystems like Ruby (19th/5.8%), Rust (14th/12.6%), Go (13th/13.5%), and even sharing the top 20 with the venerable PHP (11th/18.2%). Lua is also one of the fastest growing languages, with 10% of programmers in 2024 learning to code with Lua (up from 6.97% in [2023](https://survey.stackoverflow.co/2023/#most-popular-technologies-language-learn)).
 
-Despite this, Lua's built-in package manager is underdeveloped and its ecosystem under served, having fewer than 6,000 available packages on its [official registry](https://luarocks.org/modules) as of June, 2025. Lua was first released in July of 1994, and so the likelihood of it ever being a strongly supported language like Javascript, Go, or Python is minimal.
+Despite this, Lua's built-in package manager is underdeveloped and its ecosystem under-served, having fewer than 6,000 available packages on its [official registry](https://luarocks.org/modules) as of June, 2025. Lua was first released in July of 1994, and so the likelihood of it ever being a strongly supported language like Javascript, Go, or Python is minimal.
 
-In addition,  Lua is a language designed for and most commonly used in a multi-lingual context. Lua's niche is to provide a minimalistic but modern interface for writing extensions to existing applications and embedded systems. This means that much of the time, Lua must co-exist with other languages like C, C#, and Java within their ecosystem, without the built up support and documentation of these heavier hitting general purpose languages. From their [own site](https://www.lua.org/about.html):
+In addition,  Lua is a language designed for and most commonly used in a multi-lingual context. Lua's niche is to provide a minimalistic but modern interface for writing extensions to existing applications and embedded systems. This means that much of the time, Lua must co-exist with other languages like C, C#, and Java within their ecosystem, without the built up support and documentation of these heavier hitting general purpose languages. From core developers' [own site](https://www.lua.org/about.html):
 
 > Lua has been used in many industrial applications (e.g., Adobe's Photoshop Lightroom), with an emphasis on embedded systems (e.g., the Ginga middleware for digital TV in Brazil) and games (e.g., World of Warcraft and Angry Birds)....
 >
@@ -80,22 +80,22 @@ In addition,  Lua is a language designed for and most commonly used in a multi-l
 Here, we have a popular language where users of it are:
 
 - Growing in number
-- Commonly using it for an industry famous for its non-modular, closed system solutions
+- Commonly using it for non-modular, closed system solutions
 - Limited in packaging options and standard libraries
 - Using it specifically for its synergy with more popular ecosystems
 
 #### Case Study #3: JavaScript
 
-Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications--all for a language which at its root was never intended for what it's become used for today.
+Unlike our first two case studies, JavaScript has difficulties on the opposite end of the dependency resolution problem. Rather than having little to no support, JS/TS is *over-supported,* to the point of fragmentation in the language's community. While most developers still source packages from the global NPM registry, the space has exploded with complexity, project bloat, poor quality packages, vulnerabilities, and competing standards, as the language itself has fragmented into multiple language specifications--all for a language which at its root was never originally intended for what it's used for today.
 
-With a decades-long schism in package management systems for JavaScript, new tools such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems, and each have their distinct downsides:
+With a decades-long schism in package management systems for JavaScript, new tools such as yarn, deno, bun, pnpm, and others continue to re-solve the same core problems, and each have their distinct upsides and downsides:
 
-- `npm`: The original and still most widely used, but notorious for massive node_modules folders, slow installs, and a history of security incidents (remember the left-pad debacle?).
+- `npm`: The original and still most widely used, but notorious for massive node_modules folders, slow installs, and a history of security incidents
 
 - `yarn`: Introduced to address npm’s speed and determinism issues, but added its own lockfile format and quirks. Yarn v1 and v2+ are almost different ecosystems.
 
-- `pnpm`: Aims to solve the disk space problem by using a content-addressable store and symlinks, but can trip up tooling that expects the traditional node_modules layout.
-- `deno`: Created by the original author of Node.js, Deno ditches node_modules entirely and fetches dependencies directly from URLs, but this breaks compatibility with the vast npm ecosystem and requires a different mental model.
+- `pnpm`: Aims to solve npm's node_modules bloat problem by using a content-addressable store and symlinks, but can trip up tooling that expects the traditional node_modules layout.
+- `deno`: Created by the original author of Node.js, Deno ditches node_modules entirely and fetches dependencies directly from URLs, but this breaks compatibility with the vast npm ecosystem and requires a different mental model. Why did you do this to me, Ryan? Direct URL imports? Seriously? Did you really have to make this problem even harder, bro?
 - `bun`: A newer, ultra-fast runtime and package manager, but still maturing and not yet as widely adopted or as stable as the others.
 
 Each of these tools tries to fix pain points in the ecosystem, but the result is a development landscape where:
@@ -131,13 +131,11 @@ This is beginning to shift to more traditional package management strategies wit
 
 However, standardized adoption for internal storage of project dependencies has seen pushback from Python's core development team. A [proposal](https://discuss.python.org/t/pep-582-python-local-packages-directory/963/430) for the introduction of a project-specific `__pypackages__` directory was recently rejected in March of 2023, citing concerns with backwards compatibility for existing workflows and project security. The result is similar to that seen in JavaScript's community: a schism in the ecosystem regarding dependency management and resolution, with no accepted universal approach and a hesitance to create one.
 
-#### Case Study #5: Rust and Recursive Manifest Definitions
+#### Case Study #5: Rust, Recursive Manifest Definitions, and Cross-Language Synergy
 
-Rust is one of the newest and fastest-growing system programming languages released in the recent past. It's a language whose package management and dependency resolution is held up as a gold standard among those who are familiar with it. It features first-class support for recursive dependency manifest structures, allowing for clean, isolated subsections defined within the context of a monorepo. While other ecosystems offer similar solutions, the crates system takes advantage of its tight coupling with the language to offer a strong solution for pure rust repositories.
+Rust is one of the newest and fastest-growing systems programming languages released in the recent past. It's a language whose package management and dependency resolution is held up as a gold standard among those who are familiar with it. It features first-class support for recursive dependency manifest structures with its workspace system, allowing for clean, isolated subsections defined within the context of a monorepo of libraries and executable binaries, called 'crates'. While other ecosystems offer similar solutions, the crates system takes advantage of its tight coupling with the language to offer a strong solution for pure rust repositories.
 
-In addition, built-in support
-
-While
+In addition, Rust's system for macros makes generating bindings for communication with higher level languages as simple as adding a function decorator (You should try it sometime--its web assembly bindgen system is delightful). And so, Rust often finds itself filling the role of handling low-level performance-critical code to hand back up to languages like Python and JS through bindings or ipc/rpc protocols. This purposeful consideration of Rust's own role as one piece in a greater system shows that building tools that allow for elegant cross-compatibility are not just possible, but synergistic. Rust's power as an expressive low-level language that plays well with scripting languages serves not just its own community, but that of any language dovetailing off of its strengths, similar to the symbiotic relationship of Lua and its embedded systems focus.
 
 #### Case Study #6: Java, Kotlin, Gradle, and Maven
 
