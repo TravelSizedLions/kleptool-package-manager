@@ -11,13 +11,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-and-test:
-    name: Integration Tests (${{ matrix.os }})
+  build:
+    name: Build
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-      # Allow jobs to run independently - don't fail all if one fails
-      fail-fast: false
     
     runs-on: ${{ matrix.os }}
     
@@ -25,8 +23,35 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Klep Setup
-      uses: ./.github/actions/setup-environment
+    - name: Setup Node.js from .nvmrc
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: '.nvmrc'
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        cache-workspaces: src/rust
+
+    - name: Install Node dependencies
+      run: bun install --frozen-lockfile
+
+    - name: Bootstrap klep
+      run: bun run src/index.ts link
+
+    - name: Add klep to PATH (Unix)
+      if: runner.os != 'Windows'
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Add klep to PATH (Windows)
+      if: runner.os == 'Windows'
+      run: echo "${{ github.workspace }}" >> $env:GITHUB_PATH
 
     - name: Build Project
       run: klep ci:build
@@ -36,15 +61,42 @@ jobs:
         cd src/rust
         cargo test --workspace
 
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js from .nvmrc
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: '.nvmrc'
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        cache-workspaces: src/rust
+
+    - name: Install Node dependencies
+      run: bun install --frozen-lockfile
+
+    - name: Bootstrap klep
+      run: bun run src/index.ts link
+
+    - name: Add klep to PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Build project
+      run: klep ci:build
+
     - name: Test klep CLI
       run: klep demo
-
-    - name: Upload build artifacts (on success)
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-artifacts-${{ matrix.os }}
-        path: |
-          dist
-          src/rust/target/release
-        retention-days: 1
