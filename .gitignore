@@ -2,6 +2,7 @@
 node_modules
 dist
 .dependencies
+*.tsbuildinfo
 
 # Rust
 src/rust/pkg
