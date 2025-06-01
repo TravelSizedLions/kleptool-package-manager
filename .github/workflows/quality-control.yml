@@ -20,7 +20,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Development Environment
+    - name: Klep Setup
       uses: ./.github/actions/setup-environment
       with:
         rust-components: 'rustfmt, clippy'
@@ -39,7 +39,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Development Environment
+    - name: Klep Setup
       uses: ./.github/actions/setup-environment
       with:
         install-cargo-audit: 'true'

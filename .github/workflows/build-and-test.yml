@@ -11,11 +11,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build
+  build-and-test:
+    name: Integration Tests (${{ matrix.os }})
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+      # Allow jobs to run independently - don't fail all if one fails
+      fail-fast: false
     
     runs-on: ${{ matrix.os }}
     
@@ -23,13 +25,22 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Development Environment
+    - name: Klep Setup
       uses: ./.github/actions/setup-environment
 
     - name: Build Project
       run: klep ci:build
 
-    - name: Upload build artifacts
+    - name: Test Rust
+      run: |
+        cd src/rust
+        cargo test --workspace
+
+    - name: Test klep CLI
+      run: klep demo
+
+    - name: Upload build artifacts (on success)
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: build-artifacts-${{ matrix.os }}
@@ -37,31 +48,3 @@ jobs:
           dist
           src/rust/target/release
         retention-days: 1
-
-    - name: Test Rust
-      run: |
-        cd src/rust
-        cargo test --workspace
-
-  integration-test:
-    name: Integration Tests
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    needs: build
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Development Environment
-      uses: ./.github/actions/setup-environment
-
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: build-artifacts-${{ matrix.os }}
-
-    - name: Test klep CLI
-      run: klep demo
