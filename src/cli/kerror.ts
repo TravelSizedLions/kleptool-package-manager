@@ -79,8 +79,15 @@ function isKlepError(error: unknown): error is KlepError {
  * console.log('makes it here safely');
  * ```
  */
-function boundary(fn: (...args: unknown[]) => Promise<void> | void) {
-  return async (...args: unknown[]) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function boundary(fn: (...args: any[]) => Promise<void> | void) {
+  // `any` is the appropriate type for these function signatures, as
+  // we don't know the type of the function in advance, we allow any signature,
+  // and every signature is valid. Using `unknown` would offer no benefit and
+  // would require unnecessary type assertions.
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return async (...args: any[]) => {
     try {
       await fn(...args);
     } catch (error: unknown) {
