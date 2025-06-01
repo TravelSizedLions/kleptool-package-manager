@@ -3,5 +3,26 @@
   clean_rust: "rm -rf src/rust/pkg src/rust/target",
   build: "cd src/rust && cargo build --release && cd ..",
   build_clean: "klep clean_rust && klep build",
-  readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi"
+  readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi",
+  
+  // Quality Control Tasks
+  lint: "klep lint_ts && klep lint_rust",
+  lint_ts: "eslint . --ext .ts",
+  lint_rust: "cd src/rust && cargo clippy --workspace --all-targets --all-features",
+  
+  lint_fix: "klep lint_fix_ts && klep lint_fix_rust",
+  lint_fix_ts: "eslint . --ext .ts --fix",
+  lint_fix_rust: "cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged",
+  
+  format: "klep format_ts && klep format_rust",
+  format_ts: "prettier --write \"src/**/*.ts\"",
+  format_rust: "cd src/rust && cargo fmt --all",
+  
+  format_check: "klep format_check_ts && klep format_check_rust",
+  format_check_ts: "prettier --check \"src/**/*.ts\"",
+  format_check_rust: "cd src/rust && cargo fmt --all -- --check",
+  
+  check: "klep lint && klep format_check",
+  build_rust: "cd src/rust && cargo build --workspace --all-targets",
+  quality: "klep check && klep build_rust"
 }

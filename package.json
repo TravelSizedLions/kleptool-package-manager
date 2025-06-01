@@ -33,9 +33,6 @@
   },
   "scripts": {
     "start": "tsx src/index.ts",
-    "link": "yarn link",
-    "lint": "eslint . --ext .ts",
-    "lint:fix": "eslint . --ext .ts --fix",
-    "format": "prettier --write \"src/**/*.ts\""
+    "link": "yarn link"
   }
 }

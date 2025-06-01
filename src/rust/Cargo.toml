@@ -7,3 +7,19 @@ members = [
   "api/nn",
   "api/std",
 ]
+
+# Workspace-wide linting configuration
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+unused_imports = "deny"
+dead_code = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+cargo = "warn"
+nursery = "warn"
+# Allow some pedantic lints that can be overly strict
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"

@@ -3,6 +3,9 @@ name = "gud_nn"
 version = "0.0.1"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["cdylib"]
 path = "src/lib.rs"

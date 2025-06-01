@@ -3,6 +3,9 @@ name = "gud_common"
 version = "0.0.1"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["lib", "cdylib"]
 path = "src/lib.rs"
