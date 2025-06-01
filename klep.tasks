@@ -1,40 +1,63 @@
 {
-  link: "ln -s $CODE/kleptool-package-manager/src/index.ts $HOME/.local/bin/klep && chmod +x $HOME/.local/bin/klep",
-  clean_rust: "rm -rf src/rust/pkg src/rust/target",
-  build: "cd src/rust && cargo build --release && cd ..",
-  build_clean: "klep clean_rust && klep build",
-  readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi",
-  
-  // Quality Control Tasks
-  lint: "klep lint_ts && klep lint_rust",
-  lint_ts: "npx eslint . --ext .ts",
-  lint_rust: "cd src/rust && cargo clippy --workspace --all-targets --all-features",
-  
-  lint_fix: "klep lint_fix_ts && klep lint_fix_rust",
-  lint_fix_ts: "npx eslint . --ext .ts --fix",
-  lint_fix_rust: "cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged",
-  
-  format: "klep format_ts && klep format_rust",
-  format_ts: "npx prettier --write \"src/**/*.ts\"",
-  format_rust: "cd src/rust && cargo fmt --all",
-  
-  format_check: "klep format_check_ts && klep format_check_rust",
-  format_check_ts: "npx prettier --check \"src/**/*.ts\"",
-  format_check_rust: "cd src/rust && cargo fmt --all -- --check",
-  
-  check: "klep lint && klep format_check",
-  build_rust: "cd src/rust && cargo build --workspace --all-targets",
-  quality: "klep check && klep build_rust",
 
-  tidy: "klep lint_fix && klep format",
+  // ------------------------------------------------------------
+  // High level tasks
+  // ------------------------------------------------------------
+
+  // Link the CLI to the user's path
+  link: "ln -s $CODE/kleptool-package-manager/src/index.ts $HOME/.local/bin/klep && chmod +x $HOME/.local/bin/klep",
+
+  // Render the README as a PDF
+  readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi",
+
+  // Build the entire project
+  build: "klep 'rust:build:clean' && klep 'ts:build:clean'",
+
+  // Clean the project
+  clean: "klep 'rust:clean' && klep 'ts:clean'",
+
+  // Lint & Format the project
+  lint: "klep 'ts:lint' && klep 'rust:lint'",
+  format: "klep 'ts:format' && klep 'rust:format'",
+  tidy: 'klep lint && klep format',
+
+  // Security Audit
+  audit: 'klep ts:audit && klep rust:audit',
+
+  // Simulate a CI pipeline
+  ci: 'klep ci:tidy && klep ci:build && klep ci:secure',
+
+  // ------------------------------------------------------------
+  // Sub-tasks
+  // ------------------------------------------------------------
+  // Lint & Format (Fix)
+  'ts:lint': 'klep ts:lint:assert --fix',
+  'ts:format': 'npx prettier --write \"src/**/*.ts\"',
+  'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
+  'rust:format': 'cd src/rust && cargo fmt --all',
+
+  // Lint & Format (Assert)
+  'ts:lint:assert': 'npx eslint . --ext .ts',
+  'ts:format:assert': 'npx prettier --check \"src/**/*.ts\"',
+  'rust:lint:assert': 'cd src/rust && cargo clippy --workspace --all-targets --all-features',
+  'rust:format:assert': 'cd src/rust && cargo fmt --all -- --check',
+
+  // Build and/or clean the Rust code
+  'rust:build': "cd src/rust && cargo build --release && cd ..",
+  'rust:clean': "rm -rf src/rust/pkg src/rust/target",
+  'rust:build:clean': "klep 'rust:clean' && klep 'rust:build'",
+
+  // Build and/or clean the TypeScript code
+  'ts:build': "npx tsc --build",
+  'ts:clean': "rm -rf node_modules && yarn install --frozen-lockfile",
+  'ts:build:clean': "klep 'ts:clean' && klep 'ts:build'",
+
+  // Security Audit
+  'rust:audit': 'cd src/rust && cargo audit && cd ../..',
+  'ts:audit': 'yarn audit --level moderate',
 
   // CI/CD Tasks
-  ci: "klep ci_lint && klep ci_format_check && klep ci_build",
-  ci_lint: "klep lint_ts && klep lint_rust",
-  ci_format_check: "klep format_check_ts && klep format_check_rust",
-  ci_build: "npx tsc --build && cd src/rust && cargo build --workspace --release",
-  
-  lint_rust_strict: "cd src/rust && cargo clippy --workspace --all-targets --all-features",
-  format_check_ts: "npx prettier --check \"src/**/*.ts\"",
-  format_check_rust: "cd src/rust && cargo fmt --all -- --check"
+  'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
+  'ci:build': 'klep build',
+  'ci:secure': 'klep ts:audit && klep rust:audit',
 }
