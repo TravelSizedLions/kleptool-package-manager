@@ -51,4 +51,4 @@ runs:
 
     - name: Setup PATH for klep
       shell: bash
-      run: npx tsx src/index.ts ci:ensurepath
+      run: npx tsx src/index.ts ensurepath
