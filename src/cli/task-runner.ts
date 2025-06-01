@@ -1,9 +1,8 @@
 import * as resources from './resource-loader.ts'
 import { klepTasksSchema, TasksFile } from "./schemas/klep.tasks.schema.ts";
 import kerror from "./kerror.ts";
-import sh from './sh.ts';
+import process from './process.ts';
 
-// Define types for task runner options
 type TaskRunnerOptions = {
   silent?: boolean;
 };
@@ -35,9 +34,7 @@ async function __do(alias: string, args: string[], options: TaskRunnerOptions = 
   const streamOutput = !options.silent;
   
   // Run the command with or without streaming based on silent flag
-  const output = await sh(task, { args, streamOutput });
-  
-  return output;
+  return await process.exec(task, { args, streamOutput });
 }
 
 export default {

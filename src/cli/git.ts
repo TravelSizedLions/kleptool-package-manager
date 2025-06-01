@@ -1,7 +1,7 @@
 import git from 'simple-git';
 import semver from 'semver';
 import kerror from './kerror.ts';
-import sh from './sh.ts';
+import process from './process.ts';
 
 export type VersionType = 'tag' | 'hash' | 'branch' | 'semver';
 
@@ -147,7 +147,7 @@ export async function getLatestCommit(url: string) {
 }
 
 async function __git(args: string[], timeout: number = 10000): Promise<string> {
-  return await sh('git', { args, timeout })
+  return await process.exec('git', { args, timeout })
 }
 
 function __removeVersionConstraint(version: string): string {

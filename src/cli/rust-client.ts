@@ -1,7 +1,6 @@
-import { ExecOptions } from './sh.ts';
+import process, { IpcOptions } from './process.ts';
 import kerror from './kerror.ts';
-import sh from './sh.ts';
-import { GlobEntry, globby } from 'globby';
+import { globby } from 'globby';
 import path from 'path';
 
 
@@ -15,16 +14,30 @@ type RustClient = {
 
 let __backend: RustClient | null = null;
 
-type Dispatcher = <I = undefined, O = undefined>(blob?: I, options?: ExecOptions) => Promise<O>;
+type Dispatcher = <I = undefined, O = undefined>(blob?: I, options?: IpcOptions) => Promise<O>;
 
 function __createDispatcher(binPath: string) {
-  const resolved = path.resolve(binPath);
-  return async <I, O>(blob?: I, options: ExecOptions = {}): Promise<O> => {
-    // TODO add type checking/input + output validation
-    return await sh(resolved, { 
-      args: [blob !== undefined ? JSON.stringify(blob) : ''],
-      ...options,
-    }) as O;
+  const command = path.resolve(binPath);
+  return async <I, O>(blob?: I, options: IpcOptions = {}): Promise<O> => {
+    const data = blob !== undefined ? JSON.stringify(blob) : '';
+    
+    const output = await process.ipc(command, { ...options, data });
+    
+    if (!output.trim()) {
+      return undefined as O;
+    }
+    
+    try {
+      return JSON.parse(output) as O;
+    } catch (e) {
+      throw kerror(kerror.Unknown, 'rust-client-json-parse-error', {
+        message: `Failed to parse JSON output: ${e instanceof Error ? e.message : 'Unknown error'}`,
+        context: {
+          output,
+          error: e instanceof Error ? e.message : 'Unknown error',
+        },
+      });
+    }
   }
 }
 
