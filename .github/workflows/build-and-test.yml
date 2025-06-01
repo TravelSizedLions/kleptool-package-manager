@@ -2,9 +2,10 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ dev ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ dev ]
+    # This will run on any PR targeting dev, regardless of source branch name
 
 env:
   CARGO_TERM_COLOR: always
