@@ -147,7 +147,7 @@ export async function getLatestCommit(url: string) {
 }
 
 async function __git(args: string[], timeout: number = 10000): Promise<string> {
-  return await process.exec('git', { args, timeout })
+  return await process.exec('git', { args, timeout });
 }
 
 function __removeVersionConstraint(version: string): string {

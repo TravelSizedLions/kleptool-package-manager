@@ -7,9 +7,15 @@ newline_style = "Unix"
 use_small_heuristics = "Default"
 
 # Imports
-imports_granularity = "Crate"
-group_imports = "StdExternalCrate"
 reorder_imports = true
+
+# Function formatting
+fn_params_layout = "Tall"
+
+# Misc
+remove_nested_parens = true
+use_field_init_shorthand = true
+force_explicit_abi = true
 
 # Comments and strings
 comment_width = 80
@@ -23,9 +29,6 @@ brace_style = "SameLineWhere"
 control_brace_style = "AlwaysSameLine"
 
 # Misc
-remove_nested_parens = true
-use_field_init_shorthand = true
-force_explicit_abi = true
 empty_item_single_line = true
 struct_lit_single_line = true
 fn_single_line = false

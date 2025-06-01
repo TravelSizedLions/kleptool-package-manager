@@ -107,15 +107,15 @@ program
   .action(
     kerror.boundary(async () => {
       const client = await rustClient();
-      const res = await client.std.identity(['hello', 'world'])
+      const res = await client.std.identity(['hello', 'world']);
       const tree = await client.ast.to_tree({
         language: 'javascript',
         source_code: 'console.log("hello")',
-      })
+      });
 
-      console.log({res, tree})
+      console.log({ res, tree });
     })
-  )
+  );
 
 program
   .argument('<task>', 'The task to run')

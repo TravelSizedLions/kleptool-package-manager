@@ -3,14 +3,13 @@ import kerror from './kerror.ts';
 import { globby } from 'globby';
 import path from 'path';
 
-
 type RustClient = {
   [module: string]: {
     [api: string]: Dispatcher;
-  }
+  };
 } & {
   help: () => string;
-}
+};
 
 let __backend: RustClient | null = null;
 
@@ -20,13 +19,13 @@ function __createDispatcher(binPath: string) {
   const command = path.resolve(binPath);
   return async <I, O>(blob?: I, options: IpcOptions = {}): Promise<O> => {
     const data = blob !== undefined ? JSON.stringify(blob) : '';
-    
+
     const output = await process.ipc(command, { ...options, data });
-    
+
     if (!output.trim()) {
       return undefined as O;
     }
-    
+
     try {
       return JSON.parse(output) as O;
     } catch (e) {
@@ -38,36 +37,42 @@ function __createDispatcher(binPath: string) {
         },
       });
     }
-  }
+  };
 }
 
 async function __constructor() {
-  const binaries = await globby('src/rust/target/release/**/bin-*--*', {objectMode: true});
+  const binaries = await globby('src/rust/target/release/**/bin-*--*', { objectMode: true });
 
   const modules = binaries
-  .filter((entry) => !entry.name.endsWith('.d'))
-  .reduce((modules: RustClient, entry) => {
-    const module = entry.name.split('--')[0].split('bin-')[1];
-    if (!modules[module]) {
-      modules[module] = {};
-    }
+    .filter((entry) => !entry.name.endsWith('.d'))
+    .reduce((modules: RustClient, entry) => {
+      const module = entry.name.split('--')[0].split('bin-')[1];
+      if (!modules[module]) {
+        modules[module] = {};
+      }
 
-    const apiName = entry.name.split('--')[1];
-    const dispatcher = __createDispatcher(entry.path.toString());
-    (modules[module] as Record<string, Dispatcher>)[apiName] = dispatcher;
+      const apiName = entry.name.split('--')[1];
+      const dispatcher = __createDispatcher(entry.path.toString());
+      (modules[module] as Record<string, Dispatcher>)[apiName] = dispatcher;
 
-    return modules;
-  }, {} as RustClient);
+      return modules;
+    }, {} as RustClient);
 
   Object.defineProperty(modules, 'help', {
-      value: () => {
-        const help = `Available APIs:\n` + Object.entries(modules).map(([module, apis]) => {
-          return Object.entries(apis).map(([api, _]) => {
-            return `${module}.${api}`;
-          }).join('\n');
-        }).join('\n');
+    value: () => {
+      const help =
+        `Available APIs:\n` +
+        Object.entries(modules)
+          .map(([module, apis]) => {
+            return Object.entries(apis)
+              .map(([api, _dispatcher]) => {
+                return `${module}.${api}`;
+              })
+              .join('\n');
+          })
+          .join('\n');
 
-        return help;
+      return help;
     },
     writable: false,
     configurable: false,

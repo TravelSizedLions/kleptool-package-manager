@@ -2,6 +2,12 @@
 name = "gud_ast"
 version = "0.0.1"
 edition = "2021"
+description = "Abstract syntax tree utilities for the Kleptool package manager"
+license = "MIT"
+repository = "https://github.com/user/kleptool-package-manager"
+readme = "README.md"
+keywords = ["ast", "parsing", "syntax-tree"]
+categories = ["development-tools", "parsing"]
 
 [lints]
 workspace = true

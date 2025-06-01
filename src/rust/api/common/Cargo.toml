@@ -2,6 +2,12 @@
 name = "gud_common"
 version = "0.0.1"
 edition = "2021"
+description = "Common utilities for the Kleptool package manager"
+license = "MIT"
+repository = "https://github.com/user/kleptool-package-manager"
+readme = "README.md"
+keywords = ["utility", "ipc", "common"]
+categories = ["development-tools"]
 
 [lints]
 workspace = true

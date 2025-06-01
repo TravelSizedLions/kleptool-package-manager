@@ -1,6 +1,6 @@
 {
   "env": {
-    "es2022": true,
+    "es6": true,
     "node": true
   },
   "extends": [
@@ -10,7 +10,7 @@
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": "latest",
+    "ecmaVersion": 2021,
     "sourceType": "module"
   },
   "plugins": [
@@ -19,6 +19,7 @@
   ],
   "rules": {
     "prettier/prettier": "error",
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/indent": ["error", 2, {
       "SwitchCase": 1,
       "FunctionDeclaration": {

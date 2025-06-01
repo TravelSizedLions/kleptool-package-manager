@@ -79,8 +79,8 @@ function isKlepError(error: unknown): error is KlepError {
  * console.log('makes it here safely');
  * ```
  */
-function boundary(fn: (...args: any) => Promise<void> | void) {
-  return async (...args: any) => {
+function boundary(fn: (...args: unknown[]) => Promise<void> | void) {
+  return async (...args: unknown[]) => {
     try {
       await fn(...args);
     } catch (error: unknown) {
