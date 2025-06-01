@@ -108,13 +108,18 @@ program
     kerror.boundary(async () => {
       const client = await rustClient();
       const res = await client.std.identity(['hello', 'world'])
-      console.log({res})
+      const tree = await client.ast.to_tree({
+        language: 'javascript',
+        source_code: 'console.log("hello")',
+      })
+
+      console.log({res, tree})
     })
   )
 
 program
-  .argument('[task]', 'The task to run')
-  .option('[args...]', 'The arguments to pass to the task')
+  .argument('<task>', 'The task to run')
+  .argument('[args...]', 'The arguments to pass to the task')
   .action(
     kerror.boundary(async (task: string, args: string[]) => {
       if (!task) {
@@ -124,7 +129,7 @@ program
 
       // Get the silent flag from global options
       const silent = program.opts().silent;
-      
+
       await taskRunner.do(task, args, { silent });
     })
   );

@@ -39,7 +39,7 @@ const defaultIpcOptions: IpcOptions = {
 }
 
 function execError(command: string, code: number | null, stdout?: string, stderr?: string, streamOutput = false) {
-  return kerror(kerror.Unknown, 'exec-error-code', {
+  return kerror(kerror.Unknown, 'process-error-code', {
     message: `Command "${command}" failed with code ${code}`,
     context: {
       command,
@@ -51,14 +51,14 @@ function execError(command: string, code: number | null, stdout?: string, stderr
 }
 
 function timeoutError(command: string, timeout: number) {
-  return kerror(kerror.Unknown, 'exec-error-timeout', {
+  return kerror(kerror.Unknown, 'process-error-timeout', {
     message: `Command "${command}" timed out after ${timeout}ms`,
     context: { command, timeout },
   });
 }
 
 function processError(command: string, error: Error) {
-  return kerror(kerror.Unknown, 'exec-error-process', {
+  return kerror(kerror.Unknown, 'process-error-unknown', {
     message: `Command "${command}" failed`,
     context: {
       command,
@@ -124,57 +124,77 @@ function sendData(childProcess: ChildProcess, data?: string): void {
 
 // IPC communication using stdin and fd3
 export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string> {
-  const { args, cwd, env, timeout, data } = { ...defaultIpcOptions, ...options };
-  const command = `${cmd} ${args?.join(' ') || ''}`.trim();
+  try {
+    const { args, cwd, env, timeout, data } = { ...defaultIpcOptions, ...options };
+    const command = `${cmd} ${args?.join(' ') || ''}`.trim();
+    
+    const childProcess = spawn(cmd, args || [], {
+      cwd,
+      env,
+      stdio: ['pipe', 'inherit', 'inherit', 'pipe'], // stdin, stdout, stderr, fd3
+    });
   
-  const childProcess = spawn(cmd, args || [], {
-    cwd,
-    env,
-    stdio: ['pipe', 'inherit', 'inherit', 'pipe'], // stdin, stdout, stderr, fd3
-  });
-
-  // Send stdin data
-  sendData(childProcess, data);
-
-  // Gather output from fd3 and wait for process completion
-  const [output, { code }] = await Promise.all([
-    gatherOutput(childProcess.stdio[3] as Stream.Readable),
-    handleProcessCompletion(childProcess, command, timeout)
-  ]);
-
-  if (code !== 0) {
-    throw execError(command, code);
+    // Send stdin data
+    sendData(childProcess, data);
+  
+    // Gather output from fd3 and wait for process completion
+    const [output, { code }] = await Promise.all([
+      gatherOutput(childProcess.stdio[3] as Stream.Readable),
+      handleProcessCompletion(childProcess, command, timeout)
+    ]);
+  
+    if (code !== 0) {
+      throw execError(command, code);
+    }
+  
+    return output;
+  } catch (e) {
+    throw kerror(kerror.Unknown, 'ipc-error-unknown', {
+      message: `Command "${cmd}" failed with unknown error`,
+      context: {
+        command: cmd,
+        error: e instanceof Error ? e.stack : `Unknown error ${e}`,
+      },
+    });
   }
-
-  return output;
 }
 
 // Regular shell command execution
 export async function _exec(cmd: string, options: ExecOptions = {}): Promise<string> {
-  const { args, cwd, env, timeout, streamOutput } = { ...defaultExecOptions, ...options };
+  try {
+    const { args, cwd, env, timeout, streamOutput } = { ...defaultExecOptions, ...options };
 
-  const command = `${cmd} ${args?.join(' ') || ''}`.trim();
+    const command = `${cmd} ${args?.join(' ') || ''}`.trim();
 
-  const childProcess = exec(command, { cwd, env, timeout });
+    const childProcess = exec(command, { cwd, env, timeout });
 
-  // Handle streaming if requested
-  if (streamOutput) {
-    childProcess.stdout?.pipe(process.stdout);
-    childProcess.stderr?.pipe(process.stderr);
+    // Handle streaming if requested
+    if (streamOutput) {
+      childProcess.stdout?.pipe(process.stdout);
+      childProcess.stderr?.pipe(process.stderr);
+    }
+
+    // Gather output and wait for process completion
+    const [stdout, stderr, { code }] = await Promise.all([
+      gatherOutput(childProcess.stdout as Stream.Readable),
+      gatherOutput(childProcess.stderr as Stream.Readable),
+      handleProcessCompletion(childProcess, command, timeout)
+    ]);
+
+    if (code !== 0) {
+      throw execError(command, code, stdout, stderr, streamOutput);
+    }
+
+    return stdout;
+  } catch (e) {
+    throw kerror(kerror.Unknown, 'exec-error-unknown', {
+      message: `Command "${cmd}" failed with unknown error`,
+      context: {
+        command: cmd,
+        error: e instanceof Error ? e.stack : `Unknown error ${e}`,
+      },
+    });
   }
-
-  // Gather output and wait for process completion
-  const [stdout, stderr, { code }] = await Promise.all([
-    gatherOutput(childProcess.stdout as Stream.Readable),
-    gatherOutput(childProcess.stderr as Stream.Readable),
-    handleProcessCompletion(childProcess, command, timeout)
-  ]);
-
-  if (code !== 0) {
-    throw execError(command, code, stdout, stderr, streamOutput);
-  }
-
-  return stdout;
 }
 
 export default {
