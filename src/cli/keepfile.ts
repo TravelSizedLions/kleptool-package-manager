@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+import fs from './file.ts';
 import path from 'node:path';
 import kerror from './kerror.ts';
 import json5 from 'json5';
@@ -42,9 +42,22 @@ function load(): DependencyGraph {
     return __keep;
   }
 
+  console.log('here')
+  if (!fs.existsSync(path.join(process.cwd(), 'klep.keep'))) {
+    console.log('here2')
+    throw kerror(kerror.Parsing, 'klep-file-not-found', {
+      message: 'A klep.keep file does not exist in the current directory',
+    });
+  }
+
+  console.log('here3')
   __keep = resources.load<DependencyGraph>('./klep.keep', klepKeepfileSchema);
   return __keep;
 }
+
+function clear() {
+  __keep = undefined;
+} 
 
 function reload() {
   __keep = undefined;
@@ -63,4 +76,5 @@ export default {
   ensureDependencyFolder,
   clone,
   defaults,
+  clear,
 };
