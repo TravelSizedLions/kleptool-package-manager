@@ -30,6 +30,12 @@
   // Security Audit
   audit: 'klep ts:audit && klep rust:audit',
 
+  // Test the project
+  test: "klep ts:test && klep rust:test",
+
+  // Generate coverage reports
+  coverage: "klep ts:coverage && klep rust:coverage",
+
   // Simulate a CI pipeline
   ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure',
 
@@ -64,6 +70,14 @@
   // Security Audit
   'rust:audit': 'cd src/rust && cargo audit && cd ../..',
   'ts:audit': 'bun audit',
+
+  // Testing
+  'ts:test': 'bun test',
+  'rust:test': 'cd src/rust && cargo test --workspace',
+
+  // Coverage
+  'ts:coverage': 'bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/typescript',
+  'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --output-dir ../../coverage/rust --workspace',
 
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
