@@ -5,7 +5,6 @@ on:
     branches: [ dev ]
   pull_request:
     branches: [ dev ]
-    # This will run on any PR targeting dev, regardless of source branch name
 
 env:
   CARGO_TERM_COLOR: always

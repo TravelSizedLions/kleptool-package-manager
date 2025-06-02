@@ -1,4 +1,4 @@
-# Klep: The First Truly Dependency Resolver
+# Klep: The First Truly Language Agnostic Dependency Resolver
 
 [![Ubuntu](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-linux.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-linux.yml)
 

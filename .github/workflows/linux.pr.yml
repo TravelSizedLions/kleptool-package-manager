@@ -1,0 +1,42 @@
+name: Test (Linux + Coverage)
+
+on:
+  pull_request:
+    branches: [ dev ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-linux:
+    name: Test (Linux)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Klep Dependencies
+      uses: ./.github/actions/setup-klep
+
+    - name: Setup Additional Cargo Crates
+      uses: ./.github/actions/setup-cargo-crates
+      with:
+        cargo-crates: cargo-tarpaulin
+
+    - name: Build Project
+      run: klep ci:build
+
+    - name: Test and Generate Coverage
+      run: klep coverage
+
+    - name: Print Key
+      run: echo ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
+      shell: bash
+
+    - name: Compare Coverage
+      uses: ./.github/actions/handle-coverage
+      with:
+        operation: compare
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
