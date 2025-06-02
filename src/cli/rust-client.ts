@@ -65,14 +65,17 @@ function __getBinarySearchPaths(): string[] {
 
   if (paths.length === 0) {
     throw kerror(kerror.Unknown, 'no-rust-folders-found', {
-      message: 'No Rust binary directories found. Ensure the project is built or binaries are distributed.'
+      message:
+        'No Rust binary directories found. Ensure the project is built or binaries are distributed.',
     });
   }
 
   return paths;
 }
 
-async function __getRustBinaries(searchPaths: string[]): Promise<Array<{ name: string; path: string }>> {
+async function __getRustBinaries(
+  searchPaths: string[]
+): Promise<Array<{ name: string; path: string }>> {
   const binaries: Array<{ name: string; path: string }> = [];
   for (const searchPath of searchPaths) {
     const foundBinaries = await globby(searchPath, { objectMode: true });
@@ -89,7 +92,9 @@ async function __getRustBinaries(searchPaths: string[]): Promise<Array<{ name: s
   return binaries;
 }
 
-async function __createModules(binaries: Array<{ name: string; path: string }>): Promise<RustClient> {
+async function __createModules(
+  binaries: Array<{ name: string; path: string }>
+): Promise<RustClient> {
   return await binaries
     .filter((entry) => {
       // Exclude .d files (debug symbols) and .pdb files (Windows debug info)
@@ -136,16 +141,12 @@ function __addHelp(modules: RustClient) {
 }
 
 async function __constructor(): Promise<RustClient> {
-  return __addHelp(
-    await __createModules(
-      await __getRustBinaries(
-        __getBinarySearchPaths()
-      )
-    )
-  );
+  const binaries = await __getRustBinaries(__getBinarySearchPaths());
+  const modules = await __createModules(binaries);
+  return __addHelp(modules);
 }
 
-async function __singleton(): Promise<RustClient> {
+export default async function singleton(): Promise<RustClient> {
   try {
     if (!__backend) {
       __backend = await __constructor();
@@ -161,5 +162,3 @@ async function __singleton(): Promise<RustClient> {
     });
   }
 }
-
-export default __singleton;
