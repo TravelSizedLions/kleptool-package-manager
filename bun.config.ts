@@ -1,6 +1,6 @@
-import { BunConfig } from 'bun';
+import type { BuildConfig } from 'bun';
 
-const config: BunConfig = {
+const config: BuildConfig = {
   entrypoints: ['./src/index.ts'],
   outdir: './dist',
   target: 'bun',

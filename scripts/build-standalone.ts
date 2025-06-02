@@ -45,7 +45,7 @@ for (const binary of rustBinaries) {
 
 // Step 4: Create TypeScript build that includes binary paths
 console.log('🔨 Building TypeScript with Bun...');
-const buildResult = await $`bun build src/index.ts --compile --outfile ${join(
+const buildResult = await $`bun build src/index.ts --compile --minify --outfile ${join(
   DIST_DIR,
   'klep'
 )} --target bun`.quiet();
