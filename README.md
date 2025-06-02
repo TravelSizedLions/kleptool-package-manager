@@ -1,6 +1,6 @@
 # GUD: Git-Derived Unified Dependency Resolution
 
-[![codecov](https://codecov.io/gh/TravelSizedLions/kleptool-package-manager/branch/dev/graph/badge.svg)](https://codecov.io/gh/TravelSizedLions/kleptool-package-manager)
+[![Build and Test](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/build-and-test.yml)
 
 ## Abstract
 

@@ -64,13 +64,14 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: klep rust:coverage
 
-    - name: Upload coverage reports to Codecov (Linux only)
+    - name: Upload coverage reports (Linux only)
       if: matrix.os == 'ubuntu-latest'
-      uses: codecov/codecov-action@v4
+      uses: actions/upload-artifact@v4
       with:
-        directory: ./coverage
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        name: coverage-reports
+        path: coverage/
+        retention-days: 30
+
+    - name: Coverage Summary (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: ./scripts/coverage-summary.sh
