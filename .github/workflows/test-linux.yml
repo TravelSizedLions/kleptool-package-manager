@@ -1,0 +1,55 @@
+name: Test (Linux)
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+    # This will run on any PR targeting dev, regardless of source branch name
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-linux:
+    name: Test (Linux)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Klep Dependencies
+      uses: ./.github/actions/setup-klep
+
+    - name: Build Project
+      run: klep ci:build
+
+    - name: Cache Cargo Tarpaulin
+      id: cache-cargo-tarpaulin
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/cargo-tarpaulin
+          ~/.cargo/.crates.toml
+          ~/.cargo/.crates2.json
+        key: ${{ runner.os }}-cargo-tarpaulin-v0.32.7
+        restore-keys: |
+          ${{ runner.os }}-cargo-tarpaulin-
+
+    - name: Install cargo-tarpaulin
+      if: steps.cache-cargo-tarpaulin.outputs.cache-hit != 'true'
+      run: cargo install cargo-tarpaulin
+
+    - name: Test and Generate Coverage
+      run: klep coverage
+
+    - name: Upload Coverage Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: coverage/
+        retention-days: 30
+
+    - name: Coverage Summary
+      run: ./scripts/coverage-summary.sh
