@@ -29,16 +29,7 @@ jobs:
     - name: Test and Generate Coverage
       run: klep coverage
 
-    - name: Upload TypeScript Coverage Artifact
-      uses: actions/upload-artifact@v4
+    - name: Upload Coverage
+      uses: ./.github/actions/handle-coverage
       with:
-        name: dev-typescript-coverage
-        path: ./coverage/typescript/lcov.info
-        retention-days: 30
-
-    - name: Upload Rust Coverage Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: dev-rust-coverage
-        path: ./coverage/rust/lcov.info
-        retention-days: 30
+        operation: upload
