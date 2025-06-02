@@ -40,7 +40,7 @@
   ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure',
 
   // Delete all branches except for dev
-  'git:del:all': 'git checkout dev | git branch | grep -v "dev" | xargs git branch -D',
+  'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
 
   // ------------------------------------------------------------
   // Sub-tasks
