@@ -20,7 +20,7 @@
   build: "klep rust:build:clean && klep ts:build:clean",
 
   // Clean the project
-  clean: "klep rust:clean && klep ts:clean && klep bun:clean",
+  clean: "klep rust:clean && klep ts:clean",
 
   // Lint & Format the project
   lint: "klep ts:lint && klep rust:lint",
@@ -31,7 +31,7 @@
   audit: 'klep ts:audit && klep rust:audit',
 
   // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:secure',
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure',
 
   // Delete all branches except for dev
   'git:del:all': 'git checkout dev | git branch | grep -v "dev" | xargs git branch -D',
