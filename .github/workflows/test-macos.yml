@@ -1,0 +1,29 @@
+name: Test (macOS)
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+    # This will run on any PR targeting dev, regardless of source branch name
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-macos:
+    name: Test (macOS)
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Klep Dependencies
+      uses: ./.github/actions/setup-klep
+
+    - name: Build Project
+      run: klep ci:build
+
+    - name: Test
+      run: klep test

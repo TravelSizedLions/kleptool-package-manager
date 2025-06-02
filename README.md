@@ -1,6 +1,12 @@
-# GUD: Git-Derived Unified Dependency Resolution
+# Klep: The First Truly Dependency Resolver
 
-[![Build and Test](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/build-and-test.yml)
+[![Ubuntu](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-linux.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-linux.yml)
+
+[![Windows](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-windows.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-windows.yml)
+
+[![Mac OS](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-macos.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-macos.yml)
+
+# GUD: Git-Derived Unified Dependency Resolution
 
 ## Abstract
 

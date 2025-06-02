@@ -8,8 +8,6 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 5
-    reviewers:
-      - "@jerrod"
     commit-message:
       prefix: "bun"
       include: "scope"
@@ -22,8 +20,6 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 5
-    reviewers:
-      - "@jerrod"
     commit-message:
       prefix: "cargo"
       include: "scope"
@@ -36,7 +32,5 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 3
-    reviewers:
-      - "@jerrod"
     commit-message:
       prefix: "ci" 

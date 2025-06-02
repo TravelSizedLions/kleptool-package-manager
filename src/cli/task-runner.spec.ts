@@ -17,7 +17,9 @@ describe('TaskRunner', () => {
 
   it('should run a task', async () => {
     const result = await taskRunner.do('echo', []);
-    expect(result).toBe('Hello, world!\n');
+    // Normalize line endings for cross-platform compatibility
+    const normalizedResult = result.replace(/\r\n/g, '\n');
+    expect(normalizedResult).toBe('Hello, world!\n');
   });
 
   it('should throw an error if the task is not found', () => {
