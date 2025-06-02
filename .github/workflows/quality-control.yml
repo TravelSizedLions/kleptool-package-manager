@@ -52,4 +52,4 @@ jobs:
       run: cargo install cargo-audit --locked
 
     - name: Run Security Audit
-      run: klep ci:secure 
+      run: klep ci:secure
