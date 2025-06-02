@@ -2,7 +2,7 @@ name: Quality Control
 
 on:
   push:
-    branches: [ dev, bun-migration ]
+    branches: [ dev ]
   pull_request:
     branches: [ dev ]
     # This will run on any PR targeting dev, regardless of source branch name
