@@ -30,8 +30,6 @@ jobs:
 
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: latest
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -77,8 +75,6 @@ jobs:
 
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: latest
 
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
