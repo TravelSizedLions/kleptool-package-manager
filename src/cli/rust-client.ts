@@ -63,40 +63,34 @@ function __getBinarySearchPaths(): string[] {
     paths.push(relativeBundledPath);
   }
 
+  if (paths.length === 0) {
+    throw kerror(kerror.Unknown, 'no-rust-folders-found', {
+      message: 'No Rust binary directories found. Ensure the project is built or binaries are distributed.'
+    });
+  }
+
   return paths;
 }
 
-async function __constructor() {
-  const searchPaths = __getBinarySearchPaths();
-
-  if (searchPaths.length === 0) {
-    throw new Error(
-      'No Rust binary directories found. Ensure the project is built or binaries are distributed.'
-    );
-  }
-
-  let binaries: Array<{ name: string; path: string }> = [];
-
-  // Try each search path until we find binaries
+async function __getRustBinaries(searchPaths: string[]): Promise<Array<{ name: string; path: string }>> {
+  const binaries: Array<{ name: string; path: string }> = [];
   for (const searchPath of searchPaths) {
-    try {
-      const foundBinaries = await globby(searchPath, { objectMode: true });
-      if (foundBinaries.length > 0) {
-        binaries = foundBinaries;
-        console.log(`📦 Found Rust binaries in: ${path.dirname(searchPath)}`);
-        break;
-      }
-    } catch (error) {
-      // Continue to next path if this one fails
-      continue;
-    }
+    const foundBinaries = await globby(searchPath, { objectMode: true });
+    binaries.push(...foundBinaries);
   }
 
   if (binaries.length === 0) {
-    throw new Error(`No Rust binaries found in any search paths: ${searchPaths.join(', ')}`);
+    throw kerror(kerror.Unknown, 'no-rust-binaries-found', {
+      message: 'No Rust binaries found in any search paths',
+      context: { 'search-paths': searchPaths },
+    });
   }
 
-  const modules = binaries
+  return binaries;
+}
+
+async function __createModules(binaries: Array<{ name: string; path: string }>): Promise<RustClient> {
+  return await binaries
     .filter((entry) => {
       // Exclude .d files (debug symbols) and .pdb files (Windows debug info)
       return !entry.name.endsWith('.d') && !entry.name.endsWith('.pdb');
@@ -115,7 +109,9 @@ async function __constructor() {
 
       return modules;
     }, {} as RustClient);
+}
 
+function __addHelp(modules: RustClient) {
   Object.defineProperty(modules, 'help', {
     value: () => {
       const help =
@@ -137,6 +133,16 @@ async function __constructor() {
   });
 
   return modules;
+}
+
+async function __constructor(): Promise<RustClient> {
+  return __addHelp(
+    await __createModules(
+      await __getRustBinaries(
+        __getBinarySearchPaths()
+      )
+    )
+  );
 }
 
 async function __singleton(): Promise<RustClient> {
