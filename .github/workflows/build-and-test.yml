@@ -37,3 +37,41 @@ jobs:
 
     - name: Test klep CLI (Integration Tests)
       run: klep demo
+
+    # Coverage generation (Linux only)
+    - name: Cache cargo-tarpaulin (Linux only)
+      id: cache-cargo-tarpaulin
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/cargo-tarpaulin
+          ~/.cargo/.crates.toml
+          ~/.cargo/.crates2.json
+        key: ${{ runner.os }}-cargo-tarpaulin-v0.32.7
+        restore-keys: |
+          ${{ runner.os }}-cargo-tarpaulin-
+
+    - name: Install cargo-tarpaulin (Linux only)
+      if: matrix.os == 'ubuntu-latest' && steps.cache-cargo-tarpaulin.outputs.cache-hit != 'true'
+      run: cargo install cargo-tarpaulin
+
+    - name: Generate TypeScript Coverage (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: klep ts:coverage
+
+    - name: Generate Rust Coverage (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: klep rust:coverage
+
+    - name: Upload coverage reports (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: coverage/
+        retention-days: 30
+
+    - name: Coverage Summary (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: ./scripts/coverage-summary.sh

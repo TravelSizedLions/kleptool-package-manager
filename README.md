@@ -1,5 +1,7 @@
 # GUD: Git-Derived Unified Dependency Resolution
 
+[![Build and Test](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/build-and-test.yml)
+
 ## Abstract
 
 In this document, we'll rigorously explore the practical and theoretical challenges of implementing a language- and versioning-agnostic dependency resolver. We will discuss and analyze the development environments of a diverse set of languages and their large-scale and niche applications in order to understand their shared dependency resolution needs. After, we will devise a method for tackling this notoriously difficult problem using a novel formulation for translating dependency manifests into a unified representation, then proposing a resolution method by constructing an A* heuristic for dependability optimization. Due to the specific quirks of current solutions for dependency resolution and requirements for A* to reach optimal solutions, A* has a distinct theoretical advantage over SMT-based approaches, which we'll discuss. In short, this discourse will show that a purpose-built adaptation of A* leveraging a fully-connected feedforward network to fine-tune a traditional heuristic can be guaranteed to maintain monotonicity, and does not require maintaining admissibility in order to achieve similar results to SMT.
@@ -92,7 +94,7 @@ With a decades-long schism in package management systems for JavaScript, new too
 
 - `npm`: The original and still most widely used, but notorious for massive node_modules folders, slow installs, and a history of security incidents
 
-- `yarn`: Introduced to address npm’s speed and determinism issues, but added its own lockfile format and quirks. Yarn v1 and v2+ are almost different ecosystems.
+- `yarn`: Introduced to address npm's speed and determinism issues, but added its own lockfile format and quirks. Yarn v1 and v2+ are almost different ecosystems.
 
 - `pnpm`: Aims to solve npm's node_modules bloat problem by using a content-addressable store and symlinks, but can trip up tooling that expects the traditional node_modules layout.
 - `deno`: Created by the original author of Node.js, Deno ditches node_modules entirely and fetches dependencies directly from URLs, but this breaks compatibility with the vast npm ecosystem and requires a different mental model. Why did you do this to me, Ryan? Direct URL imports? Seriously? Did you really have to make this problem even harder, bro?
@@ -104,11 +106,11 @@ Each of these tools tries to fix pain points in the ecosystem, but the result is
 
 - Lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml) are not interchangeable, making collaboration and migration between tools tricky.
 
-- Some packages or tools only work with certain managers or certain versions, leading to “dependency manager lock-in.”
+- Some packages or tools only work with certain managers or certain versions, leading to "dependency manager lock-in."
 
 - The sheer number of transitive dependencies in a typical project can number in the thousands, increasing the attack surface for vulnerabilities and making reproducibility a challenge.
 
-On top of that, JavaScript’s *flexibility-above-all* approach means that it's most popular package manifest, `package.json`, can be used in wildly different ways, and the ecosystem’s rapid evolution means that best practices are constantly shifting. The result is a dependency resolution and build environment that’s unwieldy for even experienced developers.
+On top of that, JavaScript's *flexibility-above-all* approach means that it's most popular package manifest, `package.json`, can be used in wildly different ways, and the ecosystem's rapid evolution means that best practices are constantly shifting. The result is a dependency resolution and build environment that's unwieldy for even experienced developers.
 
 #### Case Study #4: Python and Virtual Environments
 
@@ -123,7 +125,7 @@ The Python community's solution to this is *virtual environments*, or sandboxing
 
 Instead of gathering, installing, and labeling dependencies as project-specific within the root project folder, a virtual environment outside the project is defined in a shared folder of other python environments, and then packages are installed there.
 
-To use an analogy, think of organization for house projects and chores. Most languages set up your project’s needs right inside your house alongside where the actual work is being done. The sponges are by the sink, the tools for yardwork are in the shed out back, the plunger is in the bathroom, the laundry soap is by the laundry machines, and the baking supplies are in the fridge and pantry, with the mixing bowl and oven. Everything you need for the work is local to the place where the work is happening.
+To use an analogy, think of organization for house projects and chores. Most languages set up your project's needs right inside your house alongside where the actual work is being done. The sponges are by the sink, the tools for yardwork are in the shed out back, the plunger is in the bathroom, the laundry soap is by the laundry machines, and the baking supplies are in the fridge and pantry, with the mixing bowl and oven. Everything you need for the work is local to the place where the work is happening.
 
 Python, on the other hand, hands you a key to a massive building outside of your home. Each time you need to do a project, you have to build a room in that building, put the supplies you need for that project in that room, and then temporarily bring the supplies home with you to do the work. It's so isolated that it isolates the dependencies from the project itself, which feels inside-out. It also leads to problems like trying to remember which environment maps to which project or set of projects. And speaking of which--virtual envs aren't a one-to-one relationship with projects, making them subpar for isolation, reproducibility, and portability.
 
