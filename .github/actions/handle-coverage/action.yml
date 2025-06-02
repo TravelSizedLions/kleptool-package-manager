@@ -82,7 +82,7 @@ runs:
       if: inputs.operation == 'compare'
       uses: barecheck/code-coverage-action@v1
       with:
-        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
+        barecheck-github-app-token: ${{ inputs.barecheck_token }}
         lcov-file: "./coverage/typescript/lcov.info"
         base-lcov-file: "./base-coverage/typescript/lcov.info"
         minimum-ratio: 0
@@ -93,7 +93,7 @@ runs:
       if: inputs.operation == 'compare'
       uses: barecheck/code-coverage-action@v1
       with:
-        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
+        barecheck-github-app-token: ${{ inputs.barecheck_token }}
         lcov-file: "./coverage/rust/lcov.info"
         base-lcov-file: "./base-coverage/rust/lcov.info"
         minimum-ratio: 0
@@ -104,7 +104,7 @@ runs:
       if: steps.check-ts-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
-        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
+        barecheck-github-app-token: ${{ inputs.barecheck_token }}
         lcov-file: "./coverage/typescript/lcov.info"
         minimum-ratio: 0
         send-summary-comment: true
@@ -115,7 +115,7 @@ runs:
       if: steps.check-rust-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
-        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
+        barecheck-github-app-token: ${{ inputs.barecheck_token }}
         lcov-file: "./coverage/rust/lcov.info"
         minimum-ratio: 0
         send-summary-comment: true
