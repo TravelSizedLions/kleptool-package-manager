@@ -16,7 +16,7 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OS" == "Windows_NT" ]]; 
     echo "Detected Windows environment"
     cat > "$PROJECT_ROOT/klep.cmd" << 'EOF'
 @echo off
-npx tsx "%~dp0src/index.ts" %*
+bun run "%~dp0src/index.ts" %*
 EOF
     echo "✅ Created klep.cmd - add this directory to your PATH"
     
@@ -28,7 +28,7 @@ else
         # User has .local/bin directory - create wrapper script
         cat > "$HOME/.local/bin/klep" << EOF
 #!/usr/bin/env bash
-exec npx tsx "$PROJECT_ROOT/src/index.ts" "\$@"
+exec bun run "$PROJECT_ROOT/src/index.ts" "\$@"
 EOF
         chmod +x "$HOME/.local/bin/klep"
         echo "✅ Created klep wrapper in ~/.local/bin/klep"
@@ -37,7 +37,7 @@ EOF
         # System-wide installation (if writable) - create wrapper script
         cat > "/usr/local/bin/klep" << EOF
 #!/usr/bin/env bash
-exec npx tsx "$PROJECT_ROOT/src/index.ts" "\$@"
+exec bun run "$PROJECT_ROOT/src/index.ts" "\$@"
 EOF
         chmod +x "/usr/local/bin/klep"
         echo "✅ Created klep wrapper in /usr/local/bin/klep"
@@ -46,7 +46,7 @@ EOF
         # Fallback: create a wrapper script in current directory
         cat > "$PROJECT_ROOT/klep" << EOF
 #!/usr/bin/env bash
-exec npx tsx "$PROJECT_ROOT/src/index.ts" "\$@"
+exec bun run "$PROJECT_ROOT/src/index.ts" "\$@"
 EOF
         chmod +x "$PROJECT_ROOT/klep"
         echo "✅ Created ./klep wrapper - add this directory to your PATH"

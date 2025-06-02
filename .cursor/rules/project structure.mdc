@@ -3,4 +3,9 @@ description:
 globs: 
 alwaysApply: true
 ---
+Keep in mind that this tool is meant to dogfood itself.
 
+Klep already has a task-runner. Please put new tasks in the klep.tasks file. :thumbsup:
+Complicated strings of shell commands should be created as a shell script and saved under `scripts` in the root of the project directory.
+
+Also, I'm currently using Bun for our TypeScript dependency manager

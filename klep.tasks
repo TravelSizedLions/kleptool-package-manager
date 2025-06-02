@@ -31,7 +31,7 @@
   audit: 'klep ts:audit && klep rust:audit',
 
   // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:secure',
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure',
 
   // Delete all branches except for dev
   'git:del:all': 'git checkout dev | git branch | grep -v "dev" | xargs git branch -D',
@@ -40,14 +40,14 @@
   // Sub-tasks
   // ------------------------------------------------------------
   // Lint & Format (Fix)
-  'ts:lint': 'npx eslint . --ext .ts --fix',
-  'ts:format': 'npx prettier --write \"src/**/*.ts\"',
+  'ts:lint': 'bun run --bun eslint . --ext .ts --fix',
+  'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\"',
   'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
   'rust:format': 'cd src/rust && cargo fmt --all',
 
   // Lint & Format (Assert)
-  'ts:lint:assert': 'npx eslint . --ext .ts',
-  'ts:format:assert': 'npx prettier --check \"src/**/*.ts\"',
+  'ts:lint:assert': 'bun run --bun eslint . --ext .ts',
+  'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\"',
   'rust:lint:assert': 'cd src/rust && cargo clippy --workspace --all-targets --all-features',
   'rust:format:assert': 'cd src/rust && cargo fmt --all -- --check',
 
@@ -57,17 +57,17 @@
   'rust:build:clean': "klep rust:clean && klep rust:build",
 
   // Build and/or clean the TypeScript code
-  'ts:build': "npx tsc --build",
-  'ts:clean': "rm -rf node_modules && yarn install --frozen-lockfile",
+  'ts:build': "bun run --bun tsc --build",
+  'ts:clean': "rm -rf node_modules && bun install",
   'ts:build:clean': "klep ts:clean && klep ts:build",
 
   // Security Audit
   'rust:audit': 'cd src/rust && cargo audit && cd ../..',
-  'ts:audit': 'yarn audit --level moderate',
+  'ts:audit': 'bun audit',
 
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
-  'ci:typecheck': 'npx tsc --noEmit',
+  'ci:typecheck': 'bun run --bun tsc --noEmit',
 }

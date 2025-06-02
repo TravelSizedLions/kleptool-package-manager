@@ -2,6 +2,7 @@ import process, { IpcOptions } from './process.ts';
 import kerror from './kerror.ts';
 import { globby } from 'globby';
 import path from 'path';
+import { existsSync } from 'fs';
 
 type RustClient = {
   [module: string]: {
@@ -40,10 +41,61 @@ function __createDispatcher(binPath: string) {
   };
 }
 
-async function __constructor() {
-  const binaries = await globby('src/rust/target/release/**/bin-*--*', { objectMode: true });
+function __getBinarySearchPaths(): string[] {
+  const paths: string[] = [];
 
-  const modules = binaries
+  // Development mode: look in the usual Rust target directory
+  const devPath = 'src/rust/target/release/**/bin-*--*';
+  if (existsSync('src/rust/target/release')) {
+    paths.push(devPath);
+  }
+
+  // Bundled mode: look in the distributed rust-binaries directory
+  const bundledPath = 'dist/rust-binaries/bin-*--*';
+  if (existsSync('dist/rust-binaries')) {
+    paths.push(bundledPath);
+  }
+
+  // Relative to executable (for standalone distribution)
+  const executableDir = path.dirname(globalThis.process.argv[0]);
+  const relativeBundledPath = path.join(executableDir, 'rust-binaries', 'bin-*--*');
+  if (existsSync(path.join(executableDir, 'rust-binaries'))) {
+    paths.push(relativeBundledPath);
+  }
+
+  if (paths.length === 0) {
+    throw kerror(kerror.Unknown, 'no-rust-folders-found', {
+      message:
+        'No Rust binary directories found. Ensure the project is built or binaries are distributed.',
+    });
+  }
+
+  return paths;
+}
+
+async function __getRustBinaries(
+  searchPaths: string[]
+): Promise<Array<{ name: string; path: string }>> {
+  const binaries: Array<{ name: string; path: string }> = [];
+  for (const searchPath of searchPaths) {
+    const foundBinaries = await globby(searchPath, { objectMode: true });
+    binaries.push(...foundBinaries);
+  }
+
+  if (binaries.length === 0) {
+    throw kerror(kerror.Unknown, 'no-rust-binaries-found', {
+      message: 'No Rust binaries found in any search paths',
+      context: { 'search-paths': searchPaths },
+    });
+  }
+
+  return binaries;
+}
+
+async function __createModules(
+  binaries: Array<{ name: string; path: string }>
+): Promise<RustClient> {
+  return await binaries
     .filter((entry) => {
       // Exclude .d files (debug symbols) and .pdb files (Windows debug info)
       return !entry.name.endsWith('.d') && !entry.name.endsWith('.pdb');
@@ -62,7 +114,9 @@ async function __constructor() {
 
       return modules;
     }, {} as RustClient);
+}
 
+function __addHelp(modules: RustClient) {
   Object.defineProperty(modules, 'help', {
     value: () => {
       const help =
@@ -86,7 +140,13 @@ async function __constructor() {
   return modules;
 }
 
-async function __singleton(): Promise<RustClient> {
+async function __constructor(): Promise<RustClient> {
+  const binaries = await __getRustBinaries(__getBinarySearchPaths());
+  const modules = await __createModules(binaries);
+  return __addHelp(modules);
+}
+
+export default async function singleton(): Promise<RustClient> {
   try {
     if (!__backend) {
       __backend = await __constructor();
@@ -102,5 +162,3 @@ async function __singleton(): Promise<RustClient> {
     });
   }
 }
-
-export default __singleton;
