@@ -34,4 +34,4 @@ jobs:
       with:
         operation: upload
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        barecheck_token: ${{ env.BARECHECK_GITHUB_APP_TOKEN }}
+        barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
