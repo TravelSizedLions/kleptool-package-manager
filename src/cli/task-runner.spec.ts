@@ -1,11 +1,11 @@
-import { describe, it, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, mock, beforeEach } from 'bun:test';
 import taskRunner from './task-runner.ts';
 
 describe('TaskRunner', () => {
   beforeEach(() => {
     mock.module('./resource-loader.ts', () => ({
       load: mock(() => ({
-        'echo': 'echo Hello, world!',
+        echo: 'echo Hello, world!',
       })),
     }));
 
@@ -13,7 +13,7 @@ describe('TaskRunner', () => {
       exec: mock(() => 'Hello, world!'),
       ipc: mock(() => 'Hello, world!'),
     }));
-  })
+  });
 
   it('should run a task', async () => {
     const result = await taskRunner.do('echo', []);
@@ -24,7 +24,7 @@ describe('TaskRunner', () => {
     expect(taskRunner.do('not-a-task', [])).rejects.toThrow('Task not-a-task not found');
   });
 
-  it("throw an error if there are no tasks", () => {
+  it('throw an error if there are no tasks', () => {
     mock.module('./resource-loader.ts', () => ({
       load: mock(() => null),
     }));
