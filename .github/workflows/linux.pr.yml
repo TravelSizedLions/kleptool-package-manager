@@ -1,0 +1,71 @@
+name: Test (Linux)
+
+on:
+  pull_request:
+    branches: [ dev ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-linux:
+    name: Test (Linux)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Klep Dependencies
+      uses: ./.github/actions/setup-klep
+
+    - name: Setup Additional Cargo Crates
+      uses: ./.github/actions/setup-cargo-crates
+      with:
+        cargo-crates: cargo-tarpaulin
+
+    - name: Build Project
+      run: klep ci:build
+
+    - name: Test and Generate Coverage
+      run: klep coverage
+
+    - name: Download TypeScript Base Coverage from dev
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: linux.dev.yml
+        branch: dev
+        name: dev-typescript-coverage
+        path: ./base-coverage/typescript/
+        if_no_artifact_found: warn
+
+    - name: Download Rust Base Coverage from dev
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: linux.dev.yml
+        branch: dev
+        name: dev-rust-coverage
+        path: ./base-coverage/rust/
+        if_no_artifact_found: warn
+
+    - name: Generate TypeScript Coverage Report
+      uses: barecheck/code-coverage-action@v1
+      with:
+        lcov-file: "./coverage/typescript/lcov.info"
+        base-lcov-file: "./base-coverage/typescript/lcov.info"
+        minimum-ratio: 0
+        send-summary-comment: true
+        show-annotations: "warning"
+        app-name: "TypeScript"
+
+    - name: Generate Rust Coverage Report
+      uses: barecheck/code-coverage-action@v1
+      with:
+        lcov-file: "./coverage/rust/lcov.info"
+        base-lcov-file: "./base-coverage/rust/lcov.info"
+        minimum-ratio: 0
+        send-summary-comment: true
+        show-annotations: "warning"
+        app-name: "Rust"
