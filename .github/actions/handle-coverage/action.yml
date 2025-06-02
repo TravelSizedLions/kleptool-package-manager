@@ -79,7 +79,7 @@ runs:
         fi
 
     - name: Compare Coverage (TypeScript)
-      if: inputs.operation == 'compare'
+      if: inputs.operation == 'compare' && steps.check-ts-base.outputs.exists == 'true'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
@@ -90,7 +90,7 @@ runs:
         show-annotations: "warning"
 
     - name: Compare Coverage (Rust)
-      if: inputs.operation == 'compare'
+      if: inputs.operation == 'compare' && steps.check-rust-base.outputs.exists == 'true'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
@@ -101,7 +101,7 @@ runs:
         show-annotations: "warning"
 
     - name: Generate TypeScript Coverage Report (no baseline)
-      if: steps.check-ts-base.outputs.exists == 'false'
+      if: inputs.operation == 'compare' && steps.check-ts-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
@@ -112,7 +112,7 @@ runs:
         app-name: "TypeScript (No Baseline)"
 
     - name: Generate Rust Coverage Report (no baseline)
-      if: steps.check-rust-base.outputs.exists == 'false'
+      if: inputs.operation == 'compare' && steps.check-rust-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
