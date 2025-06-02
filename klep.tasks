@@ -19,9 +19,6 @@
   // Build the entire project
   build: "klep rust:build:clean && klep ts:build:clean",
 
-  // Build standalone executable
-  "build:standalone": "bun run scripts/build-standalone.ts",
-
   // Clean the project
   clean: "klep rust:clean && klep ts:clean && klep bun:clean",
 
