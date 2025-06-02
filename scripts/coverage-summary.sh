@@ -40,9 +40,10 @@ calculate_percentage() {
 get_quality_indicator() {
     local percentage="$1"
     
-    [ "$percentage" -ge 80 ] && echo "🟢 Good coverage" && return
-    [ "$percentage" -ge 60 ] && echo "🟡 Moderate coverage" && return
-    echo "🔴 Low coverage"
+    [ "$percentage" -ge 90 ] && echo "⭐ >90% coverage" && return
+    [ "$percentage" -ge 80 ] && echo "🟢 >80% coverage" && return
+    [ "$percentage" -ge 60 ] && echo "🟡 >60% coverage" && return
+    echo "🔴 <60% coverage"
 }
 
 # Handle missing coverage file
