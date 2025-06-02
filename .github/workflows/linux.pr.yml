@@ -34,3 +34,5 @@ jobs:
       uses: ./.github/actions/handle-coverage
       with:
         operation: compare
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        barecheck_token: ${{ secrets.BARECHECK_GITHUB_APP_TOKEN }}

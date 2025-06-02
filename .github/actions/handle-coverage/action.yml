@@ -6,6 +6,14 @@ inputs:
     description: 'The operation to perform (upload, compare)'
     required: true
     default: 'upload'
+  github_token:
+    description: 'GitHub token for downloading artifacts'
+    required: false
+    default: ''
+  barecheck_token:
+    description: 'Barecheck GitHub App token for code coverage reports'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -33,7 +41,7 @@ runs:
       uses: dawidd6/action-download-artifact@v3
       continue-on-error: true
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ inputs.github_token }}
         branch: dev
         name: dev-typescript-coverage
         path: ./base-coverage/typescript/
@@ -44,7 +52,7 @@ runs:
       uses: dawidd6/action-download-artifact@v3
       continue-on-error: true
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ inputs.github_token }}
         branch: dev
         name: dev-rust-coverage
         path: ./base-coverage/rust/
@@ -52,6 +60,7 @@ runs:
 
     - name: Check if TypeScript base coverage exists
       id: check-ts-base
+      shell: bash
       run: |
         if [ -f "./base-coverage/typescript/lcov.info" ]; then
           echo "exists=true" >> $GITHUB_OUTPUT
@@ -61,6 +70,7 @@ runs:
 
     - name: Check if Rust base coverage exists
       id: check-rust-base
+      shell: bash
       run: |
         if [ -f "./base-coverage/rust/lcov.info" ]; then
           echo "exists=true" >> $GITHUB_OUTPUT
@@ -72,6 +82,7 @@ runs:
       if: inputs.operation == 'compare'
       uses: barecheck/code-coverage-action@v1
       with:
+        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
         lcov-file: "./coverage/typescript/lcov.info"
         base-lcov-file: "./base-coverage/typescript/lcov.info"
         minimum-ratio: 0
@@ -82,6 +93,7 @@ runs:
       if: inputs.operation == 'compare'
       uses: barecheck/code-coverage-action@v1
       with:
+        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
         lcov-file: "./coverage/rust/lcov.info"
         base-lcov-file: "./base-coverage/rust/lcov.info"
         minimum-ratio: 0
@@ -92,6 +104,7 @@ runs:
       if: steps.check-ts-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
+        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
         lcov-file: "./coverage/typescript/lcov.info"
         minimum-ratio: 0
         send-summary-comment: true
@@ -102,6 +115,7 @@ runs:
       if: steps.check-rust-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
+        barecheck-github-app-token: ${{ inputs.barecheck_github_app_token }}
         lcov-file: "./coverage/rust/lcov.info"
         minimum-ratio: 0
         send-summary-comment: true
