@@ -46,13 +46,13 @@
   // Sub-tasks
   // ------------------------------------------------------------
   // Lint & Format (Fix)
-  'ts:lint': 'bun run --bun eslint . --ext .ts --fix',
+  'ts:lint': 'bun run --bun eslint . --fix',
   'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\"',
   'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
   'rust:format': 'cd src/rust && cargo fmt --all',
 
   // Lint & Format (Assert)
-  'ts:lint:assert': 'bun run --bun eslint . --ext .ts',
+  'ts:lint:assert': 'bun run --bun eslint . ',
   'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\"',
   'rust:lint:assert': 'cd src/rust && cargo clippy --workspace --all-targets --all-features',
   'rust:format:assert': 'cd src/rust && cargo fmt --all -- --check',

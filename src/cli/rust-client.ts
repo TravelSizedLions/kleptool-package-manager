@@ -124,7 +124,7 @@ function __addHelp(modules: RustClient) {
         Object.entries(modules)
           .map(([module, apis]) => {
             return Object.entries(apis)
-              .map(([api, _dispatcher]) => {
+              .map(([api]) => {
                 return `${module}.${api}`;
               })
               .join('\n');
