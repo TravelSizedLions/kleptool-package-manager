@@ -35,8 +35,9 @@ runs:
         toolchain: stable
         components: ${{ inputs.rust-components }}
         cache-workspaces: src/rust
-        # Cache cargo registry and git dependencies more aggressively
-        cache-all-crates: true
+        # Enable caching and cache on failure for better cache utilization
+        cache: true
+        cache-on-failure: true
 
     # Additional Rust caching for target directory
     - name: Cache Rust target directory
