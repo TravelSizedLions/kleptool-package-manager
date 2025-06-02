@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Enable version updates for npm (Node.js/TypeScript)
+  # Enable version updates for Bun (Node.js/TypeScript)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -11,7 +11,7 @@ updates:
     reviewers:
       - "@jerrod"
     commit-message:
-      prefix: "npm"
+      prefix: "bun"
       include: "scope"
 
   # Enable version updates for Cargo (Rust)
