@@ -23,3 +23,4 @@ runs:
     - name: Install Cargo Crates
       if: steps.cache-cargo-crates.outputs.cache-hit != 'true'
       run: cargo install ${{ inputs.cargo-crates }}
+      shell: bash
