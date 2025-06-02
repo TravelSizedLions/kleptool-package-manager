@@ -18,16 +18,49 @@ runs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
 
+    # Cache Bun dependencies and global cache
+    - name: Cache Bun dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.bun/install/cache
+          node_modules
+        key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+        restore-keys: |
+          ${{ runner.os }}-bun-
+
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         toolchain: stable
         components: ${{ inputs.rust-components }}
         cache-workspaces: src/rust
+        # Cache cargo registry and git dependencies more aggressively
+        cache-all-crates: true
+
+    # Additional Rust caching for target directory
+    - name: Cache Rust target directory
+      uses: actions/cache@v4
+      with:
+        path: src/rust/target
+        key: ${{ runner.os }}-rust-target-${{ hashFiles('src/rust/**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-rust-target-
 
     - name: Install Node dependencies
       run: bun install --frozen-lockfile
       shell: bash
+
+    # Cache klep bootstrap artifacts
+    - name: Cache klep bootstrap
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.local/bin/klep
+          ${{ github.workspace }}/klep
+        key: ${{ runner.os }}-klep-bootstrap-${{ hashFiles('src/**', 'bun.lockb') }}
+        restore-keys: |
+          ${{ runner.os }}-klep-bootstrap-
 
     - name: Bootstrap klep
       run: bun run src/index.ts link
