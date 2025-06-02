@@ -1,0 +1,44 @@
+name: 'Setup Klep Dependencies'
+description: 'Sets up Node.js, Bun, Rust, installs dependencies, and bootstraps Klep'
+
+inputs:
+  rust-components:
+    description: 'Additional Rust components to install (e.g., rustfmt, clippy)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js from .nvmrc
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: '.nvmrc'
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+        components: ${{ inputs.rust-components }}
+        cache-workspaces: src/rust
+
+    - name: Install Node dependencies
+      run: bun install --frozen-lockfile
+      shell: bash
+
+    - name: Bootstrap klep
+      run: bun run src/index.ts link
+      shell: bash
+
+    - name: Add klep to PATH (Unix)
+      if: runner.os != 'Windows'
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      shell: bash
+
+    - name: Add klep to PATH (Windows)
+      if: runner.os == 'Windows'
+      run: echo "${{ github.workspace }}" >> $env:GITHUB_PATH
+      shell: pwsh 

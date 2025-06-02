@@ -20,29 +20,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js from .nvmrc
-      uses: actions/setup-node@v4
+    - name: Setup Klep Dependencies
+      uses: ./.github/actions/setup-klep
       with:
-        node-version-file: '.nvmrc'
-
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-
-    - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-        components: rustfmt, clippy
-        cache-workspaces: src/rust
-
-    - name: Install Node dependencies
-      run: bun install --frozen-lockfile
-
-    - name: Bootstrap klep
-      run: bun run src/index.ts link
-
-    - name: Add klep to PATH
-      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+        rust-components: rustfmt, clippy
 
     - name: Run Quality Control Tasks
       run: klep ci:tidy
@@ -58,19 +39,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js from .nvmrc
-      uses: actions/setup-node@v4
-      with:
-        node-version-file: '.nvmrc'
-
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-
-    - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        toolchain: stable
-        cache-workspaces: src/rust
+    - name: Setup Klep Dependencies
+      uses: ./.github/actions/setup-klep
 
     - name: Cache Cargo Audit
       uses: actions/cache@v4
@@ -80,15 +50,6 @@ jobs:
 
     - name: Install cargo-audit
       run: cargo install cargo-audit --locked
-
-    - name: Install Node dependencies
-      run: bun install --frozen-lockfile
-
-    - name: Bootstrap klep
-      run: bun run src/index.ts link
-
-    - name: Add klep to PATH
-      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: Run Security Audit
       run: klep ci:secure 
