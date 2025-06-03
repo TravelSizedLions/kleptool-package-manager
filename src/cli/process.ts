@@ -11,6 +11,13 @@ type ProcessOptions = {
   timeout?: number;
 };
 
+export type ExecResult = {
+  stdout: string;
+  stderr: string;
+  success: boolean;
+  exitCode: number | null;
+};
+
 export type ExecOptions = ProcessOptions & {
   stdout?: StreamType;
   stderr?: StreamType;
@@ -171,8 +178,8 @@ export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string
   }
 }
 
-// Regular shell command execution
-export async function _exec(cmd: string, options: ExecOptions = {}): Promise<string> {
+// Regular shell command execution with full result
+export async function execWithResult(cmd: string, options: ExecOptions = {}): Promise<ExecResult> {
   try {
     const { args, cwd, env, timeout, streamOutput } = {
       ...defaultExecOptions,
@@ -196,15 +203,12 @@ export async function _exec(cmd: string, options: ExecOptions = {}): Promise<str
       handleProcessCompletion(childProcess, command, timeout),
     ]);
 
-    if (code !== 0) {
-      if (options.throwOnError) {
-        throw execError(command, code, stdout, stderr, streamOutput);
-      }
-
-      return '';
-    }
-
-    return stdout;
+    return {
+      stdout,
+      stderr,
+      success: code === 0,
+      exitCode: code,
+    };
   } catch (e) {
     if (options.throwOnError && e instanceof Error) {
       throw kerror(kerror.Unknown, 'exec-error-unknown', {
@@ -216,11 +220,28 @@ export async function _exec(cmd: string, options: ExecOptions = {}): Promise<str
       });
     }
 
-    return '';
+    return {
+      stdout: '',
+      stderr: e instanceof Error ? e.message : String(e),
+      success: false,
+      exitCode: null,
+    };
   }
+}
+
+// Regular shell command execution (backward compatibility)
+export async function _exec(cmd: string, options: ExecOptions = {}): Promise<string> {
+  const result = await execWithResult(cmd, options);
+
+  if (!result.success && options.throwOnError) {
+    throw execError(cmd, result.exitCode, result.stdout, result.stderr, options.streamOutput);
+  }
+
+  return result.stdout;
 }
 
 export default {
   exec: _exec,
+  execWithResult,
   ipc,
 };
