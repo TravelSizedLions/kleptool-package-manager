@@ -22,89 +22,100 @@ interface SourceMapEntry {
 
 const sourceMapRegistry = new Map<string, SourceMapEntry[]>();
 
+function findStackTraceMatch(line: string) {
+  const patterns = [
+    /\s+at .* \((.+):(\d+):(\d+)\)/, // at function (file:line:col)
+    /\s+at (.+):(\d+):(\d+)/, // at file:line:col
+    /\s+at <anonymous> \((.+):(\d+):(\d+)\)/, // at <anonymous> (file:line:col)
+  ];
+
+  for (const pattern of patterns) {
+    const match = line.match(pattern);
+    if (match) return match;
+  }
+
+  return null;
+}
+
+function findBestMapping(mappings: SourceMapEntry[], originalLine: number) {
+  for (const mapping of mappings) {
+    if (originalLine >= mapping.generatedLine) {
+      return mapping;
+    }
+  }
+  return null;
+}
+
+function translateSingleStackLine(line: string): string {
+  const match = findStackTraceMatch(line);
+  if (!match) return line;
+
+  const filePath = match[1];
+  const originalLine = parseInt(match[2], 10);
+
+  console.log(`🔍 Translating: ${filePath}:${originalLine}`);
+
+  const mappings = sourceMapRegistry.get(filePath);
+  if (!mappings || mappings.length === 0) {
+    console.log(`❌ No source map found for ${filePath}`);
+    return line;
+  }
+
+  const bestMapping = findBestMapping(mappings, originalLine);
+  if (!bestMapping) {
+    console.log(`❌ No mapping found for line ${originalLine} in ${filePath}`);
+    return line;
+  }
+
+  const offsetWithinMapping = originalLine - bestMapping.generatedLine;
+  const originalLineNumber = bestMapping.originalLine + offsetWithinMapping;
+
+  return line.replace(`:${originalLine}:`, `:${originalLineNumber}:`);
+}
+
 // Function to translate error stack traces
 export function translateStackTrace(error: Error): Error {
   if (!error.stack) return error;
 
   const lines = error.stack.split('\n');
-  const translatedLines = lines.map((line) => {
-    const patterns = [
-      /\s+at .* \((.+):(\d+):(\d+)\)/, // at function (file:line:col)
-      /\s+at (.+):(\d+):(\d+)/, // at file:line:col
-      /\s+at <anonymous> \((.+):(\d+):(\d+)\)/, // at <anonymous> (file:line:col)
-    ];
+  const translatedLines = lines.map(translateSingleStackLine);
 
-    let match = null;
-    for (const pattern of patterns) {
-      match = line.match(pattern);
-      if (match) break;
-    }
-
-    if (!match) return line;
-
-    const filePath = match[1];
-    const originalLine = parseInt(match[2], 10);
-    // Column is preserved but not used in current transformation
-    // const column = match[3];
-
-    console.log(`🔍 Translating: ${filePath}:${originalLine}`);
-
-    // Look up source map for this file
-    const mappings = sourceMapRegistry.get(filePath);
-    if (!mappings || mappings.length === 0) {
-      console.log(`❌ No source map found for ${filePath}`);
-      return line;
-    }
-
-    // Find the correct mapping - look for the entry that contains our generated line
-    let bestMapping = null;
-    for (const mapping of mappings) {
-      if (originalLine >= mapping.generatedLine) {
-        bestMapping = mapping;
-        break;
-      }
-    }
-
-    if (!bestMapping) {
-      console.log(`❌ No mapping found for line ${originalLine} in ${filePath}`);
-      return line;
-    }
-
-    // Calculate the original line number
-    const offsetWithinMapping = originalLine - bestMapping.generatedLine;
-    const originalLineNumber = bestMapping.originalLine + offsetWithinMapping;
-
-    // Replace the line number in the stack trace
-    return line.replace(`:${originalLine}:`, `:${originalLineNumber}:`);
-  });
-
-  // Create new error with translated stack trace
   const translatedError = new Error(error.message);
   translatedError.stack = translatedLines.join('\n');
   translatedError.name = error.name;
 
-  // Copy other properties
   Object.assign(translatedError, error);
-
   return translatedError;
 }
 
-// Set up error boundaries and automatic stack trace translation
-function setupErrorBoundaries() {
-  // Monkey-patch console.error to translate stack traces
-  const originalConsoleError = console.error;
-  console.error = (...args: unknown[]) => {
-    const translatedArgs = args.map((arg) => {
-      if (arg instanceof Error && arg.stack) {
-        const translated = translateStackTrace(arg);
-        return translated;
+function wrapTestFunction(): void {
+  if (!globalThis.test || globalThis.originalTest) return;
+
+  console.log('🛡️  Setting up test error boundaries...');
+
+  globalThis.originalTest = globalThis.test;
+  globalThis.test = function (name: string, fn: () => void | Promise<void>) {
+    if (!globalThis.originalTest) {
+      throw new Error('Original test function is undefined');
+    }
+
+    return globalThis.originalTest(name, async () => {
+      try {
+        await fn();
+      } catch (error) {
+        if (error instanceof Error) {
+          const translated = translateStackTrace(error);
+          throw translated;
+        }
+        throw error;
       }
-      return arg;
     });
-    originalConsoleError.apply(console, translatedArgs);
   };
 
-  // Set up process error handlers with source map translation
+  console.log('🛡️  Test error boundaries activated with source map translation!');
+}
+
+function setupProcessErrorHandlers(): void {
   process.removeAllListeners('uncaughtException');
   process.removeAllListeners('unhandledRejection');
 
@@ -123,32 +134,220 @@ function setupErrorBoundaries() {
     }
     process.exit(1);
   });
-
-  // Wrap test functions for automatic error translation
-  if (typeof globalThis.test === 'function' && !globalThis.originalTest) {
-    console.log('🛡️  Setting up test error boundaries...');
-
-    globalThis.originalTest = globalThis.test;
-    globalThis.test = function (name: string, fn: () => void | Promise<void>) {
-      return globalThis.originalTest(name, async () => {
-        try {
-          await fn();
-        } catch (error) {
-          if (error instanceof Error) {
-            const translated = translateStackTrace(error);
-            throw translated;
-          }
-          throw error;
-        }
-      });
-    };
-
-    console.log('🛡️  Test error boundaries activated with source map translation!');
-  }
 }
 
-// Call setup when this module is loaded
-setupErrorBoundaries();
+function patchConsoleError(): void {
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    const translatedArgs = args.map((arg) => {
+      if (arg instanceof Error && arg.stack) {
+        return translateStackTrace(arg);
+      }
+      return arg;
+    });
+    originalConsoleError.apply(console, translatedArgs);
+  };
+}
+
+;(
+  function setupErrorBoundaries() {
+    patchConsoleError();
+    setupProcessErrorHandlers();
+    wrapTestFunction();
+  }
+)()
+
+function shouldSkipTransformation(args: any, content: string): boolean {
+  return (
+    args.path.includes('.spec.') ||
+    args.path.includes('/testing/') ||
+    content.includes('☢️ NUCLEAR')
+  );
+}
+
+function extractShebang(content: string): [string, string] {
+  if (!content.startsWith('#!')) return ['', content];
+
+  const firstNewline = content.indexOf('\n');
+  if (firstNewline === -1) return ['', content];
+
+  return [
+    content.slice(0, firstNewline + 1),
+    content.slice(firstNewline + 1)
+  ];
+}
+
+interface ImportReplacement {
+  original: string;
+  replacement: string;
+}
+
+function parseImportNames(importStatement: string): [string[], boolean, boolean, boolean] {
+  const trimmed = importStatement.trim();
+  let importNames: string[] = [];
+  let isDestructured = false;
+  let isNamespace = false;
+  let isDefault = false;
+
+  if (trimmed.startsWith('{') && trimmed.includes('}')) {
+    isDestructured = true;
+    const destructuredMatch = trimmed.match(/\{\s*([^}]+)\s*\}/);
+    if (destructuredMatch) {
+      importNames = destructuredMatch[1].split(',').map((name) => name.trim());
+    }
+  } else if (trimmed.includes('* as ')) {
+    isNamespace = true;
+    const namespaceMatch = trimmed.match(/\*\s+as\s+(\w+)/);
+    if (namespaceMatch) {
+      importNames = [namespaceMatch[1]];
+    }
+  } else {
+    isDefault = true;
+    const defaultMatch = trimmed.match(/^(\w+)/);
+    if (defaultMatch) {
+      importNames = [defaultMatch[1]];
+    }
+  }
+
+  return [importNames, isDestructured, isNamespace, isDefault];
+}
+
+function createDestructuredReplacement(
+  fullMatch: string,
+  moduleName: string,
+  importNames: string[]
+): string {
+  const moduleVar = `__nuclear_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const individualProxies = importNames
+    .map(name => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`)
+    .join('\n');
+
+  return `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${moduleVar} = await import('${moduleName}');\n${individualProxies}`;
+}
+
+function createDefaultReplacement(
+  fullMatch: string,
+  moduleName: string,
+  importName: string
+): string {
+  const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  return `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __moxxy__(${importName}, '${importName}', import.meta);`;
+}
+
+function processImports(contentToTransform: string): [ImportReplacement[], Map<string, string>, number] {
+  const importMatches = contentToTransform.matchAll(
+    /^import\s+([^'"]*)\s+from\s+['"]([^'"]+)['"];?\s*$/gm
+  );
+  
+  const importReplacements: ImportReplacement[] = [];
+  const declaredNuclearVars = new Set<string>();
+  const moduleNamesMap = new Map<string, string>();
+  let generatedLineOffset = 0;
+
+  for (const match of importMatches) {
+    const [fullMatch, importStatement, moduleName] = match;
+
+    // Skip internal imports and already transformed
+    if (moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun') {
+      continue;
+    }
+
+    const [importNames, isDestructured, isNamespace, isDefault] = parseImportNames(importStatement);
+    const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    // Store mapping for later replacement
+    if (!isDestructured && importNames.length > 0) {
+      moduleNamesMap.set(moduleName, importNames[0]);
+    }
+
+    // Only add nuclear treatment if we haven't declared this variable yet
+    if (declaredNuclearVars.has(varName)) continue;
+    
+    declaredNuclearVars.add(varName);
+
+    let replacementCode: string;
+    let addedLines: number;
+
+    if (isDestructured) {
+      replacementCode = createDestructuredReplacement(fullMatch, moduleName, importNames);
+      addedLines = 2 + importNames.length; // comment + module import + individual proxies
+    } else {
+      const importName = importNames[0] || moduleName;
+      replacementCode = createDefaultReplacement(fullMatch, moduleName, importName);
+      addedLines = 2; // comment + proxy declaration
+    }
+
+    generatedLineOffset += addedLines;
+    importReplacements.push({
+      original: fullMatch,
+      replacement: replacementCode,
+    });
+  }
+
+  return [importReplacements, moduleNamesMap, generatedLineOffset];
+}
+
+function replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string>): string {
+  let transformedContent = content;
+
+  for (const [moduleName, importName] of moduleNamesMap) {
+    const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    // Function calls with parentheses
+    const functionCallRegex = new RegExp(
+      `(?<!\\.)\\b${importName}\\.[a-zA-Z_][a-zA-Z0-9_]*\\s*\\(`,
+      'g'
+    );
+
+    transformedContent = transformedContent.replace(functionCallRegex, (match) => {
+      return match.replace(importName, `(${varName} || ${importName})`);
+    });
+
+    // Specific property access
+    const specificProps = ['env', 'argv', 'cwd', 'version', 'platform'];
+    for (const prop of specificProps) {
+      const propRegex = new RegExp(`(?<!\\.)\\b${importName}\\.${prop}\\b`, 'g');
+      transformedContent = transformedContent.replace(propRegex, (match) => {
+        return `(${varName} || ${importName}).${prop}`;
+      });
+    }
+  }
+
+  return transformedContent;
+}
+
+function createSourceMap(
+  shebang: string,
+  contentToTransform: string,
+  args: any,
+  generatedLineOffset: number
+): void {
+  const sourceMapEntries: SourceMapEntry[] = [];
+  const originalLines = (shebang + contentToTransform).split('\n');
+  const shebangLines = shebang ? 1 : 0;
+  const nuclearSetupLines = 6;
+
+  for (let i = 0; i < originalLines.length; i++) {
+    sourceMapEntries.push({
+      originalLine: i + 1, // 1-indexed
+      generatedLine: i + 1 + shebangLines + nuclearSetupLines + generatedLineOffset,
+      source: args.path,
+    });
+  }
+
+  sourceMapRegistry.set(args.path, sourceMapEntries);
+}
+
+function createNuclearSetup(): string {
+  return `// ☢️ NUCLEAR DEPENDENCIES ACTIVATED
+const { $ } = await import('${process.cwd()}/src/testing/moxxy.ts');
+const __registered = $(import.meta); // Register this module for nuclear injection
+
+// Import the proxy helper
+const { __moxxy__ } = await import('${process.cwd()}/src/testing/moxxy.ts');
+
+`;
+}
 
 // Register as Bun plugin for automatic transformation
 plugin({
@@ -160,132 +359,18 @@ plugin({
     build.onLoad({ filter: /\/src\/.*\.ts$/ }, async (args) => {
       const content = await Bun.file(args.path).text();
 
-      // Skip test files, already transformed files, and testing modules
-      if (
-        args.path.includes('.spec.') ||
-        args.path.includes('/testing/') ||
-        content.includes('☢️ NUCLEAR')
-      ) {
+      if (shouldSkipTransformation(args, content)) {
         return {
           contents: content,
           loader: 'tsx',
         };
       }
 
-      // Check for shebang and preserve it
-      let shebang = '';
-      let contentToTransform = content;
-      if (content.startsWith('#!')) {
-        const firstNewline = content.indexOf('\n');
-        if (firstNewline !== -1) {
-          shebang = content.slice(0, firstNewline + 1);
-          contentToTransform = content.slice(firstNewline + 1);
-        }
-      }
+      const [shebang, contentToTransform] = extractShebang(content);
+      const [importReplacements, moduleNamesMap, generatedLineOffset] = processImports(contentToTransform);
 
-      // Simple AST-free transformation approach
+      // Apply import transformations
       let transformedContent = contentToTransform;
-
-      // Track source map entries
-      const sourceMapEntries: SourceMapEntry[] = [];
-      let generatedLineOffset = 0;
-
-      // More precise regex that only matches actual import statements at line start
-      // This avoids matching imports in comments or strings
-      const importMatches = contentToTransform.matchAll(
-        /^import\s+([^'"]*)\s+from\s+['"]([^'"]+)['"];?\s*$/gm
-      );
-      const importReplacements = [];
-      const declaredNuclearVars = new Set<string>(); // Track declared nuclear variables
-      const moduleNamesMap = new Map<string, string>(); // Track module name to import name mapping
-
-      for (const match of importMatches) {
-        const [fullMatch, importStatement, moduleName] = match;
-
-        // Skip internal imports and already transformed
-        if (moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun') {
-          continue;
-        }
-
-        // Handle different import types
-        let importNames: string[] = [];
-        let isDestructured = false;
-
-        let isNamespace = false;
-
-        let isDefault = false;
-
-        const trimmed = importStatement.trim();
-
-        if (trimmed.startsWith('{') && trimmed.includes('}')) {
-          // Destructured import: { a, b, c } from 'module'
-          isDestructured = true;
-          const destructuredMatch = trimmed.match(/\{\s*([^}]+)\s*\}/);
-          if (destructuredMatch) {
-            importNames = destructuredMatch[1].split(',').map((name) => name.trim());
-          }
-        } else if (trimmed.includes('* as ')) {
-          // Namespace import: * as name from 'module'
-          isNamespace = true; // Note: Used for categorization but not directly in logic yet
-          const namespaceMatch = trimmed.match(/\*\s+as\s+(\w+)/);
-          if (namespaceMatch) {
-            importNames = [namespaceMatch[1]];
-          }
-        } else {
-          // Default import: name from 'module'
-          isDefault = true; // Note: Used for categorization but not directly in logic yet
-          const defaultMatch = trimmed.match(/^(\w+)/);
-          if (defaultMatch) {
-            importNames = [defaultMatch[1]];
-          }
-        }
-
-        // Create unique variable name for this module
-        const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-        // Store mapping for later replacement
-        if (!isDestructured) {
-          // For default/namespace imports, map the import name to module for replacement
-          moduleNamesMap.set(moduleName, importNames[0] || moduleName);
-        }
-        // Destructured imports don't need mapping since the variables are already proxies
-
-        // Only add nuclear treatment if we haven't declared this variable yet
-        if (!declaredNuclearVars.has(varName)) {
-          declaredNuclearVars.add(varName);
-
-          let replacementCode;
-          if (isDestructured) {
-            // For destructured imports, create individual proxies for each function
-            const moduleVar = `__nuclear_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            const individualProxies = importNames
-              .map(
-                (name) => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`
-              )
-              .join('\n');
-
-            replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${moduleVar} = await import('${moduleName}');\n${individualProxies}`;
-
-            // Track source map: original import line stays the same, but we're adding lines
-            const addedLines = 2 + importNames.length; // comment + module import + individual proxies
-            generatedLineOffset += addedLines;
-          } else {
-            // For default/namespace imports
-            const importName = importNames[0];
-            replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __moxxy__(${importName}, '${importName}', import.meta);`;
-
-            // Track source map: adding 2 lines (comment + proxy declaration)
-            generatedLineOffset += 2;
-          }
-
-          importReplacements.push({
-            original: fullMatch,
-            replacement: replacementCode,
-          });
-        }
-      }
-
-      // Apply import transformations first
       for (const replacement of importReplacements) {
         transformedContent = transformedContent.replace(
           replacement.original,
@@ -293,66 +378,14 @@ plugin({
         );
       }
 
-      // Replace direct usage with nuclear proxies - ULTRA CONSERVATIVE!
-      for (const [key, importName] of moduleNamesMap) {
-        const moduleName = key;
-        const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      // Replace direct usage with nuclear proxies
+      transformedContent = replaceRuntimeUsage(transformedContent, moduleNamesMap);
 
-        // ONLY replace very specific patterns that are definitely runtime usage
-        // Pattern 1: Function calls with parentheses
-        // Example: fs.existsSync(...), path.join(...), process.cwd()
-        // BUT NOT: entry.path.toString() or obj.fs.method()
-        const functionCallRegex = new RegExp(
-          `(?<!\\.)\\b${importName}\\.[a-zA-Z_][a-zA-Z0-9_]*\\s*\\(`,
-          'g'
-        );
+      // Create source map
+      createSourceMap(shebang, contentToTransform, args, generatedLineOffset);
 
-        transformedContent = transformedContent.replace(functionCallRegex, (match) => {
-          return match.replace(importName, `(${varName} || ${importName})`);
-        });
-
-        // Pattern 2: Very specific property access (only common runtime properties)
-        // Only replace things like process.env, process.argv, process.cwd
-        const specificProps = ['env', 'argv', 'cwd', 'version', 'platform'];
-        for (const prop of specificProps) {
-          const propRegex = new RegExp(`(?<!\\.)\\b${importName}\\.${prop}\\b`, 'g');
-          transformedContent = transformedContent.replace(propRegex, (match) => {
-            return `(${varName} || ${importName}).${prop}`;
-          });
-        }
-      }
-
-      // Inject nuclear setup at the top (after shebang if present)
-      // This calls $(import.meta) to register with the main testing system
-      const nuclearSetup = `// ☢️ NUCLEAR DEPENDENCIES ACTIVATED
-const { $ } = await import('${process.cwd()}/src/testing/moxxy.ts');
-const __registered = $(import.meta); // Register this module for nuclear injection
-
-// Import the proxy helper
-const { __moxxy__ } = await import('${process.cwd()}/src/testing/moxxy.ts');
-
-`;
-
-      // The nuclear setup adds 6 lines
-      const nuclearSetupLines = 6;
-
-      // Create source map entries
-      const originalLines = (shebang + contentToTransform).split('\n');
-      const shebangLines = shebang ? 1 : 0;
-
-      // Map all lines after the nuclear setup
-      for (let i = 0; i < originalLines.length; i++) {
-        sourceMapEntries.push({
-          originalLine: i + 1, // 1-indexed
-          generatedLine: i + 1 + shebangLines + nuclearSetupLines + generatedLineOffset,
-          source: args.path,
-        });
-      }
-
-      // Store source map for this file
-      sourceMapRegistry.set(args.path, sourceMapEntries);
-
-      // Combine shebang + nuclear setup + transformed content
+      // Combine all parts
+      const nuclearSetup = createNuclearSetup();
       const finalContent = shebang + nuclearSetup + transformedContent;
 
       return {
