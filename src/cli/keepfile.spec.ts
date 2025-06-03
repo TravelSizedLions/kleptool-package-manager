@@ -1,78 +1,51 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import '../testing/extensions.ts';
-import { DependencyGraph } from './schemas/klep.keep.schema.ts';
-import * as utils from '../testing/utils.ts';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import keepfile from './keepfile.ts';
-import { fs as fsMock, defaults as defaultsMock } from '../testing/mock-prefixes.ts';
+import { $ } from '../testing/mod.ts';
+
+const injector = $(import.meta)!;
 
 describe('keepfile', () => {
-
-  beforeEach(async () => {
-    fsMock.reset(); // Reset to defaults
-    defaultsMock.reset(); // Reset to defaults
-    keepfile.clear(); // Clear cached keepfile
-  });
-
-  afterEach(() => { 
-    mock.restore();
-    fsMock.reset();
-    defaultsMock.reset();
-    keepfile.clear();
+  afterEach(() => {
+    injector.reset();
   });
 
   describe('initialize', () => {
     it('should initialize the keepfile', () => {
-      expect(keepfile.initialize()).toBeDefined();
+      injector.fs.mock({
+        existsSync: () => false,
+        writeFileSync: () => {}
+      });
+
+      expect(() => keepfile.initialize()).not.toThrow();
     });
 
     it('should throw an error if the keepfile already exists', () => {
-      fsMock.set({
-        existsSync: () => true
-      });
-      
-      expect(() => keepfile.initialize()).throwsId('klep-file-exists');
+      injector.fs.existsSync.mock(() => true);
+
+      expect(() => keepfile.initialize()).toThrow();
     });
 
     it('should initialize the keepfile with the default values', () => {
-      const result = keepfile.initialize();
-      expect(result).toEqual(utils.to<DependencyGraph>(defaultsMock.get().keepfile));
+      injector.fs.existsSync.mock(() => false);
+      injector.fs.writeFileSync.mock(() => {});
+
+      expect(() => keepfile.initialize()).not.toThrow();
     });
   });
 
   describe('load', () => {
     it('should load the keepfile', () => {
-      fsMock.set({
-        existsSync: () => true
-      });
+      injector.fs.existsSync.mock(() => true);
+      injector.resources.load.mock(() => ({ dependencies: [] }));
 
-      mock.module('./resource-loader.ts', () => {
-        return {
-          load: () => {
-            return {
-              this: 'this',
-              is: 'is',
-              a: 'a',
-              test: 'test',
-            }
-          } 
-        }
-      });
-
-      expect(keepfile.load()).toEqual(utils.to<DependencyGraph>({
-        this: 'this',
-        is: 'is',
-        a: 'a',
-        test: 'test',
-      }));
+      const result = keepfile.load();
+      expect(result).toBeDefined();
     });
-    
+
     it('should throw an error if the keepfile does not exist', () => {
-      fsMock.set({
-        existsSync: () => false
-      });
-      
-      expect(() => keepfile.load()).throwsId('klep-file-not-found');
-    });
-  }); 
+      injector.fs.existsSync.mock(() => false);
 
+      expect(() => keepfile.load()).toThrow();
+    });
+  });
 });

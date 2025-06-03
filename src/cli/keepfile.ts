@@ -1,4 +1,4 @@
-import fs from './file.ts';
+import fs from 'node:fs';
 import path from 'node:path';
 import kerror from './kerror.ts';
 import json5 from 'json5';
@@ -7,10 +7,9 @@ import depsfile from './depsfile.ts';
 import { Dependency } from './schemas/klep.deps.schema.ts';
 import { klepKeepfileSchema, type DependencyGraph } from './schemas/klep.keep.schema.ts';
 import * as _ from 'es-toolkit';
-import _defaults from './defaults.ts';
+import defaults from './defaults.ts';
 import * as resources from './resource-loader.ts';
 
-const defaults: DependencyGraph = _defaults.keepfile;
 
 let __keep: DependencyGraph | undefined = undefined;
 
@@ -21,8 +20,8 @@ function initialize() {
     });
   }
 
-  fs.writeFileSync(path.join(process.cwd(), 'klep.keep'), json5.stringify(defaults, null, 2));
-  return defaults;
+  fs.writeFileSync(path.join(process.cwd(), 'klep.keep'), json5.stringify(defaults.keepfile, null, 2));
+  return defaults.keepfile;  
 }
 
 function ensureDependencyFolder(name: string, dep: Dependency) {
@@ -34,7 +33,7 @@ function ensureDependencyFolder(name: string, dep: Dependency) {
     fs.mkdirSync(path.join(process.cwd(), dep.folder, name), {
       recursive: true,
     });
-  }
+  } 
 }
 
 function load(): DependencyGraph {

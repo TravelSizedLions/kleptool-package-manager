@@ -1,20 +1,20 @@
 import { describe, it, expect, mock, afterEach, beforeEach } from 'bun:test';
 import { z } from 'zod';
 import * as resourceLoader from './resource-loader.ts';
-import mod from '../testing/mod.ts';
-import { readFileSync } from 'node:fs';
+import { $ } from '../testing/mod.ts';
 
-const modder = mod(import.meta)
+const injector = $(import.meta)!;
 
 describe('resource-loader', () => {
-  afterEach(() => { 
-    mock.restore();
+  afterEach(() => { ``
+    injector.reset();
   });
 
   describe('load', () => {
-    it.only('should load a resource if it exists', () => {
+    it('should load a resource if it exists', () => {
       const resourcePath = 'test.json';
-      modder.mock(readFileSync, () => {test: 'test'})
+      
+      injector.fs.readFileSync.mock(() => '{"test": "test"}');
 
       const resource = resourceLoader.load(
         resourcePath, 

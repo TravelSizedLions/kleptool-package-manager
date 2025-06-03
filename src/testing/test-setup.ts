@@ -1,4 +1,2 @@
-import { beforeEach } from 'bun:test';
-import modder from './mod.ts';
-
-beforeEach(() => modder.reset())
+// Global test setup for nuclear dependency injection
+console.log('☢️  Nuclear testing system armed and ready!');
