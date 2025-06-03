@@ -12,7 +12,7 @@ describe('process', () => {
   describe('exec', () => {
     it('should execute a command', async () => {
       // Mock the child_process.exec function instead of injector.exec
-      injector.exec.mock((_command: string, _options: unknown, _callback?: unknown) => {
+      injector.exec.mock(() => {
         // Create proper mock streams with EventEmitter functionality
         const mockStream = {
           on: (event: string, handler: (...args: unknown[]) => void) => {

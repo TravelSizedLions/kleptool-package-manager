@@ -1,9 +1,16 @@
 import { plugin } from 'bun';
 
+// Bun global is provided by runtime
+declare const Bun: {
+  file(path: string): { text(): Promise<string> };
+};
+
 // Global declarations for test function wrapping
+type TestFunction = (name: string, fn: () => void | Promise<void>) => unknown;
+
 declare global {
-  var originalTest: any;
-  var test: any;
+  var originalTest: TestFunction | undefined;
+  var test: TestFunction | undefined;
 }
 
 // Don't create a separate injector - use the main testing system
@@ -40,7 +47,8 @@ export function translateStackTrace(error: Error): Error {
 
     const filePath = match[1];
     const originalLine = parseInt(match[2], 10);
-    const column = match[3];
+    // Column is preserved but not used in current transformation
+    // const column = match[3];
 
     console.log(`🔍 Translating: ${filePath}:${originalLine}`);
 
@@ -88,7 +96,7 @@ export function translateStackTrace(error: Error): Error {
 function setupErrorBoundaries() {
   // Monkey-patch console.error to translate stack traces
   const originalConsoleError = console.error;
-  console.error = (...args: any[]) => {
+  console.error = (...args: unknown[]) => {
     const translatedArgs = args.map((arg) => {
       if (arg instanceof Error && arg.stack) {
         const translated = translateStackTrace(arg);
@@ -205,7 +213,9 @@ plugin({
         // Handle different import types
         let importNames: string[] = [];
         let isDestructured = false;
+
         let isNamespace = false;
+
         let isDefault = false;
 
         const trimmed = importStatement.trim();
@@ -219,14 +229,14 @@ plugin({
           }
         } else if (trimmed.includes('* as ')) {
           // Namespace import: * as name from 'module'
-          isNamespace = true;
+          isNamespace = true; // Note: Used for categorization but not directly in logic yet
           const namespaceMatch = trimmed.match(/\*\s+as\s+(\w+)/);
           if (namespaceMatch) {
             importNames = [namespaceMatch[1]];
           }
         } else {
           // Default import: name from 'module'
-          isDefault = true;
+          isDefault = true; // Note: Used for categorization but not directly in logic yet
           const defaultMatch = trimmed.match(/^(\w+)/);
           if (defaultMatch) {
             importNames = [defaultMatch[1]];

@@ -15,10 +15,10 @@ enum Type {
 let translateStackTrace: ((error: Error) => Error) | null = null;
 
 // Lazy load to avoid circular dependencies
-function getTranslateStackTrace() {
+async function getTranslateStackTrace() {
   if (!translateStackTrace) {
     try {
-      const transformPlugin = require('../testing/transform-plugin.ts');
+      const transformPlugin = await import('../testing/transform-plugin.ts');
       translateStackTrace = transformPlugin.translateStackTrace || ((e: Error) => e);
     } catch {
       // If the testing system isn't available, just use identity function
@@ -112,7 +112,7 @@ function boundary(fn: (...args: any[]) => Promise<void> | void) {
       // Translate stack traces for better debugging
       let processedError = error;
       if (error instanceof Error) {
-        const translator = getTranslateStackTrace();
+        const translator = await getTranslateStackTrace();
         if (translator) {
           processedError = translator(error);
         }

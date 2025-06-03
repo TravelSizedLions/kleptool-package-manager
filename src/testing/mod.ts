@@ -12,36 +12,39 @@ const mockRegistry = new Map<string, Map<string, unknown>>();
 const moduleCache = new Map<string, unknown>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const importValueToProxy = new WeakMap<any, any>();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const importValueToModuleInfo = new WeakMap<any, { modulePath: string; importName: string }>();
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _importValueToModuleInfo = new WeakMap<object, { modulePath: string; importName: string }>();
 
 // Monkey patch console.error to automatically translate stack traces
 const originalConsoleError = console.error;
-console.error = (...args: any[]) => {
-  const translatedArgs = args.map((arg) => {
+console.error = (...args: unknown[]) => {
+  const translatedArgs = args.map(async (arg) => {
     if (arg instanceof Error) {
       // Import here to avoid circular dependency
-      const { translateStackTrace } = require('./transform-plugin.ts');
+      const { translateStackTrace } = await import('./transform-plugin.ts');
       return translateStackTrace(arg);
     }
     return arg;
   });
-  originalConsoleError.apply(console, translatedArgs);
+  Promise.all(translatedArgs).then((resolved) => {
+    originalConsoleError.apply(console, resolved);
+  });
 };
 
 // Monkey patch process.on for uncaught exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', async (error) => {
   // Import here to avoid circular dependency
-  const { translateStackTrace } = require('./transform-plugin.ts');
+  const { translateStackTrace } = await import('./transform-plugin.ts');
   const translatedError = translateStackTrace(error);
   console.error('Uncaught Exception:', translatedError);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', async (reason) => {
   if (reason instanceof Error) {
     // Import here to avoid circular dependency
-    const { translateStackTrace } = require('./transform-plugin.ts');
+    const { translateStackTrace } = await import('./transform-plugin.ts');
     const translatedError = translateStackTrace(reason);
     console.error('Unhandled Rejection:', translatedError);
   } else {
@@ -493,7 +496,9 @@ export function __createModuleProxy(originalValue: any, importName: string, meta
 
 // The nuclear $ function with overloads
 export function $(meta: ImportMeta): DynamicInjector | void;
+
 export function $<T>(importValue: T): T;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function $(metaOrImport: ImportMeta | any): any {
   // If it's import.meta, handle module registration/injection
   if (metaOrImport && typeof metaOrImport === 'object' && 'url' in metaOrImport) {
@@ -536,11 +541,13 @@ export const __moduleRegistry = moduleRegistry;
 export const __mockRegistry = mockRegistry;
 
 // Legacy support - keeping the old interface for backward compatibility
-export default function mod(meta: ImportMeta) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function mod(_meta: ImportMeta) {
   // This is a simplified version for backward compatibility
   // Eventually we can phase this out in favor of the new $() system
   return {
     mark: () => {},
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     use: (dep: any) => dep,
     mock: () => {},
     reset: () => {},
@@ -558,6 +565,7 @@ export class DynamicNuclearInjector {
     this.moduleRegistry.get(moduleName)!.add(filePath);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getProxy(_moduleName: string, _importerPath: string) {
     return null;
   }
