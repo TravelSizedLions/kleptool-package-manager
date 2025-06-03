@@ -73,6 +73,29 @@ if [[ -z "${GIST_ID:-}" ]]; then
   NEW_GIST_ID=$(echo "$GIST_RESPONSE" | jq -r '.id')
   GIST_OWNER=$(echo "$GIST_RESPONSE" | jq -r '.owner.login')
   
+  # Debug: Show the actual response
+  echo "DEBUG: Gist API Response:"
+  echo "$GIST_RESPONSE" | jq '.'
+  
+  # Check for common error conditions
+  if echo "$GIST_RESPONSE" | jq -e '.message' > /dev/null; then
+    local error_message=$(echo "$GIST_RESPONSE" | jq -r '.message')
+    log_error "GitHub API error: $error_message"
+    
+    if [[ "$error_message" == *"Bad credentials"* ]]; then
+      log_error "The GITHUB_TOKEN appears to be invalid or expired."
+    elif [[ "$error_message" == *"token"* && "$error_message" == *"scope"* ]]; then
+      log_error "The GITHUB_TOKEN doesn't have the 'gist' scope required to create gists."
+      log_info "Please ensure your token has the 'gist' permission enabled."
+    fi
+    exit 1
+  fi
+  
+  if [[ "$NEW_GIST_ID" == "null" || -z "$NEW_GIST_ID" ]]; then
+    log_error "Failed to create gist - received null ID."
+    exit 1
+  fi
+  
   log_success "Created gist with ID: $NEW_GIST_ID"
   echo ""
   log_step "Setup Instructions:"
