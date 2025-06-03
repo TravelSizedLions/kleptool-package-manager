@@ -1,4 +1,4 @@
-name: Test (Linux)
+name: Ubuntu
 description: Test the project on Linux, and upload coverage to Barecheck.
 
 on:
@@ -36,3 +36,10 @@ jobs:
         operation: upload
         github_token: ${{ secrets.GITHUB_TOKEN }}
         barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
+
+    - name: Create Coverage Badges
+      uses: ./.github/actions/handle-coverage
+      with:
+        operation: badge
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        gist_id: ${{ secrets.GIST_ID }}

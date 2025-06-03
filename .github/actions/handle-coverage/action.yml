@@ -3,7 +3,7 @@ description: 'Handles uploading and comparing coverage for a pull request'
 
 inputs:
   operation:
-    description: 'The operation to perform (upload, compare)'
+    description: 'The operation to perform (upload, compare, badge)'
     required: true
     default: 'upload'
   github_token:
@@ -12,6 +12,10 @@ inputs:
     default: ''
   barecheck_token:
     description: 'Barecheck GitHub App token for code coverage reports'
+    required: false
+    default: ''
+  gist_id:
+    description: 'GitHub Gist ID for badge storage (will be created if not provided)'
     required: false
     default: ''
 
@@ -121,3 +125,20 @@ runs:
         send-summary-comment: true
         show-annotations: "warning"
         app-name: "Rust (No Baseline)"
+
+    # Badge Creation
+    - name: Extract Coverage Percentages
+      if: inputs.operation == 'badge'
+      id: coverage-percentages
+      shell: bash
+      run: ./scripts/extract-coverage.sh
+
+    - name: Create or Update Coverage Badges
+      if: inputs.operation == 'badge'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GIST_ID: ${{ inputs.gist_id }}
+        TS_COVERAGE: ${{ steps.coverage-percentages.outputs.ts_coverage }}
+        RUST_COVERAGE: ${{ steps.coverage-percentages.outputs.rust_coverage }}
+      run: ./scripts/update-coverage-badges.sh
