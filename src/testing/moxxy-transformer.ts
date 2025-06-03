@@ -154,9 +154,10 @@ function patchConsoleError(): void {
 })();
 
 function shouldSkipTransformation(args: { path: string }, content: string): boolean {
+  const normalizedPath = args.path.replace(/\\/g, '/');
   return (
-    args.path.includes('.spec.') ||
-    args.path.includes('/testing/') ||
+    normalizedPath.includes('.spec.') ||
+    normalizedPath.includes('/testing/') ||
     content.includes('☢️ NUCLEAR')
   );
 }
@@ -363,12 +364,13 @@ function createSourceMap(
 }
 
 function setupMoxxy(): string {
+  const moxxyCwd = process.cwd().replace(/\\/g, '/'); // Normalize to forward slashes for import paths
   return `// Love, Moxxy ~<3
-const { $ } = await import('${process.cwd()}/src/testing/moxxy.ts');
+const { $ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 const __registered = $(import.meta); // Register this module for nuclear injection
 
 // Import the proxy helper
-const { __moxxy__ } = await import('${process.cwd()}/src/testing/moxxy.ts');
+const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 
 `;
 }
@@ -377,7 +379,7 @@ const { __moxxy__ } = await import('${process.cwd()}/src/testing/moxxy.ts');
 plugin({
   name: 'Moxxy Dependency Injection',
   setup(build) {
-    build.onLoad({ filter: /\/src\/.*\.ts$/ }, async (args) => {
+    build.onLoad({ filter: /[\/\\]src[\/\\].*\.ts$/ }, async (args) => {
       const content = await Bun.file(args.path).text();
 
       if (shouldSkipTransformation(args, content)) {
