@@ -1,130 +1,189 @@
-import { BunPlugin } from 'bun';
-import * as ts from 'typescript';
+import { plugin } from 'bun';
 
-export const nuclearDependencyInjectionPlugin: BunPlugin = {
-  name: 'nuclear-dependency-injection',
+// Don't create a separate injector - use the main testing system
+export { __moduleRegistry, __mockRegistry } from './mod.ts';
+
+// Register as Bun plugin for automatic transformation
+plugin({
+  name: 'Nuclear Dependency Injection',
   setup(build) {
-    // Transform TypeScript files to inject dependency injection
-    build.onLoad({ filter: /\.ts$/ }, async (args) => {
-      // Skip test files and the mod system itself
-      if (args.path.includes('.spec.') || args.path.includes('testing/')) {
-        return;
+    console.log('☢️ Nuclear plugin activated - dependencies will be proxied!');
+    
+    // ONLY transform our source files - exclude test files entirely
+    build.onLoad({ filter: /\/src\/.*\.ts$/ }, async (args) => {
+      const content = await Bun.file(args.path).text();
+      
+      // Skip test files, already transformed files, and testing modules
+      if (args.path.includes('.spec.') || 
+          args.path.includes('/testing/') ||
+          content.includes('☢️ NUCLEAR')) {
+        return {
+          contents: content,
+          loader: 'tsx'
+        };
       }
-
-      const source = await Bun.file(args.path).text();
-      const transformed = transformForDependencyInjection(source, args.path);
       
-      return {
-        contents: transformed,
-        loader: 'ts',
-      };
-    });
-  },
-};
-
-function transformForDependencyInjection(source: string, filePath: string): string {
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true
-  );
-
-  const imports: Array<{
-    moduleSpecifier: string;
-    importClause: string;
-    localName: string;
-    isDefault: boolean;
-    isNamespace: boolean;
-  }> = [];
-
-  // Extract all import statements
-  function extractImports(node: ts.Node) {
-    if (ts.isImportDeclaration(node)) {
-      const moduleSpecifier = (node.moduleSpecifier as ts.StringLiteral).text;
+      // console.log(`⚡ Transforming: ${args.path}`);
       
-      if (node.importClause) {
-        // Default import: import foo from 'bar'
-        if (node.importClause.name) {
-          imports.push({
-            moduleSpecifier,
-            importClause: `import ${node.importClause.name.text} from '${moduleSpecifier}'`,
-            localName: node.importClause.name.text,
-            isDefault: true,
-            isNamespace: false,
+      // Check for shebang and preserve it
+      let shebang = '';
+      let contentToTransform = content;
+      if (content.startsWith('#!')) {
+        const firstNewline = content.indexOf('\n');
+        if (firstNewline !== -1) {
+          shebang = content.slice(0, firstNewline + 1);
+          contentToTransform = content.slice(firstNewline + 1);
+        }
+      }
+      
+      // Simple AST-free transformation approach
+      let transformedContent = contentToTransform;
+      
+      // More precise regex that only matches actual import statements at line start
+      // This avoids matching imports in comments or strings
+      const importMatches = contentToTransform.matchAll(/^import\s+([^'"]*)\s+from\s+['"]([^'"]+)['"];?\s*$/gm);
+      const importReplacements = [];
+      const declaredNuclearVars = new Set<string>(); // Track declared nuclear variables
+      const moduleNamesMap = new Map<string, string>(); // Track module name to import name mapping
+      
+      for (const match of importMatches) {
+        const [fullMatch, importStatement, moduleName] = match;
+        
+        // Skip internal imports and already transformed
+        if (moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun') {
+          continue;
+        }
+        
+        // console.log(`🔬 Found import: ${importStatement} from ${moduleName}`);
+        
+        // Handle different import types
+        let importNames: string[] = [];
+        let isDestructured = false;
+        let isNamespace = false;
+        let isDefault = false;
+        
+        const trimmed = importStatement.trim();
+        
+        if (trimmed.startsWith('{') && trimmed.includes('}')) {
+          // Destructured import: { a, b, c } from 'module'
+          isDestructured = true;
+          const destructuredMatch = trimmed.match(/\{\s*([^}]+)\s*\}/);
+          if (destructuredMatch) {
+            importNames = destructuredMatch[1].split(',').map(name => name.trim());
+          }
+        } else if (trimmed.includes('* as ')) {
+          // Namespace import: * as name from 'module'
+          isNamespace = true;
+          const namespaceMatch = trimmed.match(/\*\s+as\s+(\w+)/);
+          if (namespaceMatch) {
+            importNames = [namespaceMatch[1]];
+          }
+        } else {
+          // Default import: name from 'module'
+          isDefault = true;
+          const defaultMatch = trimmed.match(/^(\w+)/);
+          if (defaultMatch) {
+            importNames = [defaultMatch[1]];
+          }
+        }
+        
+        // Create unique variable name for this module
+        const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        
+        // Store mapping for later replacement
+        if (isDestructured) {
+          // For destructured imports, don't do any replacement - the destructured variables already come from the proxy
+          // Just track that these are destructured so we skip replacement
+          for (const importName of importNames) {
+            moduleNamesMap.set(`DESTRUCTURED_${moduleName}_${importName}`, importName);
+          }
+        } else {
+          // For default/namespace imports, map the import name
+          moduleNamesMap.set(moduleName, importNames[0] || moduleName);
+        }
+        
+        // Only add nuclear treatment if we haven't declared this variable yet
+        if (!declaredNuclearVars.has(varName)) {
+          declaredNuclearVars.add(varName);
+          
+          let replacementCode;
+          if (isDestructured) {
+            // For destructured imports, create individual proxies for each function
+            const moduleVar = `__nuclear_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            const individualProxies = importNames.map(name => 
+              `const ${name} = __createModuleProxy(${moduleVar}.${name}, '${name}', import.meta);`
+            ).join('\n');
+            
+            replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${moduleVar} = await import('${moduleName}');\n${individualProxies}`;
+          } else {
+            // For default/namespace imports
+            const importName = importNames[0];
+            replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __createModuleProxy(${importName}, '${importName}', import.meta);`;
+          }
+          
+          importReplacements.push({
+            original: fullMatch,
+            replacement: replacementCode
           });
         }
-
-        // Named/namespace imports
-        if (node.importClause.namedBindings) {
-          if (ts.isNamespaceImport(node.importClause.namedBindings)) {
-            // import * as foo from 'bar'
-            const name = node.importClause.namedBindings.name.text;
-            imports.push({
-              moduleSpecifier,
-              importClause: `import * as ${name} from '${moduleSpecifier}'`,
-              localName: name,
-              isDefault: false,
-              isNamespace: true,
-            });
-          } else if (ts.isNamedImports(node.importClause.namedBindings)) {
-            // import { a, b } from 'bar'
-            const elements = node.importClause.namedBindings.elements
-              .map(el => el.name.text)
-              .join(', ');
-            imports.push({
-              moduleSpecifier,
-              importClause: `import { ${elements} } from '${moduleSpecifier}'`,
-              localName: `{${elements}}`,
-              isDefault: false,
-              isNamespace: false,
+      }
+      
+      // Apply import transformations first
+      for (const replacement of importReplacements) {
+        transformedContent = transformedContent.replace(replacement.original, replacement.replacement);
+      }
+      
+              // Replace direct usage with nuclear proxies - ULTRA CONSERVATIVE!
+        for (const [key, importName] of moduleNamesMap) {
+          // Skip destructured imports - they already come from the proxy
+          if (key.startsWith('DESTRUCTURED_')) {
+            continue;
+          }
+          
+          const moduleName = key;
+          const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+          
+          // ONLY replace very specific patterns that are definitely runtime usage
+          // Pattern 1: Function calls with parentheses
+          // Example: fs.existsSync(...), path.join(...), process.cwd()
+          // BUT NOT: entry.path.toString() or obj.fs.method()
+          const functionCallRegex = new RegExp(`(?<!\\.)\\b${importName}\\.[a-zA-Z_][a-zA-Z0-9_]*\\s*\\(`, 'g');
+          
+          transformedContent = transformedContent.replace(functionCallRegex, (match) => {
+            // console.log(`🔄 Replacing ${importName} function calls with (${varName} || ${importName})`);
+            return match.replace(importName, `(${varName} || ${importName})`);
+          });
+          
+          // Pattern 2: Very specific property access (only common runtime properties)
+          // Only replace things like process.env, process.argv, process.cwd
+          const specificProps = ['env', 'argv', 'cwd', 'version', 'platform'];
+          for (const prop of specificProps) {
+            const propRegex = new RegExp(`(?<!\\.)\\b${importName}\\.${prop}\\b`, 'g');
+            transformedContent = transformedContent.replace(propRegex, (match) => {
+              // console.log(`🔄 Replacing ${importName}.${prop} with (${varName} || ${importName}).${prop}`);
+              return `(${varName} || ${importName}).${prop}`;
             });
           }
         }
-      }
-    }
+      
+      // Inject nuclear setup at the top (after shebang if present)
+      // This calls $(import.meta) to register with the main testing system
+      const nuclearSetup = `// ☢️ NUCLEAR DEPENDENCIES ACTIVATED
+const { $ } = await import('${process.cwd()}/src/testing/mod.ts');
+const __registered = $(import.meta); // Register this module for nuclear injection
 
-    ts.forEachChild(node, extractImports);
+// Import the proxy helper
+const { __createModuleProxy } = await import('${process.cwd()}/src/testing/mod.ts');
+
+`;
+      
+      // Combine shebang + nuclear setup + transformed content
+      const finalContent = shebang + nuclearSetup + transformedContent;
+      
+      return {
+        contents: finalContent,
+        loader: 'tsx'
+      };
+    });
   }
-
-  extractImports(sourceFile);
-
-  if (imports.length === 0) {
-    return source;
-  }
-
-  // Generate the transformed source
-  let transformed = source;
-
-  // Add the nuclear injection import at the top
-  const injectionImport = `import { $, __createModuleProxy } from '../testing/mod.ts';\n`;
-  
-  // Replace each import with a proxied version
-  for (const imp of imports) {
-    const originalImport = imp.importClause;
-    
-    if (imp.isDefault) {
-      // Transform: import foo from 'bar' 
-      // To: import __foo_original from 'bar'; const foo = __createModuleProxy(__foo_original, 'foo');
-      const proxyCode = `import __${imp.localName}_original from '${imp.moduleSpecifier}';\nconst ${imp.localName} = __createModuleProxy(__${imp.localName}_original, '${imp.localName}', import.meta);`;
-      transformed = transformed.replace(originalImport, proxyCode);
-    } else if (imp.isNamespace) {
-      // Transform: import * as foo from 'bar'
-      // To: import * as __foo_original from 'bar'; const foo = __createModuleProxy(__foo_original, 'foo');
-      const proxyCode = `import * as __${imp.localName}_original from '${imp.moduleSpecifier}';\nconst ${imp.localName} = __createModuleProxy(__${imp.localName}_original, '${imp.localName}', import.meta);`;
-      transformed = transformed.replace(originalImport, proxyCode);
-    } else {
-      // Named imports are trickier - we need to destructure from a proxy
-      const elements = imp.localName.slice(1, -1); // Remove { }
-      const proxyCode = `import * as __${imp.moduleSpecifier.replace(/[^a-zA-Z0-9]/g, '_')}_original from '${imp.moduleSpecifier}';\nconst { ${elements} } = __createModuleProxy(__${imp.moduleSpecifier.replace(/[^a-zA-Z0-9]/g, '_')}_original, '${imp.moduleSpecifier}', import.meta);`;
-      transformed = transformed.replace(originalImport, proxyCode);
-    }
-  }
-
-  // Add nuclear registration at the end
-  transformed += `\n\n// Nuclear dependency injection registration\n$(import.meta);\n`;
-
-  return injectionImport + transformed;
-}
-
-export default nuclearDependencyInjectionPlugin; 
+}); 

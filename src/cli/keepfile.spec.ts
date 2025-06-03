@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+// Import the target module FIRST to ensure nuclear registration happens
 import keepfile from './keepfile.ts';
 import { $ } from '../testing/mod.ts';
 
+// Create injector AFTER the module is imported and registered
 const injector = $(import.meta)!;
 
 describe('keepfile', () => {
   afterEach(() => {
+    keepfile.clear();
     injector.reset();
   });
 

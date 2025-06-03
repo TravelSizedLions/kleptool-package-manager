@@ -1,5 +1,6 @@
-[build]
-plugins = ["./src/testing/transform-plugin.ts"]
+# Use plugin for runtime transformations
+preload = ["./src/testing/transform-plugin.ts"]
 
+# Use plugin for test transformations  
 [test]
-preload = ["./src/testing/test-setup.ts"]
+preload = ["./src/testing/transform-plugin.ts"]

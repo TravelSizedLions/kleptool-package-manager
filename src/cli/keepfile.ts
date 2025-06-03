@@ -10,7 +10,6 @@ import * as _ from 'es-toolkit';
 import defaults from './defaults.ts';
 import * as resources from './resource-loader.ts';
 
-
 let __keep: DependencyGraph | undefined = undefined;
 
 function initialize() {

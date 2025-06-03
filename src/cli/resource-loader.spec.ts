@@ -14,7 +14,7 @@ describe('resource-loader', () => {
     it('should load a resource if it exists', () => {
       const resourcePath = 'test.json';
       
-      injector.fs.readFileSync.mock(() => '{"test": "test"}');
+      injector.readFileSync.mock(() => '{"test": "test"}');
 
       const resource = resourceLoader.load(
         resourcePath, 

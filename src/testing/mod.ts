@@ -144,37 +144,36 @@ function parseImports(filePath: string): ImportInfo[] {
 }
 
 function createMockableProxy(originalValue: any, modulePath: string, importName: string): any {
-  // If it's a primitive value, return it as-is
-  if (originalValue === null || typeof originalValue !== 'object' && typeof originalValue !== 'function') {
-    return originalValue;
-  }
-
-  const proxy = new Proxy(originalValue, {
+  const mocks = mockRegistry.get(modulePath);
+  
+  return new Proxy(originalValue, {
     get(target, prop) {
-      const mocks = mockRegistry.get(modulePath);
-      
-      // Check for full module mock
-      if (mocks?.has(importName)) {
-        const mockValue = mocks.get(importName);
-        if (typeof mockValue === 'object' && mockValue !== null) {
-          return mockValue[prop];
-        }
-        return mockValue;
+      // Check for specific property mocks first (highest priority)
+      const specificKey = `${importName}.${String(prop)}`;
+      if (mocks?.has(specificKey)) {
+        // console.log(`🎯 Found specific property mock for ${specificKey}`);
+        return mocks.get(specificKey);
       }
       
-      // Check for specific property mock
-      const propKey = `${importName}.${String(prop)}`;
-      if (mocks?.has(propKey)) {
-        return mocks.get(propKey);
+      // Check for full module mock
+      if (mocks?.has(importName) && typeof mocks.get(importName) === 'object') {
+        const fullModuleMock = mocks.get(importName);
+        if (fullModuleMock && prop in fullModuleMock) {
+          // console.log(`🎯 Found full module mock for ${importName}: ${typeof fullModuleMock}`);
+          // console.log(`🎯 Returning mocked property ${String(prop)} from full module mock`);
+          return fullModuleMock[prop];
+        }
       }
       
       const value = target[prop];
+      // console.log(`🔍 Original value for ${String(prop)}:`, typeof value);
       
       // If it's a function, wrap it in another proxy for method mocking
       if (typeof value === 'function') {
         return new Proxy(value, {
           apply(fnTarget, thisArg, argumentsList) {
             const methodKey = `${importName}.${String(prop)}`;
+            // console.log(`🚀 Function call to ${methodKey}`);
             if (mocks?.has(methodKey)) {
               const mockFn = mocks.get(methodKey);
               return mockFn.apply(thisArg, argumentsList);
@@ -200,12 +199,6 @@ function createMockableProxy(originalValue: any, modulePath: string, importName:
       return target.apply(thisArg, argumentsList);
     }
   });
-
-  // Store the mapping from original to proxy for reverse lookup
-  importValueToProxy.set(originalValue, proxy);
-  importValueToModuleInfo.set(originalValue, { modulePath, importName });
-
-  return proxy;
 }
 
 async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
@@ -213,7 +206,7 @@ async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
     return;
   }
 
-  console.log(`🚀 Initializing nuclear proxies for ${moduleInfo.filePath}`);
+  // console.log(`🚀 Initializing nuclear proxies for ${moduleInfo.filePath}`);
   
   for (const importInfo of moduleInfo.imports) {
     try {
@@ -237,7 +230,7 @@ async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
       const proxy = createMockableProxy(importedValue, moduleInfo.filePath, importInfo.localName);
       moduleInfo.proxies.set(importInfo.localName, proxy);
       
-      console.log(`✨ Created nuclear proxy for ${importInfo.localName} from ${importInfo.moduleSpecifier}`);
+      // console.log(`✨ Created nuclear proxy for ${importInfo.localName} from ${importInfo.moduleSpecifier}`);
       
     } catch (error) {
       console.warn(`❌ Failed to create proxy for ${importInfo.localName}:`, error);
@@ -245,7 +238,7 @@ async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
   }
   
   moduleInfo.isInitialized = true;
-  console.log(`💥 Nuclear initialization complete for ${moduleInfo.filePath}`);
+  // console.log(`💥 Nuclear initialization complete for ${moduleInfo.filePath}`);
 }
 
 async function registerModule(meta: ImportMeta): Promise<void> {
@@ -256,7 +249,7 @@ async function registerModule(meta: ImportMeta): Promise<void> {
     return; // Already registered
   }
 
-  console.log(`☢️  Registering module for nuclear injection: ${normalizedPath}`);
+  // console.log(`☢️  Registering module for nuclear injection: ${normalizedPath}`);
   
   const imports = parseImports(filePath);
   const moduleInfo: ModuleInfo = {
@@ -299,7 +292,7 @@ function createMockableImportProxy(originalValue: any, importName: string, modul
       });
       
       proxiedFn.mock = (mockFn: any) => {
-        console.log(`🎭 Mocking function ${path}`);
+        // console.log(`🎭 Mocking function ${path}`);
         mocks.set(path, mockFn);
       };
       
@@ -311,7 +304,7 @@ function createMockableImportProxy(originalValue: any, importName: string, modul
         get(target, prop) {
           if (prop === 'mock') {
             return (mockObj: any) => {
-              console.log(`🎭 Mocking object ${path}`);
+              // console.log(`🎭 Mocking object ${path}`);
               mocks.set(path, mockObj);
             };
           }
@@ -342,7 +335,7 @@ function createMockableImportProxy(originalValue: any, importName: string, modul
     wrapper.valueOf = () => value;
     wrapper.toString = () => String(value);
     wrapper.mock = (mockValue: any) => {
-      console.log(`🎭 Mocking primitive ${path}`);
+      // console.log(`🎭 Mocking primitive ${path}`);
       mocks.set(path, mockValue);
     };
     
@@ -354,7 +347,15 @@ function createMockableImportProxy(originalValue: any, importName: string, modul
 
 function createTypeSafeDependencyInjector(meta: ImportMeta): DynamicInjector {
   const filePath = fileURLToPath(meta.url);
-  const targetPath = normalizeModulePath(filePath);
+  const testPath = normalizeModulePath(filePath);
+  
+  // For test files, target the corresponding source module
+  let targetPath = testPath;
+  if (testPath.includes('.spec')) {
+    targetPath = testPath.replace('.spec', '');
+  }
+  
+  console.log(`🎯 Test injector targeting: ${targetPath} (from test: ${testPath})`);
   
   if (!moduleRegistry.has(targetPath)) {
     throw new Error(`Module ${targetPath} not registered for injection. Make sure to call $(import.meta) in the target module first.`);
@@ -499,4 +500,23 @@ export default function mod(meta: ImportMeta) {
     mock: () => {},
     reset: () => {}
   };
+}
+
+// Export the injector class for the plugin
+export class DynamicNuclearInjector {
+  private moduleRegistry = new Map<string, Set<string>>();
+  
+  registerModule(moduleName: string, filePath: string) {
+    console.log(`☢️ Registering nuclear module: ${moduleName} from ${filePath}`);
+    if (!this.moduleRegistry.has(moduleName)) {
+      this.moduleRegistry.set(moduleName, new Set());
+    }
+    this.moduleRegistry.get(moduleName)!.add(filePath);
+  }
+  
+  getProxy(moduleName: string, importerPath: string) {
+    console.log(`🔬 Getting nuclear proxy for ${moduleName} from ${importerPath}`);
+    // For now, return null - actual proxy creation will be handled by existing system
+    return null;
+  }
 }
