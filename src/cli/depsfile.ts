@@ -121,7 +121,7 @@ const depsfile = {
   addDependency,
   exists,
   save,
-  defaults,
+  defaults: defaults.depsfile,
   clear,
 };
 
