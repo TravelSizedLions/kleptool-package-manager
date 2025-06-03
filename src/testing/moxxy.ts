@@ -9,41 +9,6 @@ const moduleRegistry = new Map<string, ModuleInfo>();
 const mockRegistry = new Map<string, Map<string, unknown>>();
 const moduleCache = new Map<string, Module>();
 
-async function __translate(error: Error) {
-  const plugin = await import('./moxxy-transformer.ts');
-  return plugin.translateStackTrace(error);
-}
-
-// Monkey patch console.error to automatically translate stack traces
-const originalConsoleError = console.error;
-console.error = (...args: unknown[]) => {
-  const translatedArgs = args.map(async (arg) => {
-    if (arg instanceof Error) {
-      return __translate(arg);
-    }
-
-    return arg;
-  });
-  Promise.all(translatedArgs).then((resolved) => {
-    originalConsoleError.apply(console, resolved);
-  });
-};
-
-// Monkey patch process.on for uncaught exceptions
-process.on('uncaughtException', async (error) => {
-  console.error('Uncaught Exception:', await __translate(error));
-  process.exit(1);
-});
-
-process.on('unhandledRejection', async (reason) => {
-  if (!(reason instanceof Error)) {
-    console.error('Unhandled Rejection:', reason);
-    return;
-  }
-
-  console.error('Unhandled Rejection:', await __translate(reason));
-});
-
 interface ImportInfo {
   moduleSpecifier: string;
   importName: string;
