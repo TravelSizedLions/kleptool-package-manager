@@ -30,10 +30,6 @@ jobs:
     - name: Test and Generate Coverage
       run: klep coverage
 
-    - name: Print Key
-      run: echo ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
-      shell: bash
-
     - name: Compare Coverage
       uses: ./.github/actions/handle-coverage
       with:
