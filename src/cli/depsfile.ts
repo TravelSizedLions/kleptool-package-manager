@@ -6,10 +6,9 @@ import { DepsFile, klepDepsSchema, Dependency } from './schemas/klep.deps.schema
 import * as resources from './resource-loader.ts';
 import process from 'node:process';
 import * as _ from 'es-toolkit';
-import _defaults from './defaults.ts';
+import defaults from './defaults.ts';
 
-const defaults: DepsFile = _defaults.depsfile.entry;
-let __deps: DepsFile = defaults;
+let __deps: DepsFile = defaults.depsfile.entry;
 
 export function load(): DepsFile {
   if (__deps) {
@@ -35,7 +34,7 @@ export function addDependency(name: string, dep: Dependency, dev: boolean = fals
 
   if (
     (dep.folder && __deps.dependencyFolder === dep.folder) ||
-    (!__deps.dependencyFolder && dep.folder === defaults.dependencyFolder)
+    (!__deps.dependencyFolder && dep.folder === defaults.depsfile.entry.dependencyFolder)
   ) {
     delete dep.folder;
   }
@@ -112,13 +111,18 @@ function initialize() {
   fs.writeFileSync(path.join(process.cwd(), 'klep.deps'), json5.stringify(defaults, null, 2));
 }
 
+function clear() {
+  __deps = defaults.depsfile.entry;
+}
+
 const depsfile = {
   initialize,
   load,
   addDependency,
   exists,
   save,
-  defaults,
+  defaults: defaults.depsfile,
+  clear,
 };
 
 Object.defineProperty(depsfile, 'dependencies', {
