@@ -1,21 +1,21 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import { z } from 'zod';
 import * as resourceLoader from './resource-loader.ts';
+import kerror from './kerror.ts';
 
 import { $ } from '../testing/moxxy.ts';
-import kerror from './kerror.ts';
-const injector = $(import.meta)!;
+const moxxy = $(import.meta)!;
 
 describe('resource-loader', () => {
   afterEach(() => {
-    injector.reset();
+    moxxy.reset();
   });
 
   describe('load', () => {
     it('should load a resource if it exists', () => {
       const resourcePath = 'test.json';
 
-      injector.readFileSync.mock(() => '{"test": "test"}');
+      moxxy.readFileSync.mock(() => '{"test": "test"}');
 
       const resource = resourceLoader.load(resourcePath, z.object({ test: z.string() }));
       expect(resource).toEqual({ test: 'test' });
@@ -24,7 +24,7 @@ describe('resource-loader', () => {
     it('should throw an error if the resource does not exist', () => {
       const resourcePath = 'test.json';
 
-      injector.readFileSync.mock(() => {
+      moxxy.readFileSync.mock(() => {
         throw new Error('File not found');
       });
 
@@ -39,7 +39,7 @@ describe('resource-loader', () => {
     it('should throw an error if the resource is not valid JSON', () => {
       const resourcePath = 'test.json';
 
-      injector.readFileSync.mock(() => 'invalid json');
+      moxxy.readFileSync.mock(() => 'invalid json');
 
       const schema = z.object({ test: z.string() });
 

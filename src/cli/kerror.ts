@@ -18,7 +18,7 @@ let translateStackTrace: ((error: Error) => Error) | null = null;
 async function getTranslateStackTrace() {
   if (!translateStackTrace) {
     try {
-      const transformPlugin = await import('../testing/transform-plugin.ts');
+      const transformPlugin = await import('../testing/moxxy-transformer.ts');
       translateStackTrace = transformPlugin.translateStackTrace || ((e: Error) => e);
     } catch {
       // If the testing system isn't available, just use identity function

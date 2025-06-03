@@ -10,7 +10,7 @@ const mockRegistry = new Map<string, Map<string, unknown>>();
 const moduleCache = new Map<string, unknown>();
 
 async function __translate(error: Error) {
-  const plugin = await import('./transform-plugin.ts');
+  const plugin = await import('./moxxy-transformer.ts');
   return plugin.translateStackTrace(error);
 }
 
