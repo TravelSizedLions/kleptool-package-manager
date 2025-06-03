@@ -79,11 +79,15 @@ if [[ -z "${GIST_ID:-}" ]]; then
   
   # Check for common error conditions
   if echo "$GIST_RESPONSE" | jq -e '.message' > /dev/null; then
-    local error_message=$(echo "$GIST_RESPONSE" | jq -r '.message')
+    error_message=$(echo "$GIST_RESPONSE" | jq -r '.message')
     log_error "GitHub API error: $error_message"
     
     if [[ "$error_message" == *"Bad credentials"* ]]; then
       log_error "The GITHUB_TOKEN appears to be invalid or expired."
+    elif [[ "$error_message" == *"Resource not accessible by integration"* ]]; then
+      log_error "The GITHUB_TOKEN doesn't have permission to create gists."
+      log_info "You're likely using the default GITHUB_TOKEN, which doesn't have gist permissions."
+      log_info "Create a Personal Access Token with 'gist' scope and add it as a repository secret."
     elif [[ "$error_message" == *"token"* && "$error_message" == *"scope"* ]]; then
       log_error "The GITHUB_TOKEN doesn't have the 'gist' scope required to create gists."
       log_info "Please ensure your token has the 'gist' permission enabled."

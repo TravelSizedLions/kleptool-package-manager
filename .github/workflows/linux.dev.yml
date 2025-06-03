@@ -41,5 +41,5 @@ jobs:
       uses: ./.github/actions/handle-coverage
       with:
         operation: badge
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.GIST_TOKEN }}
         gist_id: ${{ secrets.GIST_ID }}
