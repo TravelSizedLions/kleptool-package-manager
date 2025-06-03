@@ -18,7 +18,6 @@
     "src/rust/target/release/"
   ],
   "dependencies": {
-    "@types/mock-fs": "^4.13.4",
     "commander": "^14.0.0",
     "es-toolkit": "^1.0.0",
     "globby": "^14.1.0",
