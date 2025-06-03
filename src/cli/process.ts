@@ -47,7 +47,7 @@ const defaultIpcOptions: IpcOptions = {
   env: process.env as Record<string, string>,
 };
 
-function execError(
+function __execError(
   command: string,
   code: number | null,
   stdout?: string,
@@ -65,14 +65,14 @@ function execError(
   });
 }
 
-function timeoutError(command: string, timeout: number) {
+function __timeoutError(command: string, timeout: number) {
   return kerror(kerror.Unknown, 'process-error-timeout', {
     message: `Command "${command}" timed out after ${timeout}ms`,
     context: { command, timeout },
   });
 }
 
-function processError(command: string, error: Error) {
+function __processError(command: string, error: Error) {
   return kerror(kerror.Unknown, 'process-error-unknown', {
     message: `Command "${command}" failed`,
     context: {
@@ -82,7 +82,7 @@ function processError(command: string, error: Error) {
   });
 }
 
-function gatherOutput(stream: Stream.Readable): Promise<string> {
+function __receive(stream: Stream.Readable): Promise<string> {
   return new Promise<string>((resolve) => {
     let outputData = '';
     stream.on('data', (chunk) => (outputData += chunk.toString()));
@@ -90,17 +90,13 @@ function gatherOutput(stream: Stream.Readable): Promise<string> {
   });
 }
 
-function setupTimeout(
-  childProcess: ChildProcess,
-  command: string,
-  timeout: number
-): NodeJS.Timeout {
+function __timeout(childProcess: ChildProcess, command: string, timeout: number): NodeJS.Timeout {
   return setTimeout(() => {
     childProcess.kill();
   }, timeout);
 }
 
-function handleProcessCompletion(
+function __handleProcessCompletion(
   childProcess: ChildProcess,
   command: string,
   timeout?: number
@@ -110,7 +106,7 @@ function handleProcessCompletion(
 
     // Setup timeout if specified
     if (timeout && timeout > 0) {
-      timeoutHandle = setupTimeout(childProcess, command, timeout);
+      timeoutHandle = __timeout(childProcess, command, timeout);
     }
 
     childProcess.on('close', (code) => {
@@ -120,7 +116,7 @@ function handleProcessCompletion(
 
     childProcess.on('error', (error) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
-      reject(processError(command, error));
+      reject(__processError(command, error));
     });
 
     // Handle timeout rejection
@@ -128,13 +124,13 @@ function handleProcessCompletion(
       const originalTimeout = timeoutHandle;
       timeoutHandle = setTimeout(() => {
         clearTimeout(originalTimeout);
-        reject(timeoutError(command, timeout!));
+        reject(__timeoutError(command, timeout!));
       }, timeout!);
     }
   });
 }
 
-function sendData(childProcess: ChildProcess, data?: string): void {
+function __send(childProcess: ChildProcess, data?: string): void {
   if (data !== undefined) {
     childProcess.stdin?.write(data);
   }
@@ -145,7 +141,7 @@ function sendData(childProcess: ChildProcess, data?: string): void {
 export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string> {
   try {
     const { args, cwd, env, timeout, data } = { ...defaultIpcOptions, ...options };
-    const command = substituteArguments(cmd, args || []);
+    const command = __withCrossPlatformArgs(cmd, args || []);
 
     const childProcess = spawn(cmd, args || [], {
       cwd,
@@ -153,17 +149,15 @@ export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string
       stdio: ['pipe', 'inherit', 'inherit', 'pipe'], // stdin, stdout, stderr, fd3
     });
 
-    // Send stdin data
-    sendData(childProcess, data);
+    __send(childProcess, data);
 
-    // Gather output from fd3 and wait for process completion
     const [output, { code }] = await Promise.all([
-      gatherOutput(childProcess.stdio[3] as Stream.Readable),
-      handleProcessCompletion(childProcess, command, timeout),
+      __receive(childProcess.stdio[3] as Stream.Readable),
+      __handleProcessCompletion(childProcess, command, timeout),
     ]);
 
     if (code !== 0) {
-      throw execError(command, code);
+      throw __execError(command, code);
     }
 
     return output;
@@ -178,8 +172,7 @@ export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string
   }
 }
 
-// Cross-platform argument substitution helper
-function substituteArguments(cmd: string, args: string[]): string {
+function __withCrossPlatformArgs(cmd: string, args: string[]): string {
   if (!cmd.includes('$@')) {
     return `${cmd} ${args.join(' ') || ''}`.trim();
   }
@@ -204,7 +197,7 @@ export async function execWithResult(cmd: string, options: ExecOptions = {}): Pr
       ...options,
     };
 
-    const command = substituteArguments(cmd, args || []);
+    const command = __withCrossPlatformArgs(cmd, args || []);
 
     const childProcess = exec(command, { cwd, env, timeout });
 
@@ -216,9 +209,9 @@ export async function execWithResult(cmd: string, options: ExecOptions = {}): Pr
 
     // Gather output and wait for process completion
     const [stdout, stderr, { code }] = await Promise.all([
-      gatherOutput(childProcess.stdout as Stream.Readable),
-      gatherOutput(childProcess.stderr as Stream.Readable),
-      handleProcessCompletion(childProcess, command, timeout),
+      __receive(childProcess.stdout as Stream.Readable),
+      __receive(childProcess.stderr as Stream.Readable),
+      __handleProcessCompletion(childProcess, command, timeout),
     ]);
 
     return {
@@ -252,7 +245,7 @@ export async function _exec(cmd: string, options: ExecOptions = {}): Promise<str
   const result = await execWithResult(cmd, options);
 
   if (!result.success && options.throwOnError) {
-    throw execError(cmd, result.exitCode, result.stdout, result.stderr, options.streamOutput);
+    throw __execError(cmd, result.exitCode, result.stdout, result.stderr, options.streamOutput);
   }
 
   return result.stdout;
