@@ -11,6 +11,23 @@ enum Type {
   Unknown = 'Unknown',
 }
 
+// Import source map translation for automatic stack trace fixing
+let translateStackTrace: ((error: Error) => Error) | null = null;
+
+// Lazy load to avoid circular dependencies
+function getTranslateStackTrace() {
+  if (!translateStackTrace) {
+    try {
+      const transformPlugin = require('../testing/transform-plugin.ts');
+      translateStackTrace = transformPlugin.translateStackTrace || ((e: Error) => e);
+    } catch (error) {
+      // If the testing system isn't available, just use identity function
+      translateStackTrace = (e: Error) => e;
+    }
+  }
+  return translateStackTrace;
+}
+
 /**
  * KlepError options
  */
@@ -61,6 +78,7 @@ function isKlepError(error: unknown): error is KlepError {
  * boundary is a function that wraps a function and catches any errors.
  * Useful for wrapping functions that may throw errors deep into the call stack.
  * Any error caught will be printed and the process will exit. KlepErrors will be specially formatted.
+ * Stack traces are automatically translated to show correct line numbers.
  *
  * @param fn - The function to wrap.
  * @returns A function that wraps the input function and catches any errors. May be an async function.
@@ -91,12 +109,21 @@ function boundary(fn: (...args: any[]) => Promise<void> | void) {
     try {
       await fn(...args);
     } catch (error: unknown) {
-      if (!(error instanceof KlepError)) {
-        console.error('unexpected error received', error);
+      // Translate stack traces for better debugging
+      let processedError = error;
+      if (error instanceof Error) {
+        const translator = getTranslateStackTrace();
+        if (translator) {
+          processedError = translator(error);
+        }
+      }
+
+      if (!(processedError instanceof KlepError)) {
+        console.error('unexpected error received', processedError);
         process.exit(1);
       }
 
-      const klepError = error as KlepError;
+      const klepError = processedError as KlepError;
 
       console.error(`${klepError.type} error:`, klepError.id);
       if (klepError.message) {
@@ -105,6 +132,12 @@ function boundary(fn: (...args: any[]) => Promise<void> | void) {
 
       if (klepError.context) {
         __printErrorContext(klepError.context);
+      }
+
+      // Print stack trace with translated line numbers
+      if (klepError.stack) {
+        console.error(`- stack trace:`);
+        console.error(klepError.stack);
       }
 
       process.exit(1);

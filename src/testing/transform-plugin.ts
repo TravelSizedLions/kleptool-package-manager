@@ -1,7 +1,149 @@
 import { plugin } from 'bun';
 
+// Global declarations for test function wrapping
+declare global {
+  var originalTest: any;
+  var test: any;
+}
+
 // Don't create a separate injector - use the main testing system
 export { __moduleRegistry, __mockRegistry } from './mod.ts';
+
+// Interface for source map support
+interface SourceMapEntry {
+  originalLine: number;
+  generatedLine: number;
+  source: string;
+}
+
+const sourceMapRegistry = new Map<string, SourceMapEntry[]>();
+
+// Function to translate error stack traces
+export function translateStackTrace(error: Error): Error {
+  if (!error.stack) return error;
+  
+  const lines = error.stack.split('\n');
+  const translatedLines = lines.map(line => {
+    const patterns = [
+      /\s+at .* \((.+):(\d+):(\d+)\)/, // at function (file:line:col)
+      /\s+at (.+):(\d+):(\d+)/, // at file:line:col
+      /\s+at <anonymous> \((.+):(\d+):(\d+)\)/ // at <anonymous> (file:line:col)
+    ];
+    
+    let match = null;
+    for (const pattern of patterns) {
+      match = line.match(pattern);
+      if (match) break;
+    }
+    
+    if (!match) return line;
+    
+    const filePath = match[1];
+    const originalLine = parseInt(match[2], 10);
+    const column = match[3];
+    
+    console.log(`🔍 Translating: ${filePath}:${originalLine}`);
+    
+    // Look up source map for this file
+    const mappings = sourceMapRegistry.get(filePath);
+    if (!mappings || mappings.length === 0) {
+      console.log(`❌ No source map found for ${filePath}`);
+      return line;
+    }
+    
+    // Find the correct mapping - look for the entry that contains our generated line
+    let bestMapping = null;
+    for (const mapping of mappings) {
+      if (originalLine >= mapping.generatedLine) {
+        bestMapping = mapping;
+        break;
+      }
+    }
+    
+    if (!bestMapping) {
+      console.log(`❌ No mapping found for line ${originalLine} in ${filePath}`);
+      return line;
+    }
+    
+    // Calculate the original line number
+    const offsetWithinMapping = originalLine - bestMapping.generatedLine;
+    const originalLineNumber = bestMapping.originalLine + offsetWithinMapping;
+    
+    // Replace the line number in the stack trace
+    return line.replace(`:${originalLine}:`, `:${originalLineNumber}:`);
+  });
+  
+  // Create new error with translated stack trace
+  const translatedError = new Error(error.message);
+  translatedError.stack = translatedLines.join('\n');
+  translatedError.name = error.name;
+  
+  // Copy other properties
+  Object.assign(translatedError, error);
+  
+  return translatedError;
+}
+
+// Set up error boundaries and automatic stack trace translation
+function setupErrorBoundaries() {
+  // Monkey-patch console.error to translate stack traces
+  const originalConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    const translatedArgs = args.map(arg => {
+      if (arg instanceof Error && arg.stack) {
+        const translated = translateStackTrace(arg);
+        return translated;
+      }
+      return arg;
+    });
+    originalConsoleError.apply(console, translatedArgs);
+  };
+
+  // Set up process error handlers with source map translation
+  process.removeAllListeners('uncaughtException');
+  process.removeAllListeners('unhandledRejection');
+
+  process.on('uncaughtException', (error) => {
+    const translated = translateStackTrace(error);
+    console.error('❌ Uncaught Exception:', translated);
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    if (reason instanceof Error) {
+      const translated = translateStackTrace(reason);
+      console.error('❌ Unhandled Rejection:', translated);
+    } else {
+      console.error('❌ Unhandled Rejection:', reason);
+    }
+    process.exit(1);
+  });
+
+  // Wrap test functions for automatic error translation
+  if (typeof globalThis.test === 'function' && !globalThis.originalTest) {
+    console.log('🛡️  Setting up test error boundaries...');
+
+    globalThis.originalTest = globalThis.test;
+    globalThis.test = function(name: string, fn: () => void | Promise<void>) {
+      return globalThis.originalTest(name, async () => {
+        try {
+          await fn();
+        } catch (error) {
+          if (error instanceof Error) {
+            const translated = translateStackTrace(error);
+            throw translated;
+          }
+          throw error;
+        }
+      });
+    };
+    
+    console.log('🛡️  Test error boundaries activated with source map translation!');
+  }
+}
+
+// Call setup when this module is loaded
+setupErrorBoundaries();
 
 // Register as Bun plugin for automatic transformation
 plugin({
@@ -37,6 +179,10 @@ plugin({
       
       // Simple AST-free transformation approach
       let transformedContent = contentToTransform;
+      
+      // Track source map entries
+      const sourceMapEntries: SourceMapEntry[] = [];
+      let generatedLineOffset = 0;
       
       // More precise regex that only matches actual import statements at line start
       // This avoids matching imports in comments or strings
@@ -107,10 +253,17 @@ plugin({
             ).join('\n');
             
             replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${moduleVar} = await import('${moduleName}');\n${individualProxies}`;
+            
+            // Track source map: original import line stays the same, but we're adding lines
+            const addedLines = 2 + importNames.length; // comment + module import + individual proxies
+            generatedLineOffset += addedLines;
           } else {
             // For default/namespace imports
             const importName = importNames[0];
             replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __createModuleProxy(${importName}, '${importName}', import.meta);`;
+            
+            // Track source map: adding 2 lines (comment + proxy declaration)
+            generatedLineOffset += 2;
           }
           
           importReplacements.push({
@@ -161,6 +314,25 @@ const __registered = $(import.meta); // Register this module for nuclear injecti
 const { __createModuleProxy } = await import('${process.cwd()}/src/testing/mod.ts');
 
 `;
+      
+      // The nuclear setup adds 6 lines
+      const nuclearSetupLines = 6;
+      
+      // Create source map entries
+      const originalLines = (shebang + contentToTransform).split('\n');
+      const shebangLines = shebang ? 1 : 0;
+      
+      // Map all lines after the nuclear setup
+      for (let i = 0; i < originalLines.length; i++) {
+        sourceMapEntries.push({
+          originalLine: i + 1, // 1-indexed
+          generatedLine: i + 1 + shebangLines + nuclearSetupLines + generatedLineOffset,
+          source: args.path
+        });
+      }
+      
+      // Store source map for this file
+      sourceMapRegistry.set(args.path, sourceMapEntries);
       
       // Combine shebang + nuclear setup + transformed content
       const finalContent = shebang + nuclearSetup + transformedContent;

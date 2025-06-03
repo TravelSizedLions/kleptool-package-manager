@@ -3,12 +3,49 @@ import { readFileSync } from 'node:fs';
 import * as ts from 'typescript';
 import * as path from 'node:path';
 
+// Import source map translation functionality
+export { translateStackTrace } from './transform-plugin.ts';
+
 // Global registry of modules and their injectable dependencies
 const moduleRegistry = new Map<string, ModuleInfo>();
 const mockRegistry = new Map<string, Map<string, any>>();
 const moduleCache = new Map<string, any>();
 const importValueToProxy = new WeakMap<any, any>();
 const importValueToModuleInfo = new WeakMap<any, { modulePath: string; importName: string }>();
+
+// Monkey patch console.error to automatically translate stack traces
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const translatedArgs = args.map(arg => {
+    if (arg instanceof Error) {
+      // Import here to avoid circular dependency
+      const { translateStackTrace } = require('./transform-plugin.ts');
+      return translateStackTrace(arg);
+    }
+    return arg;
+  });
+  originalConsoleError.apply(console, translatedArgs);
+};
+
+// Monkey patch process.on for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  // Import here to avoid circular dependency
+  const { translateStackTrace } = require('./transform-plugin.ts');
+  const translatedError = translateStackTrace(error);
+  console.error('Uncaught Exception:', translatedError);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  if (reason instanceof Error) {
+    // Import here to avoid circular dependency
+    const { translateStackTrace } = require('./transform-plugin.ts');
+    const translatedError = translateStackTrace(reason);
+    console.error('Unhandled Rejection:', translatedError);
+  } else {
+    console.error('Unhandled Rejection:', reason);
+  }
+});
 
 interface ImportInfo {
   moduleSpecifier: string;
