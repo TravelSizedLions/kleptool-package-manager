@@ -326,11 +326,11 @@ plugin({
       // Inject nuclear setup at the top (after shebang if present)
       // This calls $(import.meta) to register with the main testing system
       const nuclearSetup = `// ☢️ NUCLEAR DEPENDENCIES ACTIVATED
-const { $ } = await import('${process.cwd()}/src/testing/mod.ts');
+const { $ } = await import('${process.cwd()}/src/testing/moxxy.ts');
 const __registered = $(import.meta); // Register this module for nuclear injection
 
 // Import the proxy helper
-const { __createModuleProxy } = await import('${process.cwd()}/src/testing/mod.ts');
+const { __createModuleProxy } = await import('${process.cwd()}/src/testing/moxxy.ts');
 
 `;
 

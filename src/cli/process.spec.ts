@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import process from './process.ts';
 
-import { $ } from '../testing/mod.ts';
+import { $ } from '../testing/moxxy.ts';
 const injector = $(import.meta)!;
 
 describe('process', () => {

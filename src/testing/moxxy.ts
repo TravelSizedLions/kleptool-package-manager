@@ -177,7 +177,7 @@ function __parse(filePath: string): ImportInfo[] {
   return imports;
 }
 
-function __moxxyProxy(originalValue: any, modulePath: string, importName: string): any {
+function __createMoxxyProxy(originalValue: any, modulePath: string, importName: string): any {
   // Safety check: if the value is null, undefined, or not an object/function, don't create a proxy
   if (originalValue === null || originalValue === undefined) {
     return originalValue;
@@ -243,44 +243,50 @@ function __moxxyProxy(originalValue: any, modulePath: string, importName: string
   });
 }
 
-async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
+async function __resolve(importInfo: ImportInfo, moduleInfo: ModuleInfo): Promise<any> {
+  try {
+    const resolvedSpecifier = __resolveModuleSpecifier(
+      importInfo.moduleSpecifier,
+      moduleInfo.filePath
+    );
+    const module = await __loadModule(resolvedSpecifier);
+
+    let importedValue;
+
+    if (importInfo.isDefault) {
+      importedValue = module.default;
+    } else if (importInfo.isNamespace) {
+      importedValue = module;
+    } else {
+      importedValue = module[importInfo.importName];
+    }
+
+    // Store the original
+    moduleInfo.originalImports.set(importInfo.localName, importedValue);
+
+    // Create a mockable proxy
+    const proxy = __createMoxxyProxy(importedValue, moduleInfo.filePath, importInfo.localName);
+    moduleInfo.proxies.set(importInfo.localName, proxy);
+
+    return proxy;
+  } catch (error) {
+    console.warn(`❌ Failed to create proxy for ${importInfo.localName}:`, error);
+  }
+}
+
+async function __resolveModuleImports(moduleInfo: ModuleInfo): Promise<void> {
   if (moduleInfo.isInitialized) {
     return;
   }
 
-  for (const importInfo of moduleInfo.imports) {
-    try {
-      const resolvedSpecifier = __resolveModuleSpecifier(
-        importInfo.moduleSpecifier,
-        moduleInfo.filePath
-      );
-      const module = await __loadModule(resolvedSpecifier);
-
-      let importedValue;
-
-      if (importInfo.isDefault) {
-        importedValue = module.default;
-      } else if (importInfo.isNamespace) {
-        importedValue = module;
-      } else {
-        importedValue = module[importInfo.importName];
-      }
-
-      // Store the original
-      moduleInfo.originalImports.set(importInfo.localName, importedValue);
-
-      // Create a mockable proxy
-      const proxy = __moxxyProxy(importedValue, moduleInfo.filePath, importInfo.localName);
-      moduleInfo.proxies.set(importInfo.localName, proxy);
-    } catch (error) {
-      console.warn(`❌ Failed to create proxy for ${importInfo.localName}:`, error);
-    }
-  }
+  await Promise.all(
+    moduleInfo.imports.map(async (importInfo) => __resolve(importInfo, moduleInfo))
+  );
 
   moduleInfo.isInitialized = true;
 }
 
-async function registerModule(meta: ImportMeta): Promise<void> {
+async function __moxxify(meta: ImportMeta): Promise<void> {
   const filePath = fileURLToPath(meta.url);
   const normalizedPath = __stripExtensions(filePath);
 
@@ -300,10 +306,10 @@ async function registerModule(meta: ImportMeta): Promise<void> {
   moduleRegistry.set(normalizedPath, moduleInfo);
 
   // Initialize proxies asynchronously
-  await initializeModuleProxies(moduleInfo);
+  await __resolveModuleImports(moduleInfo);
 }
 
-function addMockFunction(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMockFunction(originalValue: any, importName: string, mocks: Map<string, any>): any {
   const proxiedFn = new Proxy(originalValue, {
     apply(target, thisArg, argumentsList) {
       if (mocks.has(importName)) {
@@ -322,7 +328,7 @@ function addMockFunction(originalValue: any, importName: string, mocks: Map<stri
   return proxiedFn;
 }
 
-function addMockObject(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMockObject(originalValue: any, importName: string, mocks: Map<string, any>): any {
   return new Proxy(originalValue, {
     get(target, prop) {
       if (prop === 'mock') {
@@ -346,12 +352,12 @@ function addMockObject(originalValue: any, importName: string, mocks: Map<string
         }
       }
 
-      return addMock(target[prop], propPath, mocks);
+      return __addMock(target[prop], propPath, mocks);
     },
   });
 }
 
-function addMockPrimitive(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMockPrimitive(originalValue: any, importName: string, mocks: Map<string, any>): any {
   const wrapper = Object.create(null);
   wrapper.valueOf = () => originalValue;
   wrapper.toString = () => String(originalValue);
@@ -362,27 +368,27 @@ function addMockPrimitive(originalValue: any, importName: string, mocks: Map<str
   return wrapper;
 }
 
-function addMock(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMock(originalValue: any, importName: string, mocks: Map<string, any>): any {
   if (originalValue === null || originalValue === undefined) {
     return originalValue;
   }
 
   switch (typeof originalValue) {
     case 'function':
-      return addMockFunction(originalValue, importName, mocks);
+      return __addMockFunction(originalValue, importName, mocks);
     case 'object':
-      return addMockObject(originalValue, importName, mocks);
+      return __addMockObject(originalValue, importName, mocks);
     default:
-      return addMockPrimitive(originalValue, importName, mocks);
+      return __addMockPrimitive(originalValue, importName, mocks);
   }
 }
 
-function createMockImport(originalValue: any, importName: string, modulePath: string): any {
+function __mockImport(originalValue: any, importName: string, modulePath: string): any {
   if (!mockRegistry.has(modulePath)) {
     mockRegistry.set(modulePath, new Map());
   }
 
-  return addMock(originalValue, importName, mockRegistry.get(modulePath)!);
+  return __addMock(originalValue, importName, mockRegistry.get(modulePath)!);
 }
 
 function createInjector(meta: ImportMeta): DynamicInjector {
@@ -431,7 +437,7 @@ function createInjector(meta: ImportMeta): DynamicInjector {
       const importName = String(prop);
       if (moduleInfo.originalImports.has(importName)) {
         const originalValue = moduleInfo.originalImports.get(importName);
-        return createMockImport(originalValue, importName, filePath);
+        return __mockImport(originalValue, importName, filePath);
       }
 
       return undefined;
@@ -473,7 +479,7 @@ export function __createModuleProxy(originalValue: any, importName: string, meta
   const moduleInfo = moduleRegistry.get(normalizedPath)!;
   moduleInfo.originalImports.set(importName, originalValue);
 
-  const proxy = __moxxyProxy(originalValue, normalizedPath, importName);
+  const proxy = __createMoxxyProxy(originalValue, normalizedPath, importName);
   moduleInfo.proxies.set(importName, proxy);
 
   return proxy;
@@ -488,24 +494,7 @@ export function $(meta: ImportMeta): DynamicInjector | void {
   }
 
   // Otherwise, register this module for injection (async but fire-and-forget)
-  registerModule(meta).catch((error) => {
+  __moxxify(meta).catch((error) => {
     console.warn(`❌ Failed to register module ${filePath}:`, error);
   });
-}
-
-// Export the injector class for the plugin
-export class DynamicNuclearInjector {
-  private moduleRegistry = new Map<string, Set<string>>();
-
-  registerModule(moduleName: string, filePath: string) {
-    if (!this.moduleRegistry.has(moduleName)) {
-      this.moduleRegistry.set(moduleName, new Set());
-    }
-    this.moduleRegistry.get(moduleName)!.add(filePath);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  getProxy(_moduleName: string, _importerPath: string) {
-    return null;
-  }
 }

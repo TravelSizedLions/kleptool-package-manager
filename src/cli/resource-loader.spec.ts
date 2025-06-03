@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'bun:test';
 import { z } from 'zod';
 import * as resourceLoader from './resource-loader.ts';
 
-import { $ } from '../testing/mod.ts';
+import { $ } from '../testing/moxxy.ts';
 import kerror from './kerror.ts';
 const injector = $(import.meta)!;
 
