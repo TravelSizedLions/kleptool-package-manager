@@ -1,9 +1,7 @@
-import { describe, it, expect, mock, afterEach, beforeEach } from 'bun:test';
+import { describe, it, expect, afterEach } from 'bun:test';
 import process from './process.ts';
-import kerror from './kerror.ts';
 
 import { $ } from '../testing/mod.ts';
-import Stream from 'node:stream';
 const injector = $(import.meta)!;
 
 describe('process', () => {
@@ -14,10 +12,10 @@ describe('process', () => {
   describe('exec', () => {
     it('should execute a command', async () => {
       // Mock the child_process.exec function instead of injector.exec
-      injector.exec.mock((command: string, options: any, callback?: any) => {
+      injector.exec.mock((_command: string, _options: unknown, _callback?: unknown) => {
         // Create proper mock streams with EventEmitter functionality
         const mockStream = {
-          on: (event: string, handler: Function) => {
+          on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'data') {
               // Simulate stream data
               setTimeout(() => handler('Hello, world!\n'), 10);
@@ -32,7 +30,7 @@ describe('process', () => {
         const mockChildProcess = {
           stdout: mockStream,
           stderr: {
-            on: (event: string, handler: Function) => {
+            on: (event: string, handler: (...args: unknown[]) => void) => {
               if (event === 'data') {
                 // No stderr data for successful command
               } else if (event === 'end') {
@@ -41,7 +39,7 @@ describe('process', () => {
             },
             pipe: () => {},
           },
-          on: (event: string, handler: Function) => {
+          on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'close') {
               // Simulate successful exit
               setTimeout(() => handler(0), 30);

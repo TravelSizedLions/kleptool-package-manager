@@ -8,6 +8,7 @@ interface KlepErrorMatchers {
 }
 
 declare module 'bun:test' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface Matchers<T> extends KlepErrorMatchers {}
 }
 

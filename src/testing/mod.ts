@@ -8,9 +8,11 @@ export { translateStackTrace } from './transform-plugin.ts';
 
 // Global registry of modules and their injectable dependencies
 const moduleRegistry = new Map<string, ModuleInfo>();
-const mockRegistry = new Map<string, Map<string, any>>();
-const moduleCache = new Map<string, any>();
+const mockRegistry = new Map<string, Map<string, unknown>>();
+const moduleCache = new Map<string, unknown>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const importValueToProxy = new WeakMap<any, any>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const importValueToModuleInfo = new WeakMap<any, { modulePath: string; importName: string }>();
 
 // Monkey patch console.error to automatically translate stack traces
@@ -203,8 +205,10 @@ function createMockableProxy(originalValue: any, modulePath: string, importName:
       // Check for full module mock
       if (mocks?.has(importName) && typeof mocks.get(importName) === 'object') {
         const fullModuleMock = mocks.get(importName);
-        if (fullModuleMock && prop in fullModuleMock) {
-          return fullModuleMock[prop];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (fullModuleMock && prop in (fullModuleMock as any)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return (fullModuleMock as any)[prop];
         }
       }
 
@@ -218,7 +222,8 @@ function createMockableProxy(originalValue: any, modulePath: string, importName:
             const methodKey = `${importName}.${String(prop)}`;
             if (mocks?.has(methodKey)) {
               const mockFn = mocks.get(methodKey);
-              return mockFn.apply(thisArg, argumentsList);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              return (mockFn as any).apply(thisArg, argumentsList);
             }
             return fnTarget.apply(thisArg, argumentsList);
           },
@@ -326,7 +331,8 @@ function createMockableImportProxy(
         apply(target, thisArg, argumentsList) {
           if (mocks.has(path)) {
             const mockFn = mocks.get(path);
-            return mockFn.apply(thisArg, argumentsList);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return (mockFn as any).apply(thisArg, argumentsList);
           }
           return target.apply(thisArg, argumentsList);
         },

@@ -7,7 +7,7 @@ type SetState<S> = (value: S | ((value: S) => S)) => void;
 type ResetState = () => void;
 
 // Simple state management that creates shared state objects
-const stateRegistry = new Map<string, any>();
+const stateRegistry = new Map<string, unknown>();
 let stateIdCounter = 0;
 
 export function useState<T>(initialValue: T): [() => T, SetState<T>, ResetState] {

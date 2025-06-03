@@ -20,7 +20,7 @@ function getTranslateStackTrace() {
     try {
       const transformPlugin = require('../testing/transform-plugin.ts');
       translateStackTrace = transformPlugin.translateStackTrace || ((e: Error) => e);
-    } catch (error) {
+    } catch {
       // If the testing system isn't available, just use identity function
       translateStackTrace = (e: Error) => e;
     }

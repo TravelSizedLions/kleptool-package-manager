@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, afterEach, beforeEach } from 'bun:test';
+import { describe, it, expect, afterEach } from 'bun:test';
 import { z } from 'zod';
 import * as resourceLoader from './resource-loader.ts';
 
@@ -8,7 +8,6 @@ const injector = $(import.meta)!;
 
 describe('resource-loader', () => {
   afterEach(() => {
-    ``;
     injector.reset();
   });
 
