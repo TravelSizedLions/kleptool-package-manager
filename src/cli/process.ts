@@ -1,7 +1,6 @@
 import { ChildProcess, exec, spawn } from 'node:child_process';
 import kerror from './kerror.ts';
 import Stream from 'node:stream';
-import { join } from 'node:path';
 
 type StreamType = 'inherit' | 'pipe' | 'ignore';
 
@@ -185,13 +184,15 @@ function substituteArguments(cmd: string, args: string[]): string {
     return `${cmd} ${args.join(' ') || ''}`.trim();
   }
 
-  const escapedArgs = args.map(arg => {
-    if (arg.includes(' ') || arg.includes('"') || arg.includes("'")) {
-      return `"${arg.replace(/"/g, '\\"')}"`;
-    }
+  const escapedArgs = args
+    .map((arg) => {
+      if (arg.includes(' ') || arg.includes('"') || arg.includes("'")) {
+        return `"${arg.replace(/"/g, '\\"')}"`;
+      }
 
-    return arg;
-  }).join(' ');
+      return arg;
+    })
+    .join(' ');
   return cmd.replace(/\$@/g, escapedArgs);
 }
 

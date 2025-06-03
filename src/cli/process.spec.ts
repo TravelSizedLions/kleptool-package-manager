@@ -44,7 +44,7 @@ describe('process', () => {
 
     it('should substitute $@ with arguments cross-platform', async () => {
       let capturedCommand = '';
-      
+
       moxxy.exec.mock((command: string) => {
         capturedCommand = command;
         return {
@@ -75,11 +75,11 @@ describe('process', () => {
         };
       });
 
-      const result = await process.execWithResult('echo "Args: $@"', { 
+      const result = await process.execWithResult('echo "Args: $@"', {
         args: ['hello', 'world'],
-        throwOnError: false 
+        throwOnError: false,
       });
-      
+
       expect(result.success).toBe(true);
       expect(capturedCommand).toBe('echo "Args: hello world"');
       expect(result.stdout).toBe('Args: hello world\n');
