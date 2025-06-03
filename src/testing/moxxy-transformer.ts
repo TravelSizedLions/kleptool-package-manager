@@ -53,9 +53,17 @@ function translateSingleStackLine(line: string): string {
   const filePath = match[1];
   const originalLine = parseInt(match[2], 10);
 
+  // Skip native code or non-file paths to avoid errors
+  if (filePath === 'native' || !filePath.includes('/') || !filePath.includes('.')) {
+    return line;
+  }
+
   const mappings = sourceMapRegistry.get(filePath);
   if (!mappings || mappings.length === 0) {
-    console.log(`No source map found for ${filePath}`);
+    // Don't log for native code or system files
+    if (!filePath.includes('node_modules') && !filePath.startsWith('bun:')) {
+      console.log(`No source map found for ${filePath}`);
+    }
     return line;
   }
 
@@ -71,19 +79,38 @@ function translateSingleStackLine(line: string): string {
   return line.replace(`:${originalLine}:`, `:${originalLineNumber}:`);
 }
 
+// Global flag to prevent infinite recursion
+let isTranslatingStackTrace = false;
+
 // Function to translate error stack traces
 export function translateStackTrace(error: Error): Error {
-  if (!error.stack) return error;
+  // Prevent infinite recursion
+  if (isTranslatingStackTrace || !error.stack) return error;
 
-  const lines = error.stack.split('\n');
-  const translatedLines = lines.map(translateSingleStackLine);
+  try {
+    isTranslatingStackTrace = true;
+    
+    const lines = error.stack.split('\n');
+    const translatedLines = lines.map(translateSingleStackLine);
 
-  const translatedError = new Error(error.message);
-  translatedError.stack = translatedLines.join('\n');
-  translatedError.name = error.name;
+    const translatedError = new Error(error.message || 'Unknown error');
+    translatedError.stack = translatedLines.join('\n');
+    translatedError.name = error.name || 'Error';
 
-  Object.assign(translatedError, error);
-  return translatedError;
+    // Safely copy other properties
+    try {
+      Object.assign(translatedError, error);
+    } catch (assignError) {
+      // If assignment fails, just use the basic properties
+    }
+    
+    return translatedError;
+  } catch (translationError) {
+    // If translation fails, return the original error
+    return error;
+  } finally {
+    isTranslatingStackTrace = false;
+  }
 }
 
 function wrapTestFunction(): void {
@@ -102,8 +129,13 @@ function wrapTestFunction(): void {
         await fn();
       } catch (error) {
         if (error instanceof Error) {
-          const translated = translateStackTrace(error);
-          throw translated;
+          try {
+            const translated = translateStackTrace(error);
+            throw translated;
+          } catch (translationError) {
+            // If translation fails, throw the original error
+            throw error;
+          }
         }
         throw error;
       }
@@ -118,17 +150,25 @@ function setupProcessErrorHandlers(): void {
   process.removeAllListeners('unhandledRejection');
 
   process.on('uncaughtException', (error) => {
-    const translated = translateStackTrace(error);
-    console.error('❌ Uncaught Exception:', translated);
+    try {
+      const translated = translateStackTrace(error);
+      console.error('❌ Uncaught Exception:', translated);
+    } catch (translationError) {
+      console.error('❌ Uncaught Exception (translation failed):', error);
+    }
     process.exit(1);
   });
 
   process.on('unhandledRejection', (reason) => {
-    if (reason instanceof Error) {
-      const translated = translateStackTrace(reason);
-      console.error('❌ Unhandled Rejection:', translated);
-    } else {
-      console.error('❌ Unhandled Rejection:', reason);
+    try {
+      if (reason instanceof Error) {
+        const translated = translateStackTrace(reason);
+        console.error('❌ Unhandled Rejection:', translated);
+      } else {
+        console.error('❌ Unhandled Rejection:', reason);
+      }
+    } catch (translationError) {
+      console.error('❌ Unhandled Rejection (translation failed):', reason);
     }
     process.exit(1);
   });
@@ -137,13 +177,22 @@ function setupProcessErrorHandlers(): void {
 function patchConsoleError(): void {
   const originalConsoleError = console.error;
   console.error = (...args: unknown[]) => {
-    const translatedArgs = args.map((arg) => {
-      if (arg instanceof Error && arg.stack) {
-        return translateStackTrace(arg);
-      }
-      return arg;
-    });
-    originalConsoleError.apply(console, translatedArgs);
+    try {
+      const translatedArgs = args.map((arg) => {
+        if (arg instanceof Error && arg.stack) {
+          try {
+            return translateStackTrace(arg);
+          } catch (translationError) {
+            return arg; // Return original error if translation fails
+          }
+        }
+        return arg;
+      });
+      originalConsoleError.apply(console, translatedArgs);
+    } catch (patchError) {
+      // Fallback to original console.error if patching fails
+      originalConsoleError.apply(console, args);
+    }
   };
 }
 
