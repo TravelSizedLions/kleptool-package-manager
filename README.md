@@ -1,10 +1,10 @@
 # Klep: The First Truly Language Agnostic Dependency Resolver
 
 [![Ubuntu](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/linux.dev.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/linux.dev.yml)
-
 [![Windows](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/windows.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/windows.yml)
-
 [![Mac OS](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/macos.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/macos.yml)
+
+![TS Coverage](coverage-ts.svg) ![Rust Coverage](coverage-rust.svg)
 
 # GUD: Git-Derived Unified Dependency Resolution
 

@@ -1,4 +1,5 @@
-name: Build and Test (Linux + Coverage)
+name: Test (Linux)
+description: Test the project on Linux, and upload coverage to Barecheck.
 
 on:
   push:
