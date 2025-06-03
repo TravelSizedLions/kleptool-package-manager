@@ -11,8 +11,6 @@ export { translateStackTrace } from './transform-plugin.ts';
 const moduleRegistry = new Map<string, ModuleInfo>();
 const mockRegistry = new Map<string, Map<string, unknown>>();
 const moduleCache = new Map<string, unknown>();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const importValueToProxy = new WeakMap<any, any>();
 
 // Monkey patch console.error to automatically translate stack traces
 const originalConsoleError = console.error;
@@ -122,67 +120,66 @@ async function loadModule(specifier: string): Promise<any> {
   }
 }
 
+function visit(node: ts.Node, imports: ImportInfo[]) {
+  if (!ts.isImportDeclaration(node)) {
+    ts.forEachChild(node, (node) => visit(node, imports));
+    return;
+  }
+
+  if (!node.importClause) {
+    ts.forEachChild(node, (node) => visit(node, imports));
+    return;
+  }
+
+  const importEntry = {
+    moduleSpecifier: (node.moduleSpecifier as ts.StringLiteral).text,
+    isDefault: false,
+    isNamespace: false,
+  }
+
+  // Default import: import foo from 'bar'
+  if (node.importClause.name) {
+    imports.push({
+      ...importEntry,
+      importName: 'default',
+      isDefault: true,
+      localName: node.importClause.name.text,
+    });
+  }
+
+  if (!node.importClause.namedBindings) {
+    ts.forEachChild(node, (node) => visit(node, imports));
+    return;
+  }
+
+  if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+    // Namespace import: import * as foo from 'bar'
+    imports.push({
+      ...importEntry,
+      importName: '*',
+      isNamespace: true,
+      localName: node.importClause.namedBindings.name.text,
+    });
+  } else if (ts.isNamedImports(node.importClause.namedBindings)) {
+    // Named imports
+    for (const element of node.importClause.namedBindings.elements) {
+      imports.push({
+        ...importEntry,
+        importName: element.propertyName?.text || element.name.text,
+        localName: element.name.text,
+      });
+    }
+  }
+
+  ts.forEachChild(node, (node) => visit(node, imports));
+}
+
 function parseImports(filePath: string): ImportInfo[] {
   const sourceText = readFileSync(filePath, 'utf8');
   const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true);
 
   const imports: ImportInfo[] = [];
-
-  function visit(node: ts.Node) {
-    if (!ts.isImportDeclaration(node)) {
-      ts.forEachChild(node, visit);
-      return;
-    }
-
-    if (!node.importClause) {
-      ts.forEachChild(node, visit);
-      return;
-    }
-
-    const importEntry = {
-      moduleSpecifier: (node.moduleSpecifier as ts.StringLiteral).text,
-      isDefault: false,
-      isNamespace: false,
-    }
-
-    // Default import: import foo from 'bar'
-    if (node.importClause.name) {
-      imports.push({
-        ...importEntry,
-        importName: 'default',
-        isDefault: true,
-        localName: node.importClause.name.text,
-      });
-    }
-
-    if (!node.importClause.namedBindings) {
-      ts.forEachChild(node, visit);
-      return;
-    }
-
-    if (ts.isNamespaceImport(node.importClause.namedBindings)) {
-      // Namespace import: import * as foo from 'bar'
-      imports.push({
-        ...importEntry,
-        importName: '*',
-        isNamespace: true,
-        localName: node.importClause.namedBindings.name.text,
-      });
-    } else if (ts.isNamedImports(node.importClause.namedBindings)) {
-      // Named imports
-      for (const element of node.importClause.namedBindings.elements) {
-        imports.push({
-          ...importEntry,
-          importName: element.propertyName?.text || element.name.text,
-          localName: element.name.text,
-        });
-      }
-    }
-
-    ts.forEachChild(node, visit);
-  }
-
-  visit(sourceFile);
+  visit(sourceFile, imports);
   return imports;
 }
 
