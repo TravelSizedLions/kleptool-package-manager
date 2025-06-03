@@ -9,7 +9,7 @@ const moduleRegistry = new Map<string, ModuleInfo>();
 const mockRegistry = new Map<string, Map<string, unknown>>();
 const moduleCache = new Map<string, unknown>();
 
-async function translateError(error: Error) {
+async function __translate(error: Error) {
   const plugin = await import('./transform-plugin.ts');
   return plugin.translateStackTrace(error);
 }
@@ -19,7 +19,7 @@ const originalConsoleError = console.error;
 console.error = (...args: unknown[]) => {
   const translatedArgs = args.map(async (arg) => {
     if (arg instanceof Error) {
-      return translateError(arg);
+      return __translate(arg);
     }
 
     return arg;
@@ -31,7 +31,7 @@ console.error = (...args: unknown[]) => {
 
 // Monkey patch process.on for uncaught exceptions
 process.on('uncaughtException', async (error) => {
-  console.error('Uncaught Exception:', await translateError(error));
+  console.error('Uncaught Exception:', await __translate(error));
   process.exit(1);
 });
 
@@ -41,7 +41,7 @@ process.on('unhandledRejection', async (reason) => {
     return;
   }
 
-  console.error('Unhandled Rejection:', await translateError(reason));
+  console.error('Unhandled Rejection:', await __translate(reason));
 });
 
 interface ImportInfo {
@@ -80,7 +80,7 @@ type DynamicInjector<TImports = any> = {
   reset(): void;
 };
 
-function normalizeModulePath(filePath: string): string {
+function __stripExtensions(filePath: string): string {
   let normalized = filePath;
   if (normalized.endsWith('.ts')) {
     normalized = normalized.slice(0, -3);
@@ -91,7 +91,7 @@ function normalizeModulePath(filePath: string): string {
   return normalized;
 }
 
-function resolveModuleSpecifier(specifier: string, fromPath: string): string {
+function __resolveModuleSpecifier(specifier: string, fromPath: string): string {
   if (specifier.startsWith('.')) {
     // Relative import
     const basePath = path.dirname(fromPath);
@@ -101,7 +101,7 @@ function resolveModuleSpecifier(specifier: string, fromPath: string): string {
   return specifier;
 }
 
-async function loadModule(specifier: string): Promise<any> {
+async function __loadModule(specifier: string): Promise<any> {
   if (moduleCache.has(specifier)) {
     return moduleCache.get(specifier);
   }
@@ -116,7 +116,7 @@ async function loadModule(specifier: string): Promise<any> {
   }
 }
 
-function visitImportDeclaration(node: ts.ImportDeclaration, imports: ImportInfo[]) {
+function __visitDeclaration(node: ts.ImportDeclaration, imports: ImportInfo[]) {
   if (!node.importClause) {
     return;
   }
@@ -160,20 +160,20 @@ function visitImportDeclaration(node: ts.ImportDeclaration, imports: ImportInfo[
   }
 }
 
-function visit(node: ts.Node, imports: ImportInfo[]) {
+function __visit(node: ts.Node, imports: ImportInfo[]) {
   if (ts.isImportDeclaration(node)) {
-    visitImportDeclaration(node, imports);
+    __visitDeclaration(node, imports);
   }
 
-  ts.forEachChild(node, (node) => visit(node, imports));
+  ts.forEachChild(node, (node) => __visit(node, imports));
 }
 
-function parseImports(filePath: string): ImportInfo[] {
+function __parse(filePath: string): ImportInfo[] {
   const sourceText = readFileSync(filePath, 'utf8');
   const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true);
 
   const imports: ImportInfo[] = [];
-  visit(sourceFile, imports);
+  __visit(sourceFile, imports);
   return imports;
 }
 
@@ -255,11 +255,11 @@ async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
 
   for (const importInfo of moduleInfo.imports) {
     try {
-      const resolvedSpecifier = resolveModuleSpecifier(
+      const resolvedSpecifier = __resolveModuleSpecifier(
         importInfo.moduleSpecifier,
         moduleInfo.filePath
       );
-      const module = await loadModule(resolvedSpecifier);
+      const module = await __loadModule(resolvedSpecifier);
 
       let importedValue;
 
@@ -287,13 +287,13 @@ async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
 
 async function registerModule(meta: ImportMeta): Promise<void> {
   const filePath = fileURLToPath(meta.url);
-  const normalizedPath = normalizeModulePath(filePath);
+  const normalizedPath = __stripExtensions(filePath);
 
   if (moduleRegistry.has(normalizedPath)) {
     return; // Already registered
   }
 
-  const imports = parseImports(filePath);
+  const imports = __parse(filePath);
   const moduleInfo: ModuleInfo = {
     filePath: normalizedPath,
     imports,
@@ -391,7 +391,7 @@ function createMockImport(originalValue: any, importName: string, modulePath: st
 }
 
 function createInjector(meta: ImportMeta): DynamicInjector {
-  const filePath = normalizeModulePath(meta.path);
+  const filePath = __stripExtensions(meta.path);
   if (!moduleRegistry.has(filePath.replace('.spec.', '.'))) {
     throw kerror(kerror.Parsing, 'nuke-module-not-registered', {
       message: `Module ${filePath} not registered for injection. Make sure to call $(import.meta) in the target module first.`,
@@ -449,7 +449,7 @@ function createInjector(meta: ImportMeta): DynamicInjector {
 // Helper function for build-time transformed modules
 export function __createModuleProxy(originalValue: any, importName: string, meta: ImportMeta): any {
   const filePath = fileURLToPath(meta.url);
-  const normalizedPath = normalizeModulePath(filePath);
+  const normalizedPath = __stripExtensions(filePath);
 
   // Safety check: if the value is null, undefined, or not an object/function, return as-is
   if (originalValue === null || originalValue === undefined) {
