@@ -1,4 +1,5 @@
 import { plugin } from 'bun';
+import kerror from '../cli/kerror.js';
 
 // Bun global is provided by runtime
 declare const Bun: {
@@ -13,31 +14,55 @@ declare global {
   var test: TestFunction | undefined;
 }
 
-// Interface for source map support
+// File-wide constants
+const STACK_TRACE_PATTERNS = [
+  /\s+at .* \((.+):(\d+):(\d+)\)/, // at function (file:line:col)
+  /\s+at (.+):(\d+):(\d+)/, // at file:line:col
+  /\s+at <anonymous> \((.+):(\d+):(\d+)\)/, // at <anonymous> (file:line:col)
+];
+
+const NUCLEAR_COMMENT = '// ☢️ NUCLEAR';
+const MAX_TRANSLATION_ERRORS = 3;
+const SPECIFIC_PROPS = ['env', 'argv', 'cwd', 'version', 'platform'];
+
+// File-wide variables
+let isTranslatingStackTrace = false;
+let translationErrorCount = 0;
+let originalConsoleError: (...args: unknown[]) => void;
+
+// Type declarations
 interface SourceMapEntry {
   originalLine: number;
   generatedLine: number;
   source: string;
 }
 
+interface ImportReplacement {
+  original: string;
+  replacement: string;
+}
+
+interface ImportProcessResult {
+  original: string;
+  code: string;
+  addedLines: number;
+}
+
 const sourceMapRegistry = new Map<string, SourceMapEntry[]>();
 
-function findStackTraceMatch(line: string) {
-  const patterns = [
-    /\s+at .* \((.+):(\d+):(\d+)\)/, // at function (file:line:col)
-    /\s+at (.+):(\d+):(\d+)/, // at file:line:col
-    /\s+at <anonymous> \((.+):(\d+):(\d+)\)/, // at <anonymous> (file:line:col)
-  ];
+// ============================================================================
+// Stack Trace Processing Functions
+// ============================================================================
 
-  for (const pattern of patterns) {
+function __findStackTraceMatch(line: string) {
+  for (const pattern of STACK_TRACE_PATTERNS) {
     const match = line.match(pattern);
     if (match) return match;
   }
-
   return null;
 }
 
-function findBestMapping(mappings: SourceMapEntry[], originalLine: number) {
+function __findBestMapping(mappings: SourceMapEntry[], originalLine: number) {
   for (const mapping of mappings) {
     if (originalLine >= mapping.generatedLine) {
       return mapping;
@@ -46,30 +71,34 @@ function findBestMapping(mappings: SourceMapEntry[], originalLine: number) {
   return null;
 }
 
-function translateSingleStackLine(line: string): string {
-  const match = findStackTraceMatch(line);
+function __shouldSkipStackTranslation(filePath: string): boolean {
+  return (
+    filePath === 'native' ||
+    !filePath.includes('/') ||
+    !filePath.includes('.') ||
+    filePath.includes('node_modules') ||
+    filePath.startsWith('bun:')
+  );
+}
+
+function __translateSingleStackLine(line: string): string {
+  const match = __findStackTraceMatch(line);
   if (!match) return line;
 
   const filePath = match[1];
   const originalLine = parseInt(match[2], 10);
 
-  // Skip native code or non-file paths to avoid errors
-  if (filePath === 'native' || !filePath.includes('/') || !filePath.includes('.')) {
+  if (__shouldSkipStackTranslation(filePath)) {
     return line;
   }
 
   const mappings = sourceMapRegistry.get(filePath);
   if (!mappings || mappings.length === 0) {
-    // Don't log for native code or system files
-    if (!filePath.includes('node_modules') && !filePath.startsWith('bun:')) {
-      console.log(`No source map found for ${filePath}`);
-    }
     return line;
   }
 
-  const bestMapping = findBestMapping(mappings, originalLine);
+  const bestMapping = __findBestMapping(mappings, originalLine);
   if (!bestMapping) {
-    console.log(`No mapping found for line ${originalLine} in ${filePath}`);
     return line;
   }
 
@@ -79,48 +108,41 @@ function translateSingleStackLine(line: string): string {
   return line.replace(`:${originalLine}:`, `:${originalLineNumber}:`);
 }
 
-// Global flag to prevent infinite recursion
-let isTranslatingStackTrace = false;
-let translationErrorCount = 0;
-const MAX_TRANSLATION_ERRORS = 3;
+function __safelyModifyErrorStack(error: Error, translatedLines: string[]): Error {
+  const originalStack = error.stack;
+  try {
+    error.stack = translatedLines.join('\n');
+    return error;
+  } catch {
+    try {
+      error.stack = originalStack;
+    } catch {
+      // If we can't even restore, just continue with the error as-is
+    }
+    return error;
+  }
+}
 
-// Function to translate error stack traces
 export function translateStackTrace(error: Error): Error {
-  // Prevent infinite recursion and disable after too many failures
   if (isTranslatingStackTrace || !error.stack || translationErrorCount >= MAX_TRANSLATION_ERRORS) {
     return error;
   }
 
   try {
     isTranslatingStackTrace = true;
-
     const lines = error.stack.split('\n');
-    const translatedLines = lines.map(translateSingleStackLine);
-
-    // Try to modify the original error instead of creating a new one
-    const originalStack = error.stack;
-    try {
-      error.stack = translatedLines.join('\n');
-      return error;
-    } catch {
-      // If we can't modify the stack, restore original and return as-is
-      try {
-        error.stack = originalStack;
-      } catch {
-        // If we can't even restore, just continue with the error as-is
-      }
-      return error;
-    }
+    const translatedLines = lines.map(__translateSingleStackLine);
+    return __safelyModifyErrorStack(error, translatedLines);
   } catch (translationError) {
     translationErrorCount++;
     const errorMessage =
       translationError instanceof Error ? translationError.message : String(translationError);
+
     console.warn(
       `⚠️  Stack trace translation failed (${translationErrorCount}/${MAX_TRANSLATION_ERRORS}):`,
       errorMessage
     );
 
-    // If we've failed too many times, disable translation
     if (translationErrorCount >= MAX_TRANSLATION_ERRORS) {
       console.warn('🚫 Stack trace translation disabled due to repeated failures');
     }
@@ -131,18 +153,13 @@ export function translateStackTrace(error: Error): Error {
   }
 }
 
-function wrapTestFunction(): void {
-  if (!globalThis.test || globalThis.originalTest) return;
+// ============================================================================
+// Test Function Wrapping
+// ============================================================================
 
-  console.log('🛡️  Setting up test error boundaries...');
-
-  globalThis.originalTest = globalThis.test;
-  globalThis.test = function (name: string, fn: () => void | Promise<void>) {
-    if (!globalThis.originalTest) {
-      throw new Error('Original test function is undefined');
-    }
-
-    return globalThis.originalTest(name, async () => {
+function __createWrappedTestFunction(originalTest: TestFunction): TestFunction {
+  return function (name: string, fn: () => void | Promise<void>) {
+    return originalTest(name, async () => {
       try {
         await fn();
       } catch (error) {
@@ -151,7 +168,6 @@ function wrapTestFunction(): void {
             const translated = translateStackTrace(error);
             throw translated;
           } catch {
-            // If translation fails, throw the original error
             throw error;
           }
         }
@@ -159,78 +175,91 @@ function wrapTestFunction(): void {
       }
     });
   };
+}
 
+function __wrapTestFunction(): void {
+  if (!globalThis.test || globalThis.originalTest) return;
+
+  console.log('🛡️  Setting up test error boundaries...');
+  globalThis.originalTest = globalThis.test;
+
+  if (!globalThis.originalTest) {
+    throw kerror(kerror.type.Unknown, 'test_function_undefined', {
+      message: 'Original test function is undefined',
+    });
+  }
+
+  globalThis.test = __createWrappedTestFunction(globalThis.originalTest);
   console.log('🛡️  Test error boundaries activated with source map translation!');
 }
 
-function setupProcessErrorHandlers(): void {
-  process.removeAllListeners('uncaughtException');
-  process.removeAllListeners('unhandledRejection');
+// ============================================================================
+// Process Error Handlers
+// ============================================================================
 
-  process.on('uncaughtException', (error) => {
-    try {
-      const translated = translateStackTrace(error);
-      console.error('❌ Uncaught Exception:', translated);
-    } catch {
-      console.error('❌ Uncaught Exception (translation failed):', error);
-    }
-    process.exit(1);
-  });
-
-  process.on('unhandledRejection', (reason) => {
-    try {
-      if (reason instanceof Error) {
-        const translated = translateStackTrace(reason);
-        console.error('❌ Unhandled Rejection:', translated);
-      } else {
-        console.error('❌ Unhandled Rejection:', reason);
-      }
-    } catch {
-      console.error('❌ Unhandled Rejection (translation failed):', reason);
-    }
-    process.exit(1);
-  });
+function __handleUncaughtException(error: Error): void {
+  try {
+    const translated = translateStackTrace(error);
+    console.error('❌ Uncaught Exception:', translated);
+  } catch {
+    console.error('❌ Uncaught Exception (translation failed):', error);
+  }
+  process.exit(1);
 }
 
-function patchConsoleError(): void {
-  const originalConsoleError = console.error;
+function __handleUnhandledRejection(reason: unknown): void {
+  try {
+    if (reason instanceof Error) {
+      const translated = translateStackTrace(reason);
+      console.error('❌ Unhandled Rejection:', translated);
+    } else {
+      console.error('❌ Unhandled Rejection:', reason);
+    }
+  } catch {
+    console.error('❌ Unhandled Rejection (translation failed):', reason);
+  }
+  process.exit(1);
+}
+
+function __setupProcessErrorHandlers(): void {
+  process.removeAllListeners('uncaughtException');
+  process.removeAllListeners('unhandledRejection');
+  process.on('uncaughtException', __handleUncaughtException);
+  process.on('unhandledRejection', __handleUnhandledRejection);
+}
+
+// ============================================================================
+// Console Error Patching
+// ============================================================================
+
+function __translateConsoleArgument(arg: unknown): unknown {
+  if (arg instanceof Error && arg.stack) {
+    try {
+      return translateStackTrace(arg);
+    } catch {
+      return arg;
+    }
+  }
+  return arg;
+}
+
+function __patchConsoleError(): void {
+  originalConsoleError = console.error;
   console.error = (...args: unknown[]) => {
     try {
-      const translatedArgs = args.map((arg) => {
-        if (arg instanceof Error && arg.stack) {
-          try {
-            return translateStackTrace(arg);
-          } catch {
-            return arg; // Return original error if translation fails
-          }
-        }
-        return arg;
-      });
+      const translatedArgs = args.map(__translateConsoleArgument);
       originalConsoleError.apply(console, translatedArgs);
     } catch {
-      // Fallback to original console.error if patching fails
       originalConsoleError.apply(console, args);
     }
   };
 }
 
-(function setupErrorBoundaries() {
-  // Disable error boundaries on macOS due to infinite recursion issues
-  if (process.platform === 'darwin') {
-    console.log('🍎 Skipping error boundaries on macOS due to compatibility issues');
-    return;
-  }
+// ============================================================================
+// Transformation Skip Logic
+// ============================================================================
 
-  try {
-    patchConsoleError();
-    setupProcessErrorHandlers();
-    wrapTestFunction();
-  } catch (setupError) {
-    console.warn('⚠️  Failed to setup error boundaries:', setupError);
-  }
-})();
-
-function shouldSkipTransformation(args: { path: string }, content: string): boolean {
+function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
   const normalizedPath = args.path.replace(/\\/g, '/');
   return (
     normalizedPath.includes('.spec.') ||
@@ -239,7 +268,15 @@ function shouldSkipTransformation(args: { path: string }, content: string): bool
   );
 }
 
-function extractShebang(content: string): [string, string] {
+function __shouldSkipImport(moduleName: string): boolean {
+  return moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun';
+}
+
+// ============================================================================
+// Content Processing Functions
+// ============================================================================
+
+function __extractShebang(content: string): [string, string] {
   if (!content.startsWith('#!')) return ['', content];
 
   const firstNewline = content.indexOf('\n');
@@ -248,12 +285,7 @@ function extractShebang(content: string): [string, string] {
   return [content.slice(0, firstNewline + 1), content.slice(firstNewline + 1)];
 }
 
-interface ImportReplacement {
-  original: string;
-  replacement: string;
-}
-
-function parseImportNames(importStatement: string): [string[], boolean, boolean, boolean] {
+function __parseImportNames(importStatement: string): [string[], boolean, boolean, boolean] {
   const trimmed = importStatement.trim();
   let importNames: string[] = [];
   let isDestructured = false;
@@ -283,78 +315,73 @@ function parseImportNames(importStatement: string): [string[], boolean, boolean,
   return [importNames, isDestructured, isNamespace, isDefault];
 }
 
-function createDestructuredReplacement(
+function __createModuleVarName(moduleName: string): string {
+  return `__moxxy_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
+function __createProxyVarName(moduleName: string): string {
+  return `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
+function __createDestructuredReplacement(
   fullMatch: string,
   moduleName: string,
   importNames: string[]
 ): string {
-  const moduleVar = `__moxxy_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const moduleVar = __createModuleVarName(moduleName);
   const individualProxies = importNames
     .map((name) => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`)
     .join('\n');
 
-  return `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${moduleVar} = await import('${moduleName}');\n${individualProxies}`;
+  return `${fullMatch}\n${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = await import('${moduleName}');\n${individualProxies}`;
 }
 
-function createDefaultReplacement(
+function __createDefaultReplacement(
   fullMatch: string,
   moduleName: string,
   importName: string
 ): string {
-  const varName = `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-  return `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __moxxy__(${importName}, '${importName}', import.meta);`;
+  const varName = __createProxyVarName(moduleName);
+  return `${fullMatch}\n${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${varName} = __moxxy__(${importName}, '${importName}', import.meta);`;
 }
 
-function shouldSkipImport(moduleName: string): boolean {
-  return moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun';
-}
-
-function __varname(moduleName: string): string {
-  return `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-}
-
-function calculateAddedLines(isDestructured: boolean, importNames: string[]): number {
+function __calculateAddedLines(isDestructured: boolean, importNames: string[]): number {
   if (isDestructured) {
     return 2 + importNames.length; // comment + module import + individual proxies
   }
   return 2; // comment + proxy declaration
 }
 
-function processImportMatch(
+function __processImportMatch(
   match: RegExpMatchArray,
   moduleNamesMap: Map<string, string>,
   declaredNuclearVars: Set<string>
-): { original: string; code: string; addedLines: number } | null {
+): ImportProcessResult | null {
   const [fullMatch, importStatement, moduleName] = match;
 
-  if (shouldSkipImport(moduleName)) {
+  if (__shouldSkipImport(moduleName)) {
     return null;
   }
 
-  const [importNames, isDestructured] = parseImportNames(importStatement);
-  const varName = __varname(moduleName);
+  const [importNames, isDestructured] = __parseImportNames(importStatement);
+  const varName = __createProxyVarName(moduleName);
 
-  // Store mapping for later replacement
   if (!isDestructured && importNames.length > 0) {
     moduleNamesMap.set(moduleName, importNames[0]);
   }
 
-  // Only add nuclear treatment if we haven't declared this variable yet
   if (declaredNuclearVars.has(varName)) {
     return null;
   }
 
   declaredNuclearVars.add(varName);
 
-  const addedLines = calculateAddedLines(isDestructured, importNames);
-  let replacementCode: string;
+  const addedLines = __calculateAddedLines(isDestructured, importNames);
+  const importName = importNames[0] || moduleName;
 
-  if (isDestructured) {
-    replacementCode = createDestructuredReplacement(fullMatch, moduleName, importNames);
-  } else {
-    const importName = importNames[0] || moduleName;
-    replacementCode = createDefaultReplacement(fullMatch, moduleName, importName);
-  }
+  const replacementCode = isDestructured
+    ? __createDestructuredReplacement(fullMatch, moduleName, importNames)
+    : __createDefaultReplacement(fullMatch, moduleName, importName);
 
   return {
     original: fullMatch,
@@ -363,7 +390,7 @@ function processImportMatch(
   };
 }
 
-function processImports(
+function __processImports(
   contentToTransform: string
 ): [ImportReplacement[], Map<string, string>, number] {
   const importMatches = contentToTransform.matchAll(
@@ -376,7 +403,7 @@ function processImports(
   let generatedLineOffset = 0;
 
   for (const match of importMatches) {
-    const replacement = processImportMatch(match, moduleNamesMap, declaredNuclearVars);
+    const replacement = __processImportMatch(match, moduleNamesMap, declaredNuclearVars);
     if (!replacement) continue;
 
     generatedLineOffset += replacement.addedLines;
@@ -389,11 +416,11 @@ function processImports(
   return [importReplacements, moduleNamesMap, generatedLineOffset];
 }
 
-function replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string>): string {
+function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string>): string {
   let transformedContent = content;
 
   for (const [moduleName, importName] of moduleNamesMap) {
-    const varName = `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const varName = __createProxyVarName(moduleName);
 
     // Function calls with parentheses
     const functionCallRegex = new RegExp(
@@ -406,8 +433,7 @@ function replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string
     });
 
     // Specific property access
-    const specificProps = ['env', 'argv', 'cwd', 'version', 'platform'];
-    for (const prop of specificProps) {
+    for (const prop of SPECIFIC_PROPS) {
       const propRegex = new RegExp(`(?<!\\.)\\b${importName}\\.${prop}\\b`, 'g');
       transformedContent = transformedContent.replace(propRegex, () => {
         return `(${varName} || ${importName}).${prop}`;
@@ -418,7 +444,7 @@ function replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string
   return transformedContent;
 }
 
-function createSourceMap(
+function __createSourceMap(
   shebang: string,
   contentToTransform: string,
   args: { path: string },
@@ -440,8 +466,8 @@ function createSourceMap(
   sourceMapRegistry.set(args.path, sourceMapEntries);
 }
 
-function setupMoxxy(): string {
-  const moxxyCwd = process.cwd().replace(/\\/g, '/'); // Normalize to forward slashes for import paths
+function __setupMoxxy(): string {
+  const moxxyCwd = process.cwd().replace(/\\/g, '/');
   return `// Love, Moxxy ~<3
 const { $ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 const __registered = $(import.meta); // Register this module for nuclear injection
@@ -452,6 +478,33 @@ const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 `;
 }
 
+// ============================================================================
+// Main Setup Functions
+// ============================================================================
+
+function __setupErrorBoundaries() {
+  // Disable error boundaries on macOS due to infinite recursion issues
+  if (process.platform === 'darwin') {
+    console.log('🍎 Skipping error boundaries on macOS due to compatibility issues');
+    return;
+  }
+
+  try {
+    __patchConsoleError();
+    __setupProcessErrorHandlers();
+    __wrapTestFunction();
+  } catch (setupError) {
+    console.warn('⚠️  Failed to setup error boundaries:', setupError);
+  }
+}
+
+// ============================================================================
+// Plugin Registration
+// ============================================================================
+
+// Initialize error boundaries
+__setupErrorBoundaries();
+
 // Register as Bun plugin for automatic transformation
 plugin({
   name: 'Moxxy Dependency Injection',
@@ -459,16 +512,16 @@ plugin({
     build.onLoad({ filter: /[/\\]src[/\\].*\.ts$/ }, async (args) => {
       const content = await Bun.file(args.path).text();
 
-      if (shouldSkipTransformation(args, content)) {
+      if (__shouldSkipTransformation(args, content)) {
         return {
           contents: content,
           loader: 'tsx',
         };
       }
 
-      const [shebang, contentToTransform] = extractShebang(content);
+      const [shebang, contentToTransform] = __extractShebang(content);
       const [importReplacements, moduleNamesMap, generatedLineOffset] =
-        processImports(contentToTransform);
+        __processImports(contentToTransform);
 
       // Apply import transformations
       let transformedContent = contentToTransform;
@@ -480,13 +533,13 @@ plugin({
       }
 
       // Replace direct usage with moxxy proxies
-      transformedContent = replaceRuntimeUsage(transformedContent, moduleNamesMap);
+      transformedContent = __replaceRuntimeUsage(transformedContent, moduleNamesMap);
 
       // Create source map
-      createSourceMap(shebang, contentToTransform, args, generatedLineOffset);
+      __createSourceMap(shebang, contentToTransform, args, generatedLineOffset);
 
       // Combine all parts
-      const moxxyLines = setupMoxxy();
+      const moxxyLines = __setupMoxxy();
       const finalContent = shebang + moxxyLines + transformedContent;
 
       return {
