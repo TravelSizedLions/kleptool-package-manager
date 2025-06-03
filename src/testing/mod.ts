@@ -120,14 +120,8 @@ async function loadModule(specifier: string): Promise<any> {
   }
 }
 
-function visit(node: ts.Node, imports: ImportInfo[]) {
-  if (!ts.isImportDeclaration(node)) {
-    ts.forEachChild(node, (node) => visit(node, imports));
-    return;
-  }
-
+function visitImportDeclaration(node: ts.ImportDeclaration, imports: ImportInfo[]) {
   if (!node.importClause) {
-    ts.forEachChild(node, (node) => visit(node, imports));
     return;
   }
 
@@ -135,9 +129,8 @@ function visit(node: ts.Node, imports: ImportInfo[]) {
     moduleSpecifier: (node.moduleSpecifier as ts.StringLiteral).text,
     isDefault: false,
     isNamespace: false,
-  }
+  };
 
-  // Default import: import foo from 'bar'
   if (node.importClause.name) {
     imports.push({
       ...importEntry,
@@ -148,7 +141,6 @@ function visit(node: ts.Node, imports: ImportInfo[]) {
   }
 
   if (!node.importClause.namedBindings) {
-    ts.forEachChild(node, (node) => visit(node, imports));
     return;
   }
 
@@ -169,6 +161,12 @@ function visit(node: ts.Node, imports: ImportInfo[]) {
         localName: element.name.text,
       });
     }
+  }
+}
+
+function visit(node: ts.Node, imports: ImportInfo[]) {
+  if (ts.isImportDeclaration(node)) {
+    visitImportDeclaration(node, imports);
   }
 
   ts.forEachChild(node, (node) => visit(node, imports));
@@ -315,7 +313,7 @@ async function registerModule(meta: ImportMeta): Promise<void> {
 }
 
 function addMockFunction(originalValue: any, importName: string, mocks: Map<string, any>): any {
-   const proxiedFn = new Proxy(originalValue, {
+  const proxiedFn = new Proxy(originalValue, {
     apply(target, thisArg, argumentsList) {
       if (mocks.has(importName)) {
         const mockFn = mocks.get(importName);
@@ -333,7 +331,7 @@ function addMockFunction(originalValue: any, importName: string, mocks: Map<stri
   return proxiedFn;
 }
 
-function addMockObject(originalValue: any, importName: string, mocks: Map<string, any>): any {  
+function addMockObject(originalValue: any, importName: string, mocks: Map<string, any>): any {
   return new Proxy(originalValue, {
     get(target, prop) {
       if (prop === 'mock') {
@@ -388,12 +386,7 @@ function addMock(originalValue: any, importName: string, mocks: Map<string, any>
   }
 }
 
-
-function createMockImport(
-  originalValue: any,
-  importName: string,
-  modulePath: string
-): any {
+function createMockImport(originalValue: any, importName: string, modulePath: string): any {
   if (!mockRegistry.has(modulePath)) {
     mockRegistry.set(modulePath, new Map());
   }
