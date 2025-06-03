@@ -26,7 +26,7 @@ describe('CLI Integration Tests', () => {
       const result = await $test`test:args hello world`;
 
       expect(result.success).toBe(true);
-      expect(result.stdout).toContain('Args:  hello world');
+      expect(result.stdout).toContain('Args: hello world');
     });
 
     it('should handle non-existent tasks', async () => {

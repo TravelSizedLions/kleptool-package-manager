@@ -38,8 +38,9 @@
   // Simulate a CI pipeline
   ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep test',
 
-  // Delete all branches except for dev
+  // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
+  'git:tweak' : 'git add . && git commit -m "tweaks" && git push',
 
   // ------------------------------------------------------------
   // Sub-tasks

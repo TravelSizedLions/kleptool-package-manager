@@ -1,6 +1,7 @@
 import { ChildProcess, exec, spawn } from 'node:child_process';
 import kerror from './kerror.ts';
 import Stream from 'node:stream';
+import { join } from 'node:path';
 
 type StreamType = 'inherit' | 'pipe' | 'ignore';
 
@@ -145,7 +146,7 @@ function sendData(childProcess: ChildProcess, data?: string): void {
 export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string> {
   try {
     const { args, cwd, env, timeout, data } = { ...defaultIpcOptions, ...options };
-    const command = `${cmd} ${args?.join(' ') || ''}`.trim();
+    const command = substituteArguments(cmd, args || []);
 
     const childProcess = spawn(cmd, args || [], {
       cwd,
@@ -178,6 +179,22 @@ export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string
   }
 }
 
+// Cross-platform argument substitution helper
+function substituteArguments(cmd: string, args: string[]): string {
+  if (!cmd.includes('$@')) {
+    return `${cmd} ${args.join(' ') || ''}`.trim();
+  }
+
+  const escapedArgs = args.map(arg => {
+    if (arg.includes(' ') || arg.includes('"') || arg.includes("'")) {
+      return `"${arg.replace(/"/g, '\\"')}"`;
+    }
+
+    return arg;
+  }).join(' ');
+  return cmd.replace(/\$@/g, escapedArgs);
+}
+
 // Regular shell command execution with full result
 export async function execWithResult(cmd: string, options: ExecOptions = {}): Promise<ExecResult> {
   try {
@@ -186,7 +203,7 @@ export async function execWithResult(cmd: string, options: ExecOptions = {}): Pr
       ...options,
     };
 
-    const command = `${cmd} ${args?.join(' ') || ''}`.trim();
+    const command = substituteArguments(cmd, args || []);
 
     const childProcess = exec(command, { cwd, env, timeout });
 
