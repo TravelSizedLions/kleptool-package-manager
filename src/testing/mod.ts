@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import * as ts from 'typescript';
 import * as path from 'node:path';
+import kerror from '../cli/kerror.ts';
 
 // Import source map translation functionality
 export { translateStackTrace } from './transform-plugin.ts';
@@ -12,9 +13,6 @@ const mockRegistry = new Map<string, Map<string, unknown>>();
 const moduleCache = new Map<string, unknown>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const importValueToProxy = new WeakMap<any, any>();
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _importValueToModuleInfo = new WeakMap<object, { modulePath: string; importName: string }>();
 
 // Monkey patch console.error to automatically translate stack traces
 const originalConsoleError = console.error;
@@ -392,28 +390,20 @@ function createMockableImportProxy(
   return addMockMethod(originalValue, importName);
 }
 
-function createTypeSafeDependencyInjector(meta: ImportMeta): DynamicInjector {
-  const filePath = fileURLToPath(meta.url);
-  const testPath = normalizeModulePath(filePath);
-
-  // For test files, target the corresponding source module
-  let targetPath = testPath;
-  if (testPath.includes('.spec')) {
-    targetPath = testPath.replace('.spec', '');
+function createInjector(meta: ImportMeta): DynamicInjector {
+  const filePath = normalizeModulePath(meta.path);
+  if (!moduleRegistry.has(filePath.replace('.spec.', '.'))) {
+    throw kerror(kerror.Parsing, 'nuke-module-not-registered', {
+      message: `Module ${filePath} not registered for injection. Make sure to call $(import.meta) in the target module first.`,
+    });
   }
 
-  if (!moduleRegistry.has(targetPath)) {
-    throw new Error(
-      `Module ${targetPath} not registered for injection. Make sure to call $(import.meta) in the target module first.`
-    );
+  if (!mockRegistry.has(filePath)) {
+    mockRegistry.set(filePath, new Map());
   }
 
-  if (!mockRegistry.has(targetPath)) {
-    mockRegistry.set(targetPath, new Map());
-  }
-
-  const moduleInfo = moduleRegistry.get(targetPath)!;
-  const mocks = mockRegistry.get(targetPath)!;
+  const moduleInfo = moduleRegistry.get(filePath)!;
+  const mocks = mockRegistry.get(filePath)!;
 
   // Create the base injector with legacy methods
   const baseInjector = {
@@ -446,7 +436,7 @@ function createTypeSafeDependencyInjector(meta: ImportMeta): DynamicInjector {
       const importName = String(prop);
       if (moduleInfo.originalImports.has(importName)) {
         const originalValue = moduleInfo.originalImports.get(importName);
-        return createMockableImportProxy(originalValue, importName, targetPath);
+        return createMockableImportProxy(originalValue, importName, filePath);
       }
 
       return undefined;
@@ -494,38 +484,18 @@ export function __createModuleProxy(originalValue: any, importName: string, meta
   return proxy;
 }
 
-// The nuclear $ function with overloads
-export function $(meta: ImportMeta): DynamicInjector | void;
+export function $(meta: ImportMeta): DynamicInjector | void {
+  const filePath = meta.path;
 
-export function $<T>(importValue: T): T;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function $(metaOrImport: ImportMeta | any): any {
-  // If it's import.meta, handle module registration/injection
-  if (metaOrImport && typeof metaOrImport === 'object' && 'url' in metaOrImport) {
-    const meta = metaOrImport as ImportMeta;
-    const filePath = fileURLToPath(meta.url);
-
-    // If this is a test file, return a dependency injector
-    if (filePath.includes('.spec.')) {
-      return createTypeSafeDependencyInjector(meta);
-    }
-
-    // Otherwise, register this module for injection (async but fire-and-forget)
-    registerModule(meta).catch((error) => {
-      console.warn(`❌ Failed to register module ${filePath}:`, error);
-    });
-    return;
+  // If this is a test file, return a dependency injector
+  if (filePath.includes('.spec.')) {
+    return createInjector(meta);
   }
 
-  // If it's an import value, return the proxied version if available
-  if (importValueToProxy.has(metaOrImport)) {
-    const proxy = importValueToProxy.get(metaOrImport);
-    return proxy;
-  }
-
-  // Fallback: return the original value
-  console.warn(`⚠️  No proxy found for import value, returning original`);
-  return metaOrImport;
+  // Otherwise, register this module for injection (async but fire-and-forget)
+  registerModule(meta).catch((error) => {
+    console.warn(`❌ Failed to register module ${filePath}:`, error);
+  });
 }
 
 // Utility function to debug the nuclear system
