@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import depsfile from './depsfile.ts';
+import path from 'node:path';
 
 import { $ } from '../testing/moxxy.ts';
 import { beforeEach } from 'bun:test';
@@ -25,22 +26,21 @@ describe('DepsFile', () => {
       let savedContent = '';
       let savedPath = '';
 
-      // Mock fs module
       moxxy.fs.mock({
-        writeFileSync: (path: string, content: string) => {
-          savedPath = path;
+        writeFileSync: (filePath: string, content: string) => {
+          savedPath = filePath;
           savedContent = content;
         },
       });
 
-      // Mock process module
       moxxy.process.mock({
         cwd: () => '/test/project',
       });
 
       depsfile.save();
 
-      expect(savedPath).toBe('/test/project/klep.deps');
+      const expectedPath = path.join('/test/project', 'klep.deps');
+      expect(path.normalize(savedPath)).toBe(path.normalize(expectedPath));
       expect(savedContent).toContain('dependencyFolder');
       expect(savedContent).toContain('dependencies');
     });
@@ -119,7 +119,6 @@ describe('DepsFile', () => {
       depsfile.addDependency('test-dep', dep, false);
       const result = depsfile.load();
 
-      // folder should be removed since it matches the default
       expect(result.dependencies['test-dep'].folder).toBeUndefined();
     });
 
@@ -132,7 +131,6 @@ describe('DepsFile', () => {
       depsfile.addDependency('test-dep', dep, false);
       const result = depsfile.load();
 
-      // extract should be removed since it's 'all'
       expect(result.dependencies['test-dep'].extract).toBeUndefined();
     });
 
@@ -157,7 +155,6 @@ describe('DepsFile', () => {
   describe('exists', () => {
     beforeEach(() => {
       depsfile.clear();
-
       depsfile.addDependency(
         'existing-dep',
         {
@@ -194,7 +191,6 @@ describe('DepsFile', () => {
       };
 
       const result = depsfile.exists('existing-dep', dep);
-
       expect(result).toBe(false);
     });
 
@@ -204,7 +200,6 @@ describe('DepsFile', () => {
       };
 
       const result = depsfile.exists('existing-dev-dep', dep);
-
       expect(result).toBe(false);
     });
 
@@ -215,7 +210,6 @@ describe('DepsFile', () => {
       };
 
       const result = depsfile.exists('new-name', dep);
-
       expect(result).toBe(false);
     });
 
@@ -226,7 +220,6 @@ describe('DepsFile', () => {
       };
 
       const result = depsfile.exists('new-dev-name', dep);
-
       expect(result).toBe(false);
     });
 
@@ -237,7 +230,6 @@ describe('DepsFile', () => {
       };
 
       const result = depsfile.exists('unique-dep', dep);
-
       expect(result).toBe(true);
     });
 
@@ -248,7 +240,6 @@ describe('DepsFile', () => {
       };
 
       const result = depsfile.exists('unique-dev-dep', dep);
-
       expect(result).toBe(true);
     });
   });
@@ -268,8 +259,8 @@ describe('DepsFile', () => {
 
       moxxy.fs.mock({
         existsSync: () => false,
-        writeFileSync: (path: string, content: string) => {
-          savedPath = path;
+        writeFileSync: (filePath: string, content: string) => {
+          savedPath = filePath;
           savedContent = content;
         },
       });
@@ -280,7 +271,8 @@ describe('DepsFile', () => {
 
       depsfile.initialize();
 
-      expect(savedPath).toBe('/test/project/klep.deps');
+      const expectedPath = path.join('/test/project', 'klep.deps');
+      expect(path.normalize(savedPath)).toBe(path.normalize(expectedPath));
       expect(savedContent).toContain('dependencyFolder');
       expect(savedContent).toContain('dependencies');
       expect(savedContent).toContain('devDependencies');
