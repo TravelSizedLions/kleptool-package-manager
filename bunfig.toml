@@ -1,4 +1,4 @@
 [test]
-preload = [
-  "./src/testing/mock-prefixes.ts"
-]
+# preload = [
+#   "./src/testing/mock-prefixes.ts"
+# ]

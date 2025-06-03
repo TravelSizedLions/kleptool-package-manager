@@ -34,7 +34,7 @@ expect.extend({
       }
 
       return {
-        message: () => `expected error to be a KlepError with type ${type} and id ${id}`,
+        message: () => `expected error to be a KlepError with type ${type} and id ${id}. instead got ${error}`,
         pass: false,
       };
     }
@@ -50,7 +50,7 @@ expect.extend({
       (received as () => void)();
 
       return {
-        message: () => `expected error to be a KlepError with id ${id}`,
+        message: () => `expected error to be a KlepError with id ${id}.`,
         pass: false,
       };
     } catch (error) {
@@ -61,7 +61,7 @@ expect.extend({
       }
 
       return {
-        message: () => `expected error to be a KlepError with id ${id}`,
+        message: () => `expected error to be a KlepError with id ${id}. instead got ${error}`,
         pass: false,
       };
     }
@@ -88,7 +88,7 @@ expect.extend({
       }
 
       return {
-        message: () => `expected error to be a KlepError with type ${type}`,
+        message: () => `expected error to be a KlepError with type ${type}. instead got ${error}`,
         pass: false,
       };
     }
