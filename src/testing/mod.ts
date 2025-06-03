@@ -4,23 +4,24 @@ import * as ts from 'typescript';
 import * as path from 'node:path';
 import kerror from '../cli/kerror.ts';
 
-// Import source map translation functionality
-export { translateStackTrace } from './transform-plugin.ts';
-
 // Global registry of modules and their injectable dependencies
 const moduleRegistry = new Map<string, ModuleInfo>();
 const mockRegistry = new Map<string, Map<string, unknown>>();
 const moduleCache = new Map<string, unknown>();
+
+async function translateError(error: Error) {
+  const plugin = await import('./transform-plugin.ts');
+  return plugin.translateStackTrace(error);
+}
 
 // Monkey patch console.error to automatically translate stack traces
 const originalConsoleError = console.error;
 console.error = (...args: unknown[]) => {
   const translatedArgs = args.map(async (arg) => {
     if (arg instanceof Error) {
-      // Import here to avoid circular dependency
-      const { translateStackTrace } = await import('./transform-plugin.ts');
-      return translateStackTrace(arg);
+      return translateError(arg);
     }
+
     return arg;
   });
   Promise.all(translatedArgs).then((resolved) => {
@@ -30,22 +31,17 @@ console.error = (...args: unknown[]) => {
 
 // Monkey patch process.on for uncaught exceptions
 process.on('uncaughtException', async (error) => {
-  // Import here to avoid circular dependency
-  const { translateStackTrace } = await import('./transform-plugin.ts');
-  const translatedError = translateStackTrace(error);
-  console.error('Uncaught Exception:', translatedError);
+  console.error('Uncaught Exception:', await translateError(error));
   process.exit(1);
 });
 
 process.on('unhandledRejection', async (reason) => {
-  if (reason instanceof Error) {
-    // Import here to avoid circular dependency
-    const { translateStackTrace } = await import('./transform-plugin.ts');
-    const translatedError = translateStackTrace(reason);
-    console.error('Unhandled Rejection:', translatedError);
-  } else {
+  if (!(reason instanceof Error)) {
     console.error('Unhandled Rejection:', reason);
+    return;
   }
+
+  console.error('Unhandled Rejection:', await translateError(reason));
 });
 
 interface ImportInfo {
