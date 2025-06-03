@@ -24,7 +24,7 @@ describe('kerror', () => {
   describe('KlepError construction', () => {
     it('should create error with minimal options', () => {
       const error = kerror(kerror.type.Unknown, 'test-id');
-      
+
       expect(error).toBeInstanceOf(kerror.KlepError);
       expect(error.type).toBe(kerror.type.Unknown);
       expect(error.id).toBe('test-id');
@@ -36,9 +36,9 @@ describe('kerror', () => {
       const context = { file: 'test.ts', line: 42 };
       const error = kerror(kerror.type.Parsing, 'parsing-error-123', {
         message: 'Failed to parse config',
-        context
+        context,
       });
-      
+
       expect(error.type).toBe(kerror.type.Parsing);
       expect(error.id).toBe('parsing-error-123');
       expect(error.message).toBe('Failed to parse config');
@@ -47,22 +47,22 @@ describe('kerror', () => {
 
     it('should handle context correctly when not provided', () => {
       const error = kerror(kerror.type.Git, 'git-error', {
-        message: 'Git command failed'
+        message: 'Git command failed',
       });
-      
+
       expect(error.context).toEqual({});
     });
 
     it('should work with all error types', () => {
       const types = [
         kerror.type.Parsing,
-        kerror.type.Argument, 
+        kerror.type.Argument,
         kerror.type.Git,
         kerror.type.Task,
-        kerror.type.Unknown
+        kerror.type.Unknown,
       ];
 
-      types.forEach(type => {
+      types.forEach((type) => {
         const error = kerror(type, 'test-id');
         expect(error.type).toBe(type);
       });
@@ -141,7 +141,7 @@ describe('kerror', () => {
     it('should print basic error info', async () => {
       const fn = kerror.boundary(() => {
         throw kerror(kerror.type.Git, 'git-123', {
-          message: 'Git operation failed'
+          message: 'Git operation failed',
         });
       });
 
@@ -160,9 +160,9 @@ describe('kerror', () => {
         command: 'git push',
         options: {
           branch: 'main',
-          force: true
+          force: true,
         },
-        files: ['index.ts', 'config.json']
+        files: ['index.ts', 'config.json'],
       };
 
       const fn = kerror.boundary(() => {
@@ -237,7 +237,7 @@ describe('kerror', () => {
       expect(kerror.KlepError).toBeDefined();
       const error = new kerror.KlepError({
         type: kerror.type.Unknown,
-        id: 'direct-construction'
+        id: 'direct-construction',
       });
       expect(error).toBeInstanceOf(kerror.KlepError);
     });
@@ -255,7 +255,9 @@ describe('kerror', () => {
 
   describe('legacy compatibility', () => {
     it('should throw an error when called as function', () => {
-      expect(() => {throw kerror(kerror.Unknown, 'test-id')}).toThrow();
+      expect(() => {
+        throw kerror(kerror.Unknown, 'test-id');
+      }).toThrow();
     });
 
     it('should maintain backward compatibility with existing usage', () => {
