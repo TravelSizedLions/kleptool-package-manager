@@ -19,8 +19,11 @@ function initialize() {
     });
   }
 
-  fs.writeFileSync(path.join(process.cwd(), 'klep.keep'), json5.stringify(defaults.keepfile, null, 2));
-  return defaults.keepfile;  
+  fs.writeFileSync(
+    path.join(process.cwd(), 'klep.keep'),
+    json5.stringify(defaults.keepfile, null, 2)
+  );
+  return defaults.keepfile;
 }
 
 function ensureDependencyFolder(name: string, dep: Dependency) {
@@ -32,7 +35,7 @@ function ensureDependencyFolder(name: string, dep: Dependency) {
     fs.mkdirSync(path.join(process.cwd(), dep.folder, name), {
       recursive: true,
     });
-  } 
+  }
 }
 
 function load(): DependencyGraph {
@@ -52,7 +55,7 @@ function load(): DependencyGraph {
 
 function clear() {
   __keep = undefined;
-} 
+}
 
 function reload() {
   __keep = undefined;

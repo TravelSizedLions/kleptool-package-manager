@@ -34,7 +34,8 @@ expect.extend({
       }
 
       return {
-        message: () => `expected error to be a KlepError with type ${type} and id ${id}. instead got ${error}`,
+        message: () =>
+          `expected error to be a KlepError with type ${type} and id ${id}. instead got ${error}`,
         pass: false,
       };
     }
@@ -93,6 +94,6 @@ expect.extend({
       };
     }
   },
-}); 
+});
 
 export {};

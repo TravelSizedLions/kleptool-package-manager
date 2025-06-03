@@ -10,7 +10,7 @@ describe('keepfile', () => {
   beforeEach(() => {
     injector.reset();
   });
-  
+
   afterEach(() => {
     keepfile.clear();
   });
@@ -19,7 +19,7 @@ describe('keepfile', () => {
     it('should initialize the keepfile', () => {
       injector.fs.mock({
         existsSync: () => false,
-        writeFileSync: () => {}
+        writeFileSync: () => {},
       });
 
       expect(() => keepfile.initialize()).not.toThrow();

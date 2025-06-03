@@ -1,9 +1,6 @@
-
-
 export function to<T>(value: unknown): T {
   return value as T;
 }
-
 
 export type State<T> = [() => T, SetState<T>, ResetState];
 type SetState<S> = (value: S | ((value: S) => S)) => void;
@@ -15,7 +12,7 @@ let stateIdCounter = 0;
 
 export function useState<T>(initialValue: T): [() => T, SetState<T>, ResetState] {
   const stateId = `state_${++stateIdCounter}`;
-  
+
   if (!stateRegistry.has(stateId)) {
     stateRegistry.set(stateId, initialValue);
   }

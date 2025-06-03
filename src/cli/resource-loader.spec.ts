@@ -7,21 +7,19 @@ import kerror from './kerror.ts';
 const injector = $(import.meta)!;
 
 describe('resource-loader', () => {
-  afterEach(() => { ``
+  afterEach(() => {
+    ``;
     injector.reset();
   });
 
   describe('load', () => {
     it('should load a resource if it exists', () => {
       const resourcePath = 'test.json';
-      
+
       injector.readFileSync.mock(() => '{"test": "test"}');
 
-      const resource = resourceLoader.load(
-        resourcePath, 
-        z.object({test: z.string()})
-      );
-      expect(resource).toEqual({test: 'test'});
+      const resource = resourceLoader.load(resourcePath, z.object({ test: z.string() }));
+      expect(resource).toEqual({ test: 'test' });
     });
 
     it('should throw an error if the resource does not exist', () => {
@@ -31,9 +29,12 @@ describe('resource-loader', () => {
         throw new Error('File not found');
       });
 
-      const schema = z.object({test: z.string()})
+      const schema = z.object({ test: z.string() });
 
-      expect(() => resourceLoader.load(resourcePath, schema)).throws(kerror.Parsing, 'invalid-klep-resource');
+      expect(() => resourceLoader.load(resourcePath, schema)).throws(
+        kerror.Parsing,
+        'invalid-klep-resource'
+      );
     });
 
     it('should throw an error if the resource is not valid JSON', () => {
@@ -41,9 +42,12 @@ describe('resource-loader', () => {
 
       injector.readFileSync.mock(() => 'invalid json');
 
-      const schema = z.object({test: z.string()})
+      const schema = z.object({ test: z.string() });
 
-      expect(() => resourceLoader.load(resourcePath, schema)).throws(kerror.Parsing, 'invalid-klep-resource');
+      expect(() => resourceLoader.load(resourcePath, schema)).throws(
+        kerror.Parsing,
+        'invalid-klep-resource'
+      );
     });
   });
 });

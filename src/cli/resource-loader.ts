@@ -23,10 +23,7 @@ function __load(resourcePath: string) {
   }
 }
 
-export function load<T>(
-  resourcePath: string, 
-  schema: z.ZodSchema,
-): T {
+export function load<T>(resourcePath: string, schema: z.ZodSchema): T {
   const content = __load(resourcePath);
 
   try {
