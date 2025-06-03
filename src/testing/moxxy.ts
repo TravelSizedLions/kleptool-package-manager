@@ -448,7 +448,7 @@ function createInjector(meta: ImportMeta): DynamicInjector {
 }
 
 // Helper function for build-time transformed modules
-export function __moxxy(originalValue: any, importName: string, meta: ImportMeta): any {
+export function __moxxy__(originalValue: any, importName: string, meta: ImportMeta): any {
   const filePath = fileURLToPath(meta.url);
   const normalizedPath = __stripExtensions(filePath);
 

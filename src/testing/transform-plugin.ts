@@ -260,8 +260,7 @@ plugin({
             const moduleVar = `__nuclear_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
             const individualProxies = importNames
               .map(
-                (name) =>
-                  `const ${name} = __moxxy(${moduleVar}.${name}, '${name}', import.meta);`
+                (name) => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`
               )
               .join('\n');
 
@@ -273,7 +272,7 @@ plugin({
           } else {
             // For default/namespace imports
             const importName = importNames[0];
-            replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __moxxy(${importName}, '${importName}', import.meta);`;
+            replacementCode = `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __moxxy__(${importName}, '${importName}', import.meta);`;
 
             // Track source map: adding 2 lines (comment + proxy declaration)
             generatedLineOffset += 2;
@@ -330,7 +329,7 @@ const { $ } = await import('${process.cwd()}/src/testing/moxxy.ts');
 const __registered = $(import.meta); // Register this module for nuclear injection
 
 // Import the proxy helper
-const { __moxxy } = await import('${process.cwd()}/src/testing/moxxy.ts');
+const { __moxxy__ } = await import('${process.cwd()}/src/testing/moxxy.ts');
 
 `;
 
