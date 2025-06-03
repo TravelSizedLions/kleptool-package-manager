@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { $mock, runCliWithMockTasks } from '../cli-helpers.ts';
-import { testTasks } from './test-helpers.ts';
+import { testTasks } from '../test-helpers.ts';
 
 describe('CLI Integration Tests', () => {
   describe('Task execution', () => {

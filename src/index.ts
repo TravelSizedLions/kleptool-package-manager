@@ -139,7 +139,7 @@ program
         process.exit(1);
       }
 
-      throw error; // Re-throw non-Error objects
+      throw error;
     }
   });
 

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { withMockTasks, testTasks } from './integration/test-helpers.ts';
+import { withMockTasks, testTasks } from './test-helpers.ts';
 
 export type CliResult = {
   exitCode: number | null;
