@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { withMockTasks, testTasks } from './test-helpers.ts';
+import { withMockTasks, testTasks } from './integration/test-helpers.ts';
 
 export type CliResult = {
   exitCode: number | null;
@@ -71,7 +71,7 @@ export async function runCliWithMockTasks(
  * Template literal function for running CLI commands with mocked tasks
  */
 export function $mock(tasks: Record<string, string> = testTasks) {
-  return (template: TemplateStringsArray, ...args: any[]): Promise<CliResult> => {
+  return (template: TemplateStringsArray, ...args: unknown[]): Promise<CliResult> => {
     const command = String.raw(template, ...args);
     const parsedArgs = command.split(' ').filter((arg) => arg.length > 0);
 

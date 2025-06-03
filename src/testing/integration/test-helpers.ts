@@ -46,22 +46,18 @@ export class MockTasksFile {
 /**
  * Higher-order function for running tests with mocked tasks
  */
-export function withMockTasks<T>(
+export async function withMockTasks<T>(
   tasks: TasksFile,
   testFn: (tasksFilePath: string) => T | Promise<T>
 ): Promise<T> {
-  return new Promise(async (resolve, reject) => {
-    const mockFile = new MockTasksFile(tasks);
+  const mockFile = new MockTasksFile(tasks);
 
-    try {
-      const result = await testFn(mockFile.getPath());
-      resolve(result);
-    } catch (error) {
-      reject(error);
-    } finally {
-      mockFile.cleanup();
-    }
-  });
+  try {
+    const result = await testFn(mockFile.getPath());
+    return result;
+  } finally {
+    mockFile.cleanup();
+  }
 }
 
 /**

@@ -102,7 +102,7 @@ export function translateStackTrace(error: Error): Error {
     try {
       error.stack = translatedLines.join('\n');
       return error;
-    } catch (stackModificationError) {
+    } catch {
       // If we can't modify the stack, restore original and return as-is
       try {
         error.stack = originalStack;
@@ -150,7 +150,7 @@ function wrapTestFunction(): void {
           try {
             const translated = translateStackTrace(error);
             throw translated;
-          } catch (translationError) {
+          } catch {
             // If translation fails, throw the original error
             throw error;
           }
@@ -171,7 +171,7 @@ function setupProcessErrorHandlers(): void {
     try {
       const translated = translateStackTrace(error);
       console.error('❌ Uncaught Exception:', translated);
-    } catch (translationError) {
+    } catch {
       console.error('❌ Uncaught Exception (translation failed):', error);
     }
     process.exit(1);
@@ -185,7 +185,7 @@ function setupProcessErrorHandlers(): void {
       } else {
         console.error('❌ Unhandled Rejection:', reason);
       }
-    } catch (translationError) {
+    } catch {
       console.error('❌ Unhandled Rejection (translation failed):', reason);
     }
     process.exit(1);
@@ -200,7 +200,7 @@ function patchConsoleError(): void {
         if (arg instanceof Error && arg.stack) {
           try {
             return translateStackTrace(arg);
-          } catch (translationError) {
+          } catch {
             return arg; // Return original error if translation fails
           }
         }
