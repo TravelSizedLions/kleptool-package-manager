@@ -1,8 +1,12 @@
+import mod from '../testing/mod.ts';
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { z } from 'zod';
 import kerror from './kerror.ts';
 import json5 from 'json5';
+
+const resources = mod(import.meta);
+resources.mark(readFileSync);
 
 function __resolve(resourcePath: string) {
   return path.join(process.cwd(), resourcePath);
@@ -10,7 +14,7 @@ function __resolve(resourcePath: string) {
 
 function __load(resourcePath: string) {
   try {
-    return readFileSync(__resolve(resourcePath), 'utf8');
+    return resources.use(readFileSync)(__resolve(resourcePath), 'utf8');
   } catch (e) {
     throw kerror(kerror.Parsing, 'invalid-klep-resource', {
       message: 'Invalid klep resource',
@@ -22,7 +26,10 @@ function __load(resourcePath: string) {
   }
 }
 
-export function load<T>(resourcePath: string, schema: z.ZodSchema): T {
+export function load<T>(
+  resourcePath: string, 
+  schema: z.ZodSchema,
+): T {
   const content = __load(resourcePath);
 
   try {
