@@ -129,45 +129,53 @@ function parseImports(filePath: string): ImportInfo[] {
   const imports: ImportInfo[] = [];
 
   function visit(node: ts.Node) {
-    if (ts.isImportDeclaration(node)) {
-      const moduleSpecifier = (node.moduleSpecifier as ts.StringLiteral).text;
+    if (!ts.isImportDeclaration(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
 
-      if (node.importClause) {
-        // Default import: import foo from 'bar'
-        if (node.importClause.name) {
-          imports.push({
-            moduleSpecifier,
-            importName: 'default',
-            isDefault: true,
-            isNamespace: false,
-            localName: node.importClause.name.text,
-          });
-        }
+    if (!node.importClause) {
+      ts.forEachChild(node, visit);
+      return;
+    }
 
-        // Named imports: import { a, b } from 'bar'
-        if (node.importClause.namedBindings) {
-          if (ts.isNamespaceImport(node.importClause.namedBindings)) {
-            // Namespace import: import * as foo from 'bar'
-            imports.push({
-              moduleSpecifier,
-              importName: '*',
-              isDefault: false,
-              isNamespace: true,
-              localName: node.importClause.namedBindings.name.text,
-            });
-          } else if (ts.isNamedImports(node.importClause.namedBindings)) {
-            // Named imports
-            for (const element of node.importClause.namedBindings.elements) {
-              imports.push({
-                moduleSpecifier,
-                importName: element.propertyName?.text || element.name.text,
-                isDefault: false,
-                isNamespace: false,
-                localName: element.name.text,
-              });
-            }
-          }
-        }
+    const importEntry = {
+      moduleSpecifier: (node.moduleSpecifier as ts.StringLiteral).text,
+      isDefault: false,
+      isNamespace: false,
+    }
+
+    // Default import: import foo from 'bar'
+    if (node.importClause.name) {
+      imports.push({
+        ...importEntry,
+        importName: 'default',
+        isDefault: true,
+        localName: node.importClause.name.text,
+      });
+    }
+
+    if (!node.importClause.namedBindings) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+
+    if (ts.isNamespaceImport(node.importClause.namedBindings)) {
+      // Namespace import: import * as foo from 'bar'
+      imports.push({
+        ...importEntry,
+        importName: '*',
+        isNamespace: true,
+        localName: node.importClause.namedBindings.name.text,
+      });
+    } else if (ts.isNamedImports(node.importClause.namedBindings)) {
+      // Named imports
+      for (const element of node.importClause.namedBindings.elements) {
+        imports.push({
+          ...importEntry,
+          importName: element.propertyName?.text || element.name.text,
+          localName: element.name.text,
+        });
       }
     }
 
@@ -352,8 +360,7 @@ function addMockObject(originalValue: any, importName: string, mocks: Map<string
         }
       }
 
-      const originalProp = target[prop];
-      return addMock(originalProp, propPath, mocks);
+      return addMock(target[prop], propPath, mocks);
     },
   });
 }
@@ -503,14 +510,6 @@ export function $(meta: ImportMeta): DynamicInjector | void {
   registerModule(meta).catch((error) => {
     console.warn(`❌ Failed to register module ${filePath}:`, error);
   });
-}
-
-// Utility function to debug the nuclear system
-export function __debugNuclear() {
-  return Array.from(mockRegistry.entries()).map(([key, value]) => [
-    key,
-    Object.fromEntries(value.entries()),
-  ]);
 }
 
 // Export the injector class for the plugin
