@@ -4,7 +4,7 @@
 [![Windows](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/windows.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/windows.yml)
 [![Mac OS](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/macos.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/macos.yml)
 
-![TypeScript Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/TravelSizedLions/YOUR_GIST_ID/raw/kleptool-ts-coverage.json) ![Rust Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/TravelSizedLions/YOUR_GIST_ID/raw/kleptool-rust-coverage.json)
+![TypeScript Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jaredstorm/12c7e6f492fb7ecfa6642ccf61d172f4/raw/kleptool-ts-coverage.json) ![Rust Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/jaredstorm/12c7e6f492fb7ecfa6642ccf61d172f4/raw/kleptool-rust-coverage.json)
 
 # GUD: Git-Derived Unified Dependency Resolution
 
