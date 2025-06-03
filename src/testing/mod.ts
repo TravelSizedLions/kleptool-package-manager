@@ -309,62 +309,56 @@ async function registerModule(meta: ImportMeta): Promise<void> {
   await initializeModuleProxies(moduleInfo);
 }
 
-function addMockMethod(originalValue: any, importName: string, mocks: Map<string, any>): any {
-  if (originalValue === null || originalValue === undefined) {
-    return originalValue;
-  }
+function addMockFunction(originalValue: any, importName: string, mocks: Map<string, any>): any {
+   const proxiedFn = new Proxy(originalValue, {
+    apply(target, thisArg, argumentsList) {
+      if (mocks.has(importName)) {
+        const mockFn = mocks.get(importName);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (mockFn as any).apply(thisArg, argumentsList);
+      }
+      return target.apply(thisArg, argumentsList);
+    },
+  });
 
-  if (typeof originalValue === 'function') {
-    // For functions, add a mock method and proxy the function calls
-    const proxiedFn = new Proxy(originalValue, {
-      apply(target, thisArg, argumentsList) {
-        if (mocks.has(importName)) {
-          const mockFn = mocks.get(importName);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return (mockFn as any).apply(thisArg, argumentsList);
+  proxiedFn.mock = (mockFn: any) => {
+    mocks.set(importName, mockFn);
+  };
+
+  return proxiedFn;
+}
+
+function addMockObject(originalValue: any, importName: string, mocks: Map<string, any>): any {  
+  return new Proxy(originalValue, {
+    get(target, prop) {
+      if (prop === 'mock') {
+        return (mockObj: any) => {
+          mocks.set(importName, mockObj);
+        };
+      }
+
+      const propPath = `${importName}.${String(prop)}`;
+
+      // Check if we have a mock for this specific property
+      if (mocks.has(propPath)) {
+        return mocks.get(propPath);
+      }
+
+      // Check if we have a mock for the parent object
+      if (mocks.has(importName)) {
+        const mockObj = mocks.get(importName);
+        if (mockObj && typeof mockObj === 'object') {
+          return mockObj[prop];
         }
-        return target.apply(thisArg, argumentsList);
-      },
-    });
+      }
 
-    proxiedFn.mock = (mockFn: any) => {
-      mocks.set(importName, mockFn);
-    };
+      const originalProp = target[prop];
+      return addMock(originalProp, propPath, mocks);
+    },
+  });
+}
 
-    return proxiedFn;
-  }
-
-  if (typeof originalValue === 'object') {
-    return new Proxy(originalValue, {
-      get(target, prop) {
-        if (prop === 'mock') {
-          return (mockObj: any) => {
-            mocks.set(importName, mockObj);
-          };
-        }
-
-        const propPath = `${importName}.${String(prop)}`;
-
-        // Check if we have a mock for this specific property
-        if (mocks.has(propPath)) {
-          return mocks.get(propPath);
-        }
-
-        // Check if we have a mock for the parent object
-        if (mocks.has(importName)) {
-          const mockObj = mocks.get(importName);
-          if (mockObj && typeof mockObj === 'object') {
-            return mockObj[prop];
-          }
-        }
-
-        const originalProp = target[prop];
-        return addMockMethod(originalProp, propPath, mocks);
-      },
-    });
-  }
-
-  // For primitives, just add a mock method
+function addMockPrimitive(originalValue: any, importName: string, mocks: Map<string, any>): any {
   const wrapper = Object.create(null);
   wrapper.valueOf = () => originalValue;
   wrapper.toString = () => String(originalValue);
@@ -375,8 +369,23 @@ function addMockMethod(originalValue: any, importName: string, mocks: Map<string
   return wrapper;
 }
 
+function addMock(originalValue: any, importName: string, mocks: Map<string, any>): any {
+  if (originalValue === null || originalValue === undefined) {
+    return originalValue;
+  }
 
-function createMockableImportProxy(
+  switch (typeof originalValue) {
+    case 'function':
+      return addMockFunction(originalValue, importName, mocks);
+    case 'object':
+      return addMockObject(originalValue, importName, mocks);
+    default:
+      return addMockPrimitive(originalValue, importName, mocks);
+  }
+}
+
+
+function createMockImport(
   originalValue: any,
   importName: string,
   modulePath: string
@@ -385,9 +394,7 @@ function createMockableImportProxy(
     mockRegistry.set(modulePath, new Map());
   }
 
-  const mocks = mockRegistry.get(modulePath)!;
-
-  return addMockMethod(originalValue, importName, mocks);
+  return addMock(originalValue, importName, mockRegistry.get(modulePath)!);
 }
 
 function createInjector(meta: ImportMeta): DynamicInjector {
@@ -436,7 +443,7 @@ function createInjector(meta: ImportMeta): DynamicInjector {
       const importName = String(prop);
       if (moduleInfo.originalImports.has(importName)) {
         const originalValue = moduleInfo.originalImports.get(importName);
-        return createMockableImportProxy(originalValue, importName, filePath);
+        return createMockImport(originalValue, importName, filePath);
       }
 
       return undefined;
