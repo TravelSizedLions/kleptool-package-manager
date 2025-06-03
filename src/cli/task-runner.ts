@@ -6,10 +6,12 @@ import nodeProcess from 'node:process';
 
 type TaskRunnerOptions = {
   silent?: boolean;
+  tasksFilePath?: string;
 };
 
 async function __do(alias: string, args: string[], options: TaskRunnerOptions = {}) {
-  const tasks = resources.load<TasksFile>('./klep.tasks', klepTasksSchema);
+  const tasksFilePath = options.tasksFilePath || './klep.tasks';
+  const tasks = resources.load<TasksFile>(tasksFilePath, klepTasksSchema);
 
   if (!tasks) {
     throw kerror(kerror.type.Argument, 'no-tasks-found', {

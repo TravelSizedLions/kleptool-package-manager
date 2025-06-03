@@ -23,6 +23,7 @@ program.version(packageJson.version);
 
 // Global options
 program.option('-s, --silent', 'Silence command output');
+program.option('--tasks-file <path>', 'Path to tasks file (default: ./klep.tasks)');
 
 program
   .command('init')
@@ -127,8 +128,11 @@ program
     }
 
     try {
-      const silent = program.opts().silent;
-      await taskRunner.do(task, args, { silent });
+      const options = program.opts();
+      await taskRunner.do(task, args, {
+        silent: options.silent,
+        tasksFilePath: options.tasksFile,
+      });
     } catch (error) {
       if (kerror.isKlepError(error)) {
         console.error('❌ Task failed:', error.message);
