@@ -13,9 +13,6 @@ declare global {
   var test: TestFunction | undefined;
 }
 
-// Don't create a separate injector - use the main testing system
-export { __moduleRegistry, __mockRegistry } from './mod.ts';
-
 // Interface for source map support
 interface SourceMapEntry {
   originalLine: number;

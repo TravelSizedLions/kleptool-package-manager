@@ -536,24 +536,6 @@ export function __debugNuclear() {
   ]);
 }
 
-// Export the module registry for debugging
-export const __moduleRegistry = moduleRegistry;
-export const __mockRegistry = mockRegistry;
-
-// Legacy support - keeping the old interface for backward compatibility
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function mod(_meta: ImportMeta) {
-  // This is a simplified version for backward compatibility
-  // Eventually we can phase this out in favor of the new $() system
-  return {
-    mark: () => {},
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    use: (dep: any) => dep,
-    mock: () => {},
-    reset: () => {},
-  };
-}
-
 // Export the injector class for the plugin
 export class DynamicNuclearInjector {
   private moduleRegistry = new Map<string, Set<string>>();
