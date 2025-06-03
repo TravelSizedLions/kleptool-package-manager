@@ -1,4 +1,6 @@
 import process from 'node:process';
+import { $ } from '../testing/moxxy.ts';
+const moxxy = $(import.meta)!;
 
 /**
  * Stack trace translation function
