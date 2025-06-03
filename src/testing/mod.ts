@@ -309,6 +309,73 @@ async function registerModule(meta: ImportMeta): Promise<void> {
   await initializeModuleProxies(moduleInfo);
 }
 
+function addMockMethod(originalValue: any, importName: string, mocks: Map<string, any>): any {
+  if (originalValue === null || originalValue === undefined) {
+    return originalValue;
+  }
+
+  if (typeof originalValue === 'function') {
+    // For functions, add a mock method and proxy the function calls
+    const proxiedFn = new Proxy(originalValue, {
+      apply(target, thisArg, argumentsList) {
+        if (mocks.has(importName)) {
+          const mockFn = mocks.get(importName);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return (mockFn as any).apply(thisArg, argumentsList);
+        }
+        return target.apply(thisArg, argumentsList);
+      },
+    });
+
+    proxiedFn.mock = (mockFn: any) => {
+      mocks.set(importName, mockFn);
+    };
+
+    return proxiedFn;
+  }
+
+  if (typeof originalValue === 'object') {
+    return new Proxy(originalValue, {
+      get(target, prop) {
+        if (prop === 'mock') {
+          return (mockObj: any) => {
+            mocks.set(importName, mockObj);
+          };
+        }
+
+        const propPath = `${importName}.${String(prop)}`;
+
+        // Check if we have a mock for this specific property
+        if (mocks.has(propPath)) {
+          return mocks.get(propPath);
+        }
+
+        // Check if we have a mock for the parent object
+        if (mocks.has(importName)) {
+          const mockObj = mocks.get(importName);
+          if (mockObj && typeof mockObj === 'object') {
+            return mockObj[prop];
+          }
+        }
+
+        const originalProp = target[prop];
+        return addMockMethod(originalProp, propPath, mocks);
+      },
+    });
+  }
+
+  // For primitives, just add a mock method
+  const wrapper = Object.create(null);
+  wrapper.valueOf = () => originalValue;
+  wrapper.toString = () => String(originalValue);
+  wrapper.mock = (mockValue: any) => {
+    mocks.set(importName, mockValue);
+  };
+
+  return wrapper;
+}
+
+
 function createMockableImportProxy(
   originalValue: any,
   importName: string,
@@ -320,74 +387,7 @@ function createMockableImportProxy(
 
   const mocks = mockRegistry.get(modulePath)!;
 
-  // Create a proxy that adds .mock() method to everything
-  function addMockMethod(value: any, path: string): any {
-    if (value === null || value === undefined) {
-      return value;
-    }
-
-    if (typeof value === 'function') {
-      // For functions, add a mock method and proxy the function calls
-      const proxiedFn = new Proxy(value, {
-        apply(target, thisArg, argumentsList) {
-          if (mocks.has(path)) {
-            const mockFn = mocks.get(path);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return (mockFn as any).apply(thisArg, argumentsList);
-          }
-          return target.apply(thisArg, argumentsList);
-        },
-      });
-
-      proxiedFn.mock = (mockFn: any) => {
-        mocks.set(path, mockFn);
-      };
-
-      return proxiedFn;
-    }
-
-    if (typeof value === 'object') {
-      return new Proxy(value, {
-        get(target, prop) {
-          if (prop === 'mock') {
-            return (mockObj: any) => {
-              mocks.set(path, mockObj);
-            };
-          }
-
-          const propPath = `${path}.${String(prop)}`;
-
-          // Check if we have a mock for this specific property
-          if (mocks.has(propPath)) {
-            return mocks.get(propPath);
-          }
-
-          // Check if we have a mock for the parent object
-          if (mocks.has(path)) {
-            const mockObj = mocks.get(path);
-            if (mockObj && typeof mockObj === 'object') {
-              return mockObj[prop];
-            }
-          }
-
-          const originalProp = target[prop];
-          return addMockMethod(originalProp, propPath);
-        },
-      });
-    }
-
-    // For primitives, just add a mock method
-    const wrapper = Object.create(null);
-    wrapper.valueOf = () => value;
-    wrapper.toString = () => String(value);
-    wrapper.mock = (mockValue: any) => {
-      mocks.set(path, mockValue);
-    };
-
-    return wrapper;
-  }
-
-  return addMockMethod(originalValue, importName);
+  return addMockMethod(originalValue, importName, mocks);
 }
 
 function createInjector(meta: ImportMeta): DynamicInjector {
