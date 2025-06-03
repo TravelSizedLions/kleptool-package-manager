@@ -81,11 +81,15 @@ function translateSingleStackLine(line: string): string {
 
 // Global flag to prevent infinite recursion
 let isTranslatingStackTrace = false;
+let translationErrorCount = 0;
+const MAX_TRANSLATION_ERRORS = 3;
 
 // Function to translate error stack traces
 export function translateStackTrace(error: Error): Error {
-  // Prevent infinite recursion
-  if (isTranslatingStackTrace || !error.stack) return error;
+  // Prevent infinite recursion and disable after too many failures
+  if (isTranslatingStackTrace || !error.stack || translationErrorCount >= MAX_TRANSLATION_ERRORS) {
+    return error;
+  }
 
   try {
     isTranslatingStackTrace = true;
@@ -93,20 +97,30 @@ export function translateStackTrace(error: Error): Error {
     const lines = error.stack.split('\n');
     const translatedLines = lines.map(translateSingleStackLine);
 
-    const translatedError = new Error(error.message || 'Unknown error');
-    translatedError.stack = translatedLines.join('\n');
-    translatedError.name = error.name || 'Error';
-
-    // Safely copy other properties
+    // Try to modify the original error instead of creating a new one
+    const originalStack = error.stack;
     try {
-      Object.assign(translatedError, error);
-    } catch (assignError) {
-      // If assignment fails, just use the basic properties
+      error.stack = translatedLines.join('\n');
+      return error;
+    } catch (stackModificationError) {
+      // If we can't modify the stack, restore original and return as-is
+      try {
+        error.stack = originalStack;
+      } catch {
+        // If we can't even restore, just continue with the error as-is
+      }
+      return error;
+    }
+      } catch (translationError) {
+      translationErrorCount++;
+      const errorMessage = translationError instanceof Error ? translationError.message : String(translationError);
+      console.warn(`⚠️  Stack trace translation failed (${translationErrorCount}/${MAX_TRANSLATION_ERRORS}):`, errorMessage);
+    
+    // If we've failed too many times, disable translation
+    if (translationErrorCount >= MAX_TRANSLATION_ERRORS) {
+      console.warn('🚫 Stack trace translation disabled due to repeated failures');
     }
     
-    return translatedError;
-  } catch (translationError) {
-    // If translation fails, return the original error
     return error;
   } finally {
     isTranslatingStackTrace = false;
@@ -197,9 +211,19 @@ function patchConsoleError(): void {
 }
 
 (function setupErrorBoundaries() {
-  patchConsoleError();
-  setupProcessErrorHandlers();
-  wrapTestFunction();
+  // Disable error boundaries on macOS due to infinite recursion issues
+  if (process.platform === 'darwin') {
+    console.log('🍎 Skipping error boundaries on macOS due to compatibility issues');
+    return;
+  }
+  
+  try {
+    patchConsoleError();
+    setupProcessErrorHandlers();
+    wrapTestFunction();
+  } catch (setupError) {
+    console.warn('⚠️  Failed to setup error boundaries:', setupError);
+  }
 })();
 
 function shouldSkipTransformation(args: { path: string }, content: string): boolean {
