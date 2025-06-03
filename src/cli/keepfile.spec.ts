@@ -7,9 +7,12 @@ import { $ } from '../testing/mod.ts';
 const injector = $(import.meta)!;
 
 describe('keepfile', () => {
+  beforeEach(() => {
+    injector.reset();
+  });
+  
   afterEach(() => {
     keepfile.clear();
-    injector.reset();
   });
 
   describe('initialize', () => {

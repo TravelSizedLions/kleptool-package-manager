@@ -144,10 +144,23 @@ function parseImports(filePath: string): ImportInfo[] {
 }
 
 function createMockableProxy(originalValue: any, modulePath: string, importName: string): any {
-  const mocks = mockRegistry.get(modulePath);
+  // Safety check: if the value is null, undefined, or not an object/function, don't create a proxy
+  if (originalValue === null || originalValue === undefined) {
+    console.warn(`⚠️  Cannot create proxy for ${importName}: value is null/undefined`);
+    return originalValue;
+  }
+  
+  if (typeof originalValue !== 'object' && typeof originalValue !== 'function') {
+    console.warn(`⚠️  Cannot create proxy for ${importName}: value is primitive (${typeof originalValue})`);
+    return originalValue;
+  }
+
+  // Don't capture mocks here - do fresh lookup each time!
   
   return new Proxy(originalValue, {
     get(target, prop) {
+      const mocks = mockRegistry.get(modulePath); // Fresh lookup each time!
+      
       // Check for specific property mocks first (highest priority)
       const specificKey = `${importName}.${String(prop)}`;
       if (mocks?.has(specificKey)) {
@@ -172,11 +185,26 @@ function createMockableProxy(originalValue: any, modulePath: string, importName:
       if (typeof value === 'function') {
         return new Proxy(value, {
           apply(fnTarget, thisArg, argumentsList) {
+            const mocks = mockRegistry.get(modulePath); // Fresh lookup for each call!
             const methodKey = `${importName}.${String(prop)}`;
-            // console.log(`🚀 Function call to ${methodKey}`);
+            if (importName === 'fs' && prop === 'existsSync') {
+              console.log(`🚀 Function call to ${methodKey}`);
+              console.log(`🔍 Proxy module path: ${modulePath}`);
+              console.log(`🔍 mocks Map instance ID:`, mocks);
+              console.log(`🔍 Global mockRegistry Map instance ID:`, mockRegistry);
+              console.log(`🔍 Are they the same?`, mocks === mockRegistry.get(modulePath));
+              console.log(`🔍 Mock registry has keys:`, Array.from(mocks?.keys() || []));
+              console.log(`🔍 Checking for mock at key: ${methodKey}`);
+            }
             if (mocks?.has(methodKey)) {
               const mockFn = mocks.get(methodKey);
+              if (importName === 'fs' && prop === 'existsSync') {
+                console.log(`🔥 INTERCEPTING call to ${methodKey} with mock function`);
+              }
               return mockFn.apply(thisArg, argumentsList);
+            }
+            if (importName === 'fs' && prop === 'existsSync') {
+              console.log(`🔍 No mock found for ${methodKey}, using original`);
             }
             return fnTarget.apply(thisArg, argumentsList);
           }
@@ -187,7 +215,7 @@ function createMockableProxy(originalValue: any, modulePath: string, importName:
     },
     
     apply(target, thisArg, argumentsList) {
-      const mocks = mockRegistry.get(modulePath);
+      const mocks = mockRegistry.get(modulePath); // Fresh lookup for direct function calls!
       
       if (mocks?.has(importName)) {
         const mockFn = mocks.get(importName);
@@ -304,8 +332,13 @@ function createMockableImportProxy(originalValue: any, importName: string, modul
         get(target, prop) {
           if (prop === 'mock') {
             return (mockObj: any) => {
-              // console.log(`🎭 Mocking object ${path}`);
+              console.log(`🎭 Mocking object ${path} with:`, Object.keys(mockObj || {}));
+              console.log(`🎭 Storing in mock registry for module: ${modulePath}`);
+              console.log(`🎭 mocks Map instance ID:`, mocks);
+              console.log(`🎭 Global mockRegistry Map instance ID:`, mockRegistry);
+              console.log(`🎭 Are they the same?`, mocks === mockRegistry.get(modulePath));
               mocks.set(path, mockObj);
+              console.log(`🎭 Mock registry now has keys:`, Array.from(mocks.keys()));
             };
           }
           
@@ -418,9 +451,25 @@ export function __createModuleProxy(originalValue: any, importName: string, meta
   const filePath = fileURLToPath(meta.url);
   const normalizedPath = normalizeModulePath(filePath);
   
+  // Debug logging for fs module
+  if (importName === 'fs') {
+    console.log(`🔍 Creating proxy for fs - Type: ${typeof originalValue}, Keys: ${Object.keys(originalValue || {}).slice(0, 5)}`);
+  }
+  
+  // Safety check: if the value is null, undefined, or not an object/function, return as-is
+  if (originalValue === null || originalValue === undefined) {
+    console.warn(`⚠️  Cannot create build-time proxy for ${importName}: value is null/undefined`);
+    return originalValue;
+  }
+  
+  if (typeof originalValue !== 'object' && typeof originalValue !== 'function') {
+    console.warn(`⚠️  Cannot create build-time proxy for ${importName}: value is primitive (${typeof originalValue})`);
+    return originalValue;
+  }
+  
   // Register this module if not already registered
   if (!moduleRegistry.has(normalizedPath)) {
-    console.log(`☢️  Auto-registering module for nuclear injection: ${normalizedPath}`);
+    // console.log(`☢️  Auto-registering module for nuclear injection: ${normalizedPath}`);
     moduleRegistry.set(normalizedPath, {
       filePath: normalizedPath,
       imports: [], // Will be populated by transform
@@ -437,6 +486,12 @@ export function __createModuleProxy(originalValue: any, importName: string, meta
   moduleInfo.proxies.set(importName, proxy);
   
   console.log(`✨ Build-time nuclear proxy created for ${importName} in ${normalizedPath}`);
+  
+  // Debug the proxy for fs
+  if (importName === 'fs') {
+    console.log(`🔍 fs proxy has existsSync?`, 'existsSync' in proxy);
+    console.log(`🔍 fs proxy type:`, typeof proxy);
+  }
   
   return proxy;
 }

@@ -23,7 +23,9 @@ plugin({
         };
       }
       
-      // console.log(`⚡ Transforming: ${args.path}`);
+      if (args.path.includes('keepfile')) {
+        console.log(`⚡ Transforming: ${args.path}`);
+      }
       
       // Check for shebang and preserve it
       let shebang = '';
@@ -54,7 +56,9 @@ plugin({
           continue;
         }
         
-        // console.log(`🔬 Found import: ${importStatement} from ${moduleName}`);
+        if (moduleName.includes('node:')) {
+          console.log(`🔬 Found import: ${importStatement} from ${moduleName}`);
+        }
         
         // Handle different import types
         let importNames: string[] = [];
@@ -90,17 +94,12 @@ plugin({
         // Create unique variable name for this module
         const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
         
-        // Store mapping for later replacement
-        if (isDestructured) {
-          // For destructured imports, don't do any replacement - the destructured variables already come from the proxy
-          // Just track that these are destructured so we skip replacement
-          for (const importName of importNames) {
-            moduleNamesMap.set(`DESTRUCTURED_${moduleName}_${importName}`, importName);
-          }
-        } else {
-          // For default/namespace imports, map the import name
+        // Store mapping for later replacement  
+        if (!isDestructured) {
+          // For default/namespace imports, map the import name to module for replacement
           moduleNamesMap.set(moduleName, importNames[0] || moduleName);
         }
+        // Destructured imports don't need mapping since the variables are already proxies
         
         // Only add nuclear treatment if we haven't declared this variable yet
         if (!declaredNuclearVars.has(varName)) {
@@ -135,11 +134,6 @@ plugin({
       
               // Replace direct usage with nuclear proxies - ULTRA CONSERVATIVE!
         for (const [key, importName] of moduleNamesMap) {
-          // Skip destructured imports - they already come from the proxy
-          if (key.startsWith('DESTRUCTURED_')) {
-            continue;
-          }
-          
           const moduleName = key;
           const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
           
@@ -150,7 +144,9 @@ plugin({
           const functionCallRegex = new RegExp(`(?<!\\.)\\b${importName}\\.[a-zA-Z_][a-zA-Z0-9_]*\\s*\\(`, 'g');
           
           transformedContent = transformedContent.replace(functionCallRegex, (match) => {
-            // console.log(`🔄 Replacing ${importName} function calls with (${varName} || ${importName})`);
+            if (importName === 'fs') {
+              console.log(`🔄 Replacing ${importName} function calls: ${match} -> ${match.replace(importName, `(${varName} || ${importName})`)}`);
+            }
             return match.replace(importName, `(${varName} || ${importName})`);
           });
           
