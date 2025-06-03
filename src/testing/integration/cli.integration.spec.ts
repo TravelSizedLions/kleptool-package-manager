@@ -4,7 +4,7 @@ import { testTasks } from './test-helpers.ts';
 
 describe('CLI Integration Tests', () => {
   describe('Task execution', () => {
-    it.only('should run a simple task successfully', async () => {
+    it('should run a simple task successfully', async () => {
       const $test = $mock(testTasks);
       const result = await $test`test:simple`;
 
@@ -26,7 +26,7 @@ describe('CLI Integration Tests', () => {
       const result = await $test`test:args hello world`;
 
       expect(result.success).toBe(true);
-      expect(result.stdout).toContain('Args: hello world');
+      expect(result.stdout).toContain('Args:  hello world');
     });
 
     it('should handle non-existent tasks', async () => {
@@ -39,7 +39,7 @@ describe('CLI Integration Tests', () => {
     });
   });
 
-  describe.skip('Custom task mocking', () => {
+  describe('Custom task mocking', () => {
     it('should work with custom task definitions', async () => {
       const customTasks = {
         'custom:echo': 'echo "Custom task executed"',

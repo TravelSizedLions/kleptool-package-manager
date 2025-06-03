@@ -6,6 +6,10 @@ import kerror from './kerror.ts';
 import json5 from 'json5';
 
 function __resolve(resourcePath: string) {
+  // If the path is already absolute, use it as-is
+  if (path.isAbsolute(resourcePath)) {
+    return resourcePath;
+  }
   return path.join(process.cwd(), resourcePath);
 }
 

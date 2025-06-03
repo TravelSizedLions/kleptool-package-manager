@@ -518,7 +518,7 @@ export function __moxxy__(originalValue: unknown, importName: string, meta: Impo
   return proxy;
 }
 
-export function $(meta: ImportMeta, override?: string): DynamicInjector | void {
+export function $(meta: ImportMeta): DynamicInjector | void {
   const filePath = meta.path;
 
   // If this is a test file, return a dependency injector

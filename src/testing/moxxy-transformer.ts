@@ -207,7 +207,7 @@ function patchConsoleError(): void {
         return arg;
       });
       originalConsoleError.apply(console, translatedArgs);
-    } catch (patchError) {
+    } catch {
       // Fallback to original console.error if patching fails
       originalConsoleError.apply(console, args);
     }
@@ -456,7 +456,7 @@ const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 plugin({
   name: 'Moxxy Dependency Injection',
   setup(build) {
-    build.onLoad({ filter: /[\/\\]src[\/\\].*\.ts$/ }, async (args) => {
+    build.onLoad({ filter: /[/\\]src[/\\].*\.ts$/ }, async (args) => {
       const content = await Bun.file(args.path).text();
 
       if (shouldSkipTransformation(args, content)) {
