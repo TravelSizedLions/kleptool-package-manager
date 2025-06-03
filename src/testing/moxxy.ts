@@ -374,18 +374,26 @@ function __addMockObject(originalValue: any, importName: string, mocks: Map<stri
   });
 }
 
-function __addMockPrimitive(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMockPrimitive(
+  originalValue: unknown,
+  importName: string,
+  mocks: Map<string, unknown>
+): unknown {
   const wrapper = Object.create(null);
   wrapper.valueOf = () => originalValue;
   wrapper.toString = () => String(originalValue);
-  wrapper.mock = (mockValue: any) => {
+  wrapper.mock = (mockValue: unknown) => {
     mocks.set(importName, mockValue);
   };
 
   return wrapper;
 }
 
-function __addMock(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMock(
+  originalValue: unknown,
+  importName: string,
+  mocks: Map<string, unknown>
+): unknown {
   if (originalValue === null || originalValue === undefined) {
     return originalValue;
   }
@@ -400,7 +408,7 @@ function __addMock(originalValue: any, importName: string, mocks: Map<string, an
   }
 }
 
-function __mockImport(originalValue: any, importName: string, modulePath: string): any {
+function __mockImport(originalValue: unknown, importName: string, modulePath: string): unknown {
   if (!mockRegistry.has(modulePath)) {
     mockRegistry.set(modulePath, new Map());
   }
@@ -447,7 +455,7 @@ function createInjector(meta: ImportMeta): DynamicInjector {
     get(target, prop) {
       // Return base methods
       if (prop in target) {
-        return (target as any)[prop];
+        return (target as Record<string, unknown>)[prop as keyof typeof target];
       }
 
       // Check if this is an import
@@ -465,7 +473,7 @@ function createInjector(meta: ImportMeta): DynamicInjector {
 }
 
 // Helper function for build-time transformed modules
-export function __moxxy__(originalValue: any, importName: string, meta: ImportMeta): any {
+export function __moxxy__(originalValue: unknown, importName: string, meta: ImportMeta): unknown {
   const filePath = fileURLToPath(meta.url);
   const normalizedPath = __stripExtensions(filePath);
 
