@@ -7,7 +7,7 @@ export { __moduleRegistry, __mockRegistry } from './mod.ts';
 plugin({
   name: 'Nuclear Dependency Injection',
   setup(build) {
-    console.log('☢️ Nuclear plugin activated - dependencies will be proxied!');
+    console.log('☢️ Nuclear Reactor Activated');
     
     // ONLY transform our source files - exclude test files entirely
     build.onLoad({ filter: /\/src\/.*\.ts$/ }, async (args) => {
@@ -23,9 +23,6 @@ plugin({
         };
       }
       
-      if (args.path.includes('keepfile')) {
-        console.log(`⚡ Transforming: ${args.path}`);
-      }
       
       // Check for shebang and preserve it
       let shebang = '';
@@ -54,10 +51,6 @@ plugin({
         // Skip internal imports and already transformed
         if (moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun') {
           continue;
-        }
-        
-        if (moduleName.includes('node:')) {
-          console.log(`🔬 Found import: ${importStatement} from ${moduleName}`);
         }
         
         // Handle different import types
@@ -144,9 +137,6 @@ plugin({
           const functionCallRegex = new RegExp(`(?<!\\.)\\b${importName}\\.[a-zA-Z_][a-zA-Z0-9_]*\\s*\\(`, 'g');
           
           transformedContent = transformedContent.replace(functionCallRegex, (match) => {
-            if (importName === 'fs') {
-              console.log(`🔄 Replacing ${importName} function calls: ${match} -> ${match.replace(importName, `(${varName} || ${importName})`)}`);
-            }
             return match.replace(importName, `(${varName} || ${importName})`);
           });
           
@@ -156,7 +146,6 @@ plugin({
           for (const prop of specificProps) {
             const propRegex = new RegExp(`(?<!\\.)\\b${importName}\\.${prop}\\b`, 'g');
             transformedContent = transformedContent.replace(propRegex, (match) => {
-              // console.log(`🔄 Replacing ${importName}.${prop} with (${varName} || ${importName}).${prop}`);
               return `(${varName} || ${importName}).${prop}`;
             });
           }
