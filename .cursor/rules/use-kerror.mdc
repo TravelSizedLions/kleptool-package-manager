@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+When throwing exrrors in typescript, please use the [kerror.ts](mdc:kleptool-package-manager/kleptool-package-manager/kleptool-package-manager/kleptool-package-manager/kleptool-package-manager/kleptool-package-manager/kleptool-package-manager/kleptool-package-manager/kleptool-package-manager/src/cli/kerror.ts) module. If needed, you can add new error types to the enum. Please use unique id's when throwing as well, and don't use template strings or formatting when constructing error ids. This is to make the errors searchable.
