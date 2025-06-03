@@ -305,11 +305,46 @@ function __addMockFunction(
       }
       return target.apply(thisArg, argumentsList);
     },
+    
+    get(target, prop) {
+      if (prop === 'mock') {
+        return (mockFn: Function) => {
+          mocks.set(importName, mockFn);
+        };
+      }
+      
+      // Forward other property access to the original function
+      return target[prop as keyof typeof target];
+    },
+    
+    has(target, prop) {
+      if (prop === 'mock') {
+        return true;
+      }
+      return prop in target;
+    },
+    
+    ownKeys(target) {
+      const keys = Reflect.ownKeys(target);
+      if (!keys.includes('mock')) {
+        keys.push('mock');
+      }
+      return keys;
+    },
+    
+    getOwnPropertyDescriptor(target, prop) {
+      if (prop === 'mock') {
+        return {
+          configurable: true,
+          enumerable: false,
+          value: (mockFn: Function) => {
+            mocks.set(importName, mockFn);
+          },
+        };
+      }
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
   });
-
-  proxiedFn.mock = (mockFn: Function) => {
-    mocks.set(importName, mockFn);
-  };
 
   return proxiedFn;
 }

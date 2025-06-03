@@ -16,6 +16,7 @@ export type ExecOptions = ProcessOptions & {
   stderr?: StreamType;
   shell?: boolean;
   streamOutput?: boolean;
+  throwOnError?: boolean;
 };
 
 export type IpcOptions = ProcessOptions & {
@@ -30,6 +31,7 @@ const defaultExecOptions: ExecOptions = {
   stderr: 'pipe',
   shell: true,
   streamOutput: false,
+  throwOnError: true,
 };
 
 const defaultIpcOptions: IpcOptions = {
@@ -172,7 +174,10 @@ export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string
 // Regular shell command execution
 export async function _exec(cmd: string, options: ExecOptions = {}): Promise<string> {
   try {
-    const { args, cwd, env, timeout, streamOutput } = { ...defaultExecOptions, ...options };
+    const { args, cwd, env, timeout, streamOutput } = {
+      ...defaultExecOptions,
+      ...options,
+    };
 
     const command = `${cmd} ${args?.join(' ') || ''}`.trim();
 
@@ -192,18 +197,26 @@ export async function _exec(cmd: string, options: ExecOptions = {}): Promise<str
     ]);
 
     if (code !== 0) {
-      throw execError(command, code, stdout, stderr, streamOutput);
+      if (options.throwOnError) {
+        throw execError(command, code, stdout, stderr, streamOutput);
+      }
+
+      return '';
     }
 
     return stdout;
   } catch (e) {
-    throw kerror(kerror.Unknown, 'exec-error-unknown', {
-      message: `Command "${cmd}" failed with unknown error`,
-      context: {
-        command: cmd,
-        error: e instanceof Error ? e.stack : `Unknown error ${e}`,
-      },
-    });
+    if (options.throwOnError && e instanceof Error) {
+      throw kerror(kerror.Unknown, 'exec-error-unknown', {
+        message: `Command "${cmd}" failed with unknown error`,
+        context: {
+          command: cmd,
+          error: e instanceof Error ? e.stack : `Unknown error ${e}`,
+        },
+      });
+    }
+
+    return '';
   }
 }
 

@@ -93,7 +93,7 @@ export function translateStackTrace(error: Error): Error {
 
   try {
     isTranslatingStackTrace = true;
-    
+
     const lines = error.stack.split('\n');
     const translatedLines = lines.map(translateSingleStackLine);
 
@@ -111,16 +111,20 @@ export function translateStackTrace(error: Error): Error {
       }
       return error;
     }
-      } catch (translationError) {
-      translationErrorCount++;
-      const errorMessage = translationError instanceof Error ? translationError.message : String(translationError);
-      console.warn(`⚠️  Stack trace translation failed (${translationErrorCount}/${MAX_TRANSLATION_ERRORS}):`, errorMessage);
-    
+  } catch (translationError) {
+    translationErrorCount++;
+    const errorMessage =
+      translationError instanceof Error ? translationError.message : String(translationError);
+    console.warn(
+      `⚠️  Stack trace translation failed (${translationErrorCount}/${MAX_TRANSLATION_ERRORS}):`,
+      errorMessage
+    );
+
     // If we've failed too many times, disable translation
     if (translationErrorCount >= MAX_TRANSLATION_ERRORS) {
       console.warn('🚫 Stack trace translation disabled due to repeated failures');
     }
-    
+
     return error;
   } finally {
     isTranslatingStackTrace = false;
@@ -216,7 +220,7 @@ function patchConsoleError(): void {
     console.log('🍎 Skipping error boundaries on macOS due to compatibility issues');
     return;
   }
-  
+
   try {
     patchConsoleError();
     setupProcessErrorHandlers();

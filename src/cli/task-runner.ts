@@ -34,7 +34,7 @@ async function __do(alias: string, args: string[], options: TaskRunnerOptions = 
   const streamOutput = !options.silent;
 
   // Run the command with or without streaming based on silent flag
-  return await process.exec(task, { args, streamOutput });
+  return await process.exec(task, { args, streamOutput, throwOnError: false });
 }
 
 export default {
