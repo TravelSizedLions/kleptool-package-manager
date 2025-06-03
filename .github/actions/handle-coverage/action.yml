@@ -139,6 +139,6 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         GIST_ID: ${{ inputs.gist_id }}
-        TS_COVERAGE: ${{ steps.coverage-percentages.outputs.ts_coverage }}
+        TS_COVERAGE: ${{ steps.coverage-percentages.outputs.typescript_coverage }}
         RUST_COVERAGE: ${{ steps.coverage-percentages.outputs.rust_coverage }}
       run: ./scripts/update-coverage-badges.sh
