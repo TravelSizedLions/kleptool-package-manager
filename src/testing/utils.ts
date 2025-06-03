@@ -18,10 +18,13 @@ export function useState<T>(initialValue: T): [() => T, SetState<T>, ResetState]
   }
 
   return [
-    () => stateRegistry.get(stateId), // Getter function that always returns current value
+    () => stateRegistry.get(stateId) as T, // Getter function that always returns current value
     (newValue) => {
       const currentValue = stateRegistry.get(stateId);
-      stateRegistry.set(stateId, newValue instanceof Function ? newValue(currentValue) : newValue);
+      stateRegistry.set(
+        stateId,
+        newValue instanceof Function ? newValue(currentValue as T) : (newValue as T)
+      );
     },
     () => stateRegistry.set(stateId, initialValue),
   ];

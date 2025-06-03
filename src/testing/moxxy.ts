@@ -330,13 +330,13 @@ function __addMockFunction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   originalValue: any,
   importName: string,
-  mocks: Map<string, Function>
+  mocks: Map<string, unknown>
 ): unknown {
   const proxiedFn = new Proxy(originalValue, {
     apply(target, thisArg, argumentsList) {
       if (mocks.has(importName)) {
         const mockFn = mocks.get(importName);
-        return mockFn?.apply(thisArg, argumentsList);
+        return (mockFn as Function)?.apply(thisArg, argumentsList);
       }
       return target.apply(thisArg, argumentsList);
     },
@@ -410,7 +410,7 @@ function __addMock(
     case 'function':
       return __addMockFunction(originalValue, importName, mocks);
     case 'object':
-      return __addMockObject(originalValue, importName, mocks);
+      return __addMockObject(originalValue as Record<string, unknown>, importName, mocks);
     default:
       return __addMockPrimitive(originalValue, importName, mocks);
   }

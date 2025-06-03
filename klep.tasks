@@ -37,7 +37,7 @@
   coverage: "klep ts:coverage && klep rust:coverage",
 
   // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure',
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep test',
 
   // Delete all branches except for dev
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',

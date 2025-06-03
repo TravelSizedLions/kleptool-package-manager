@@ -210,7 +210,7 @@ function createDestructuredReplacement(
   moduleName: string,
   importNames: string[]
 ): string {
-  const moduleVar = `__nuclear_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const moduleVar = `__moxxy_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
   const individualProxies = importNames
     .map((name) => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`)
     .join('\n');
@@ -223,8 +223,66 @@ function createDefaultReplacement(
   moduleName: string,
   importName: string
 ): string {
-  const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const varName = `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
   return `${fullMatch}\n// ☢️ NUCLEAR: Make ${moduleName} injectable\nconst ${varName} = __moxxy__(${importName}, '${importName}', import.meta);`;
+}
+
+function shouldSkipImport(moduleName: string): boolean {
+  return moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun';
+}
+
+function __varname(moduleName: string): string {
+  return `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
+function calculateAddedLines(isDestructured: boolean, importNames: string[]): number {
+  if (isDestructured) {
+    return 2 + importNames.length; // comment + module import + individual proxies
+  }
+  return 2; // comment + proxy declaration
+}
+
+function processImportMatch(
+  match: RegExpMatchArray,
+  moduleNamesMap: Map<string, string>,
+  declaredNuclearVars: Set<string>
+): { original: string; code: string; addedLines: number } | null {
+  const [fullMatch, importStatement, moduleName] = match;
+
+  if (shouldSkipImport(moduleName)) {
+    return null;
+  }
+
+  const [importNames, isDestructured] = parseImportNames(importStatement);
+  const varName = __varname(moduleName);
+
+  // Store mapping for later replacement
+  if (!isDestructured && importNames.length > 0) {
+    moduleNamesMap.set(moduleName, importNames[0]);
+  }
+
+  // Only add nuclear treatment if we haven't declared this variable yet
+  if (declaredNuclearVars.has(varName)) {
+    return null;
+  }
+
+  declaredNuclearVars.add(varName);
+
+  const addedLines = calculateAddedLines(isDestructured, importNames);
+  let replacementCode: string;
+
+  if (isDestructured) {
+    replacementCode = createDestructuredReplacement(fullMatch, moduleName, importNames);
+  } else {
+    const importName = importNames[0] || moduleName;
+    replacementCode = createDefaultReplacement(fullMatch, moduleName, importName);
+  }
+
+  return {
+    original: fullMatch,
+    code: replacementCode,
+    addedLines,
+  };
 }
 
 function processImports(
@@ -240,42 +298,13 @@ function processImports(
   let generatedLineOffset = 0;
 
   for (const match of importMatches) {
-    const [fullMatch, importStatement, moduleName] = match;
+    const replacement = processImportMatch(match, moduleNamesMap, declaredNuclearVars);
+    if (!replacement) continue;
 
-    // Skip internal imports and already transformed
-    if (moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun') {
-      continue;
-    }
-
-    const [importNames, isDestructured] = parseImportNames(importStatement);
-    const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-    // Store mapping for later replacement
-    if (!isDestructured && importNames.length > 0) {
-      moduleNamesMap.set(moduleName, importNames[0]);
-    }
-
-    // Only add nuclear treatment if we haven't declared this variable yet
-    if (declaredNuclearVars.has(varName)) continue;
-
-    declaredNuclearVars.add(varName);
-
-    let replacementCode: string;
-    let addedLines: number;
-
-    if (isDestructured) {
-      replacementCode = createDestructuredReplacement(fullMatch, moduleName, importNames);
-      addedLines = 2 + importNames.length; // comment + module import + individual proxies
-    } else {
-      const importName = importNames[0] || moduleName;
-      replacementCode = createDefaultReplacement(fullMatch, moduleName, importName);
-      addedLines = 2; // comment + proxy declaration
-    }
-
-    generatedLineOffset += addedLines;
+    generatedLineOffset += replacement.addedLines;
     importReplacements.push({
-      original: fullMatch,
-      replacement: replacementCode,
+      original: replacement.original,
+      replacement: replacement.code,
     });
   }
 
@@ -286,7 +315,7 @@ function replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string
   let transformedContent = content;
 
   for (const [moduleName, importName] of moduleNamesMap) {
-    const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const varName = `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
     // Function calls with parentheses
     const functionCallRegex = new RegExp(
