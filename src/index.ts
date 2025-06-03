@@ -23,6 +23,7 @@ program.version(packageJson.version);
 
 // Global options
 program.option('-s, --silent', 'Silence command output');
+program.option('--tasks-file <path>', 'Path to tasks file (default: ./klep.tasks)');
 
 program
   .command('init')
@@ -120,18 +121,26 @@ program
 program
   .argument('<task>', 'The task to run')
   .argument('[args...]', 'The arguments to pass to the task')
-  .action(
-    kerror.boundary(async (task: string, args: string[]) => {
-      if (!task) {
-        program.help();
-        return;
+  .action(async (task: string, args: string[]) => {
+    if (!task) {
+      program.help();
+      return;
+    }
+
+    try {
+      const options = program.opts();
+      await taskRunner.do(task, args, {
+        silent: options.silent,
+        tasksFilePath: options.tasksFile,
+      });
+    } catch (error) {
+      if (kerror.isKlepError(error)) {
+        console.error('❌ Task failed:', error.message);
+        process.exit(1);
       }
 
-      // Get the silent flag from global options
-      const silent = program.opts().silent;
-
-      await taskRunner.do(task, args, { silent });
-    })
-  );
+      throw error;
+    }
+  });
 
 program.parse(process.argv);

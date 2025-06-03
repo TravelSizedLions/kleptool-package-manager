@@ -1,10 +1,10 @@
 # Klep: The First Truly Language Agnostic Dependency Resolver
 
-[![Ubuntu](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-linux.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-linux.yml)
+[![Ubuntu](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/linux.dev.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/linux.dev.yml)
 
-[![Windows](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-windows.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-windows.yml)
+[![Windows](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/windows.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/windows.yml)
 
-[![Mac OS](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-macos.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/test-macos.yml)
+[![Mac OS](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/macos.yml/badge.svg)](https://github.com/TravelSizedLions/kleptool-package-manager/actions/workflows/macos.yml)
 
 # GUD: Git-Derived Unified Dependency Resolution
 

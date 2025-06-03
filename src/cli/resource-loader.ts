@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
+import process from 'node:process';
 import { z } from 'zod';
 import kerror from './kerror.ts';
 import json5 from 'json5';
 
 function __resolve(resourcePath: string) {
-  return path.join(process.cwd(), resourcePath);
+  return path.isAbsolute(resourcePath) ? resourcePath : path.join(process.cwd(), resourcePath);
 }
 
 function __load(resourcePath: string) {

@@ -1,0 +1,70 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+When creating and editing a javascript or typescript file, please use the following basic organizational structure.
+
+1. imports
+2. file-wide variables and constants
+3. file-wide type declarations, interfaces, and enums
+4. classes
+5. functions
+
+If you break down functions into smaller helper functions, please place the helpers above, close by where they're used. If multiple main functions use the same helper functions, those should go above all other functions.
+
+Example:
+```ts
+import thing from 'place'
+
+let moduleVar
+const moduleConst = 'module constant!'
+
+type ModuleTypeA = {
+  //...
+}
+
+type ModuleTypeB = {
+  //...
+}
+
+type ModuleTypeC = ModuleTypeA & ModuleTypeB
+
+class ModuleClass {
+  // ...
+}
+
+
+function __helperForExportedFunctions() {
+  // ...
+}
+
+function __helperForFunctionA() {
+  // ..
+}
+
+export function functionA() {
+  return __helperForFunctionA() && __helperForExportedFunctions()
+}
+
+
+function __helperForFunctionB() {
+  // ...
+}
+
+export function functionB() {
+  return __helperForFunctionB() && __helperForExportedFunctions()
+}
+
+
+function __functionC() {
+  // ...
+}
+
+export default {
+  functionA,
+  functionB,
+  functionC: __functionC
+}
+
+```

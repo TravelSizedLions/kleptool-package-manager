@@ -1,6 +1,12 @@
 import process from 'node:process';
 
 /**
+ * Stack trace translation function
+ * Lazy loaded to avoid circular dependencies
+ */
+let __translateStackTrace: ((error: Error) => Error) | null = null;
+
+/**
  * KlepError types
  */
 enum Type {
@@ -20,6 +26,10 @@ type KlepErrorOptions = {
   message?: string;
   context?: unknown;
 };
+
+// ------------------------------------------------------------
+// KlepError Class & Type Guard
+// ------------------------------------------------------------
 
 /**
  * KlepError is a custom error class that extends the built-in Error class.
@@ -57,10 +67,15 @@ function isKlepError(error: unknown): error is KlepError {
   return error instanceof KlepError;
 }
 
+// ------------------------------------------------------------
+// Error Boundary Setup
+// ------------------------------------------------------------
+
 /**
  * boundary is a function that wraps a function and catches any errors.
  * Useful for wrapping functions that may throw errors deep into the call stack.
  * Any error caught will be printed and the process will exit. KlepErrors will be specially formatted.
+ * Stack traces are automatically translated to show correct line numbers.
  *
  * @param fn - The function to wrap.
  * @returns A function that wraps the input function and catches any errors. May be an async function.
@@ -91,25 +106,60 @@ function boundary(fn: (...args: any[]) => Promise<void> | void) {
     try {
       await fn(...args);
     } catch (error: unknown) {
-      if (!(error instanceof KlepError)) {
-        console.error('unexpected error received', error);
+      if (!(error instanceof Error)) {
+        console.error('unexpected not-an-error received', error);
         process.exit(1);
       }
 
-      const klepError = error as KlepError;
-
-      console.error(`${klepError.type} error:`, klepError.id);
-      if (klepError.message) {
-        console.error(`- message: ${klepError.message}`);
+      const translated = await __translate(error);
+      if (!isKlepError(translated)) {
+        console.error('unexpected error received', translated);
+        process.exit(1);
       }
 
-      if (klepError.context) {
-        __printErrorContext(klepError.context);
-      }
+      __printKlepError(translated);
 
       process.exit(1);
     }
   };
+}
+
+async function __translate(error: Error) {
+  const translator = await __getStackTraceTranslator();
+  return translator(error);
+}
+
+async function __getStackTraceTranslator() {
+  if (__translateStackTrace) {
+    return __translateStackTrace;
+  }
+
+  try {
+    const transformPlugin = await import('../testing/moxxy-transformer.ts');
+    __translateStackTrace = transformPlugin.translateStackTrace || ((e: Error) => e);
+  } catch {
+    // If the testing system isn't available, just use identity function
+    __translateStackTrace = (e: Error) => e;
+  }
+
+  return __translateStackTrace;
+}
+
+function __printKlepError(error: KlepError) {
+  console.error(`${error.type} error:`, error.id);
+  if (error.message) {
+    console.error(`- message: ${error.message}`);
+  }
+
+  if (error.context) {
+    __printErrorContext(error.context);
+  }
+
+  // Print stack trace with translated line numbers
+  if (error.stack) {
+    console.error(`- stack trace:`);
+    console.error(error.stack);
+  }
 }
 
 function __printErrorContext(
@@ -142,9 +192,10 @@ function __printErrorContext(
   console.error(`${'  '.repeat(level)}${key ? `${tick} ${key}: ` : `${tick} `}${context}`);
 }
 
-type KerrorFuncOptions = {
-  [key: string]: unknown;
-};
+// ------------------------------------------------------------
+// Prepare Export
+// ------------------------------------------------------------
+type KerrorFuncOptions = { [key: string]: unknown };
 
 type KerrorFuncModule = {
   (type: Type, id: string, options?: KerrorFuncOptions): KlepError;

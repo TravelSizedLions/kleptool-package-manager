@@ -11,11 +11,19 @@ type ProcessOptions = {
   timeout?: number;
 };
 
+export type ExecResult = {
+  stdout: string;
+  stderr: string;
+  success: boolean;
+  exitCode: number | null;
+};
+
 export type ExecOptions = ProcessOptions & {
   stdout?: StreamType;
   stderr?: StreamType;
   shell?: boolean;
   streamOutput?: boolean;
+  throwOnError?: boolean;
 };
 
 export type IpcOptions = ProcessOptions & {
@@ -30,6 +38,7 @@ const defaultExecOptions: ExecOptions = {
   stderr: 'pipe',
   shell: true,
   streamOutput: false,
+  throwOnError: true,
 };
 
 const defaultIpcOptions: IpcOptions = {
@@ -38,7 +47,7 @@ const defaultIpcOptions: IpcOptions = {
   env: process.env as Record<string, string>,
 };
 
-function execError(
+function __execError(
   command: string,
   code: number | null,
   stdout?: string,
@@ -56,14 +65,14 @@ function execError(
   });
 }
 
-function timeoutError(command: string, timeout: number) {
+function __timeoutError(command: string, timeout: number) {
   return kerror(kerror.Unknown, 'process-error-timeout', {
     message: `Command "${command}" timed out after ${timeout}ms`,
     context: { command, timeout },
   });
 }
 
-function processError(command: string, error: Error) {
+function __processError(command: string, error: Error) {
   return kerror(kerror.Unknown, 'process-error-unknown', {
     message: `Command "${command}" failed`,
     context: {
@@ -73,7 +82,7 @@ function processError(command: string, error: Error) {
   });
 }
 
-function gatherOutput(stream: Stream.Readable): Promise<string> {
+function __receive(stream: Stream.Readable): Promise<string> {
   return new Promise<string>((resolve) => {
     let outputData = '';
     stream.on('data', (chunk) => (outputData += chunk.toString()));
@@ -81,17 +90,13 @@ function gatherOutput(stream: Stream.Readable): Promise<string> {
   });
 }
 
-function setupTimeout(
-  childProcess: ChildProcess,
-  command: string,
-  timeout: number
-): NodeJS.Timeout {
+function __timeout(childProcess: ChildProcess, command: string, timeout: number): NodeJS.Timeout {
   return setTimeout(() => {
     childProcess.kill();
   }, timeout);
 }
 
-function handleProcessCompletion(
+function __handleProcessCompletion(
   childProcess: ChildProcess,
   command: string,
   timeout?: number
@@ -101,7 +106,7 @@ function handleProcessCompletion(
 
     // Setup timeout if specified
     if (timeout && timeout > 0) {
-      timeoutHandle = setupTimeout(childProcess, command, timeout);
+      timeoutHandle = __timeout(childProcess, command, timeout);
     }
 
     childProcess.on('close', (code) => {
@@ -111,7 +116,7 @@ function handleProcessCompletion(
 
     childProcess.on('error', (error) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
-      reject(processError(command, error));
+      reject(__processError(command, error));
     });
 
     // Handle timeout rejection
@@ -119,13 +124,13 @@ function handleProcessCompletion(
       const originalTimeout = timeoutHandle;
       timeoutHandle = setTimeout(() => {
         clearTimeout(originalTimeout);
-        reject(timeoutError(command, timeout!));
+        reject(__timeoutError(command, timeout!));
       }, timeout!);
     }
   });
 }
 
-function sendData(childProcess: ChildProcess, data?: string): void {
+function __send(childProcess: ChildProcess, data?: string): void {
   if (data !== undefined) {
     childProcess.stdin?.write(data);
   }
@@ -136,7 +141,7 @@ function sendData(childProcess: ChildProcess, data?: string): void {
 export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string> {
   try {
     const { args, cwd, env, timeout, data } = { ...defaultIpcOptions, ...options };
-    const command = `${cmd} ${args?.join(' ') || ''}`.trim();
+    const command = __withCrossPlatformArgs(cmd, args || []);
 
     const childProcess = spawn(cmd, args || [], {
       cwd,
@@ -144,17 +149,15 @@ export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string
       stdio: ['pipe', 'inherit', 'inherit', 'pipe'], // stdin, stdout, stderr, fd3
     });
 
-    // Send stdin data
-    sendData(childProcess, data);
+    __send(childProcess, data);
 
-    // Gather output from fd3 and wait for process completion
     const [output, { code }] = await Promise.all([
-      gatherOutput(childProcess.stdio[3] as Stream.Readable),
-      handleProcessCompletion(childProcess, command, timeout),
+      __receive(childProcess.stdio[3] as Stream.Readable),
+      __handleProcessCompletion(childProcess, command, timeout),
     ]);
 
     if (code !== 0) {
-      throw execError(command, code);
+      throw __execError(command, code);
     }
 
     return output;
@@ -169,12 +172,32 @@ export async function ipc(cmd: string, options: IpcOptions = {}): Promise<string
   }
 }
 
-// Regular shell command execution
-export async function _exec(cmd: string, options: ExecOptions = {}): Promise<string> {
-  try {
-    const { args, cwd, env, timeout, streamOutput } = { ...defaultExecOptions, ...options };
+function __withCrossPlatformArgs(cmd: string, args: string[]): string {
+  if (!cmd.includes('$@')) {
+    return `${cmd} ${args.join(' ') || ''}`.trim();
+  }
 
-    const command = `${cmd} ${args?.join(' ') || ''}`.trim();
+  const escapedArgs = args
+    .map((arg) => {
+      if (arg.includes(' ') || arg.includes('"') || arg.includes("'")) {
+        return `"${arg.replace(/"/g, '\\"')}"`;
+      }
+
+      return arg;
+    })
+    .join(' ');
+  return cmd.replace(/\$@/g, escapedArgs);
+}
+
+// Regular shell command execution with full result
+export async function execWithResult(cmd: string, options: ExecOptions = {}): Promise<ExecResult> {
+  try {
+    const { args, cwd, env, timeout, streamOutput } = {
+      ...defaultExecOptions,
+      ...options,
+    };
+
+    const command = __withCrossPlatformArgs(cmd, args || []);
 
     const childProcess = exec(command, { cwd, env, timeout });
 
@@ -186,28 +209,50 @@ export async function _exec(cmd: string, options: ExecOptions = {}): Promise<str
 
     // Gather output and wait for process completion
     const [stdout, stderr, { code }] = await Promise.all([
-      gatherOutput(childProcess.stdout as Stream.Readable),
-      gatherOutput(childProcess.stderr as Stream.Readable),
-      handleProcessCompletion(childProcess, command, timeout),
+      __receive(childProcess.stdout as Stream.Readable),
+      __receive(childProcess.stderr as Stream.Readable),
+      __handleProcessCompletion(childProcess, command, timeout),
     ]);
 
-    if (code !== 0) {
-      throw execError(command, code, stdout, stderr, streamOutput);
+    return {
+      stdout,
+      stderr,
+      success: code === 0,
+      exitCode: code,
+    };
+  } catch (e) {
+    if (options.throwOnError && e instanceof Error) {
+      throw kerror(kerror.Unknown, 'exec-error-unknown', {
+        message: `Command "${cmd}" failed with unknown error`,
+        context: {
+          command: cmd,
+          error: e instanceof Error ? e.stack : `Unknown error ${e}`,
+        },
+      });
     }
 
-    return stdout;
-  } catch (e) {
-    throw kerror(kerror.Unknown, 'exec-error-unknown', {
-      message: `Command "${cmd}" failed with unknown error`,
-      context: {
-        command: cmd,
-        error: e instanceof Error ? e.stack : `Unknown error ${e}`,
-      },
-    });
+    return {
+      stdout: '',
+      stderr: e instanceof Error ? e.message : String(e),
+      success: false,
+      exitCode: null,
+    };
   }
+}
+
+// Regular shell command execution (backward compatibility)
+export async function _exec(cmd: string, options: ExecOptions = {}): Promise<string> {
+  const result = await execWithResult(cmd, options);
+
+  if (!result.success && options.throwOnError) {
+    throw __execError(cmd, result.exitCode, result.stdout, result.stderr, options.streamOutput);
+  }
+
+  return result.stdout;
 }
 
 export default {
   exec: _exec,
+  execWithResult,
   ipc,
 };
