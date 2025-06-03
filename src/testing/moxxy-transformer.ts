@@ -53,17 +53,15 @@ function translateSingleStackLine(line: string): string {
   const filePath = match[1];
   const originalLine = parseInt(match[2], 10);
 
-  console.log(`🔍 Translating: ${filePath}:${originalLine}`);
-
   const mappings = sourceMapRegistry.get(filePath);
   if (!mappings || mappings.length === 0) {
-    console.log(`❌ No source map found for ${filePath}`);
+    console.log(`No source map found for ${filePath}`);
     return line;
   }
 
   const bestMapping = findBestMapping(mappings, originalLine);
   if (!bestMapping) {
-    console.log(`❌ No mapping found for line ${originalLine} in ${filePath}`);
+    console.log(`No mapping found for line ${originalLine} in ${filePath}`);
     return line;
   }
 
@@ -155,7 +153,7 @@ function patchConsoleError(): void {
   wrapTestFunction();
 })();
 
-function shouldSkipTransformation(args: any, content: string): boolean {
+function shouldSkipTransformation(args: { path: string }, content: string): boolean {
   return (
     args.path.includes('.spec.') ||
     args.path.includes('/testing/') ||
@@ -249,7 +247,7 @@ function processImports(
       continue;
     }
 
-    const [importNames, isDestructured, isNamespace, isDefault] = parseImportNames(importStatement);
+    const [importNames, isDestructured] = parseImportNames(importStatement);
     const varName = `__nuclear_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
     // Store mapping for later replacement
@@ -304,7 +302,7 @@ function replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string
     const specificProps = ['env', 'argv', 'cwd', 'version', 'platform'];
     for (const prop of specificProps) {
       const propRegex = new RegExp(`(?<!\\.)\\b${importName}\\.${prop}\\b`, 'g');
-      transformedContent = transformedContent.replace(propRegex, (match) => {
+      transformedContent = transformedContent.replace(propRegex, () => {
         return `(${varName} || ${importName}).${prop}`;
       });
     }
@@ -316,7 +314,7 @@ function replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string
 function createSourceMap(
   shebang: string,
   contentToTransform: string,
-  args: any,
+  args: { path: string },
   generatedLineOffset: number
 ): void {
   const sourceMapEntries: SourceMapEntry[] = [];

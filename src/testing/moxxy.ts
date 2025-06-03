@@ -7,7 +7,7 @@ import kerror from '../cli/kerror.ts';
 // Global registry of modules and their injectable dependencies
 const moduleRegistry = new Map<string, ModuleInfo>();
 const mockRegistry = new Map<string, Map<string, unknown>>();
-const moduleCache = new Map<string, unknown>();
+const moduleCache = new Map<string, Module>();
 
 async function __translate(error: Error) {
   const plugin = await import('./moxxy-transformer.ts');
@@ -55,12 +55,13 @@ interface ImportInfo {
 interface ModuleInfo {
   filePath: string;
   imports: ImportInfo[];
-  proxies: Map<string, any>;
-  originalImports: Map<string, any>;
+  proxies: Map<string, unknown>;
+  originalImports: Map<string, unknown>;
   isInitialized: boolean;
 }
 
 // Type magic for creating mockable versions of imports
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MockFunction<T> = T extends (...args: any[]) => any
   ? { mock: (mockFn: T) => void } & T
   : T extends object
@@ -72,6 +73,7 @@ type MockableObject<T> = {
 } & { mock: (mockObj: Partial<T>) => void };
 
 // Dynamic injector type that matches the module's imports
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DynamicInjector<TImports = any> = {
   [K in keyof TImports]: MockFunction<TImports[K]>;
 } & {
@@ -101,18 +103,23 @@ function __resolveModuleSpecifier(specifier: string, fromPath: string): string {
   return specifier;
 }
 
-async function __loadModule(specifier: string): Promise<any> {
+type Module = {
+  default: unknown;
+  [key: string]: unknown;
+};
+
+async function __loadModule(specifier: string): Promise<Module | undefined> {
   if (moduleCache.has(specifier)) {
     return moduleCache.get(specifier);
   }
 
   try {
-    const module = await import(specifier);
+    const module = (await import(specifier)) as Module;
     moduleCache.set(specifier, module);
     return module;
   } catch (error) {
     console.warn(`Failed to load module ${specifier}:`, error);
-    return {};
+    return undefined;
   }
 }
 
@@ -177,7 +184,7 @@ function __parse(filePath: string): ImportInfo[] {
   return imports;
 }
 
-function __createMoxxyProxy(originalValue: any, modulePath: string, importName: string): any {
+function __createMoxxyProxy(originalValue: unknown, modulePath: string, importName: string) {
   // Safety check: if the value is null, undefined, or not an object/function, don't create a proxy
   if (originalValue === null || originalValue === undefined) {
     return originalValue;
@@ -190,60 +197,70 @@ function __createMoxxyProxy(originalValue: any, modulePath: string, importName: 
     return originalValue;
   }
 
-  return new Proxy(originalValue, {
-    get(target, prop) {
-      const mocks = mockRegistry.get(modulePath);
+  if (typeof originalValue === 'function') {
+    return new Proxy(originalValue, {
+      apply(target, thisArg, argumentsList) {
+        const mocks = mockRegistry.get(modulePath);
 
-      const specificKey = `${importName}.${String(prop)}`;
-      if (mocks?.has(specificKey)) {
-        return mocks.get(specificKey);
-      }
-
-      // Check for full module mock
-      if (mocks?.has(importName) && typeof mocks.get(importName) === 'object') {
-        const fullModuleMock = mocks.get(importName);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (fullModuleMock && prop in (fullModuleMock as any)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return (fullModuleMock as any)[prop];
+        if (!mocks || !mocks.has(importName)) {
+          return target.apply(thisArg, argumentsList);
         }
-      }
 
-      const value = target[prop];
-      if (typeof value !== 'function') {
-        return value;
-      }
+        const mockFn = mocks.get(importName);
+        const caller = typeof mockFn === 'function' ? mockFn : target;
+        return caller.apply(thisArg, argumentsList);
+      },
+    });
+  }
 
-      return new Proxy(value, {
-        apply(fnTarget, thisArg, argumentsList) {
-          const mocks = mockRegistry.get(modulePath);
-          const methodKey = `${importName}.${String(prop)}`;
-          if (!mocks || !mocks.has(methodKey)) {
-            return fnTarget.apply(thisArg, argumentsList);
+  if (typeof originalValue === 'object') {
+    return new Proxy(originalValue, {
+      get(target, prop) {
+        if (target === null || target === undefined) {
+          return target;
+        }
+
+        const mocks = mockRegistry.get(modulePath);
+
+        const specificKey = `${importName}.${String(prop)}`;
+        if (mocks?.has(specificKey)) {
+          return mocks.get(specificKey);
+        }
+
+        // Check for full module mock
+        if (mocks?.has(importName) && typeof mocks.get(importName) === 'object') {
+          const fullModuleMock = mocks.get(importName);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (fullModuleMock && prop in (fullModuleMock as any)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return (fullModuleMock as any)[prop];
           }
+        }
 
-          const mockFn = mocks.get(methodKey);
-          const caller = typeof mockFn === 'function' ? mockFn : fnTarget;
-          return caller.apply(thisArg, argumentsList);
-        },
-      });
-    },
+        const value = (target as Record<string, unknown>)[prop as keyof Record<string, unknown>];
+        if (typeof value !== 'function') {
+          return value;
+        }
 
-    apply(target, thisArg, argumentsList) {
-      const mocks = mockRegistry.get(modulePath);
+        return new Proxy(value, {
+          apply(fnTarget, thisArg, argumentsList) {
+            const mocks = mockRegistry.get(modulePath);
+            const methodKey = `${importName}.${String(prop)}`;
+            if (!mocks || !mocks.has(methodKey)) {
+              return fnTarget.apply(thisArg, argumentsList);
+            }
 
-      if (!mocks || !mocks.has(importName)) {
-        return target.apply(thisArg, argumentsList);
-      }
-
-      const mockFn = mocks.get(importName);
-      const caller = typeof mockFn === 'function' ? mockFn : target;
-      return caller.apply(thisArg, argumentsList);
-    },
-  });
+            const mockFn = mocks.get(methodKey);
+            const caller = typeof mockFn === 'function' ? mockFn : fnTarget;
+            return caller.apply(thisArg, argumentsList);
+          },
+        });
+      },
+    });
+  }
 }
 
-async function __resolve(importInfo: ImportInfo, moduleInfo: ModuleInfo): Promise<any> {
+async function __resolve(importInfo: ImportInfo, moduleInfo: ModuleInfo): Promise<unknown> {
   try {
     const resolvedSpecifier = __resolveModuleSpecifier(
       importInfo.moduleSpecifier,
@@ -254,11 +271,11 @@ async function __resolve(importInfo: ImportInfo, moduleInfo: ModuleInfo): Promis
     let importedValue;
 
     if (importInfo.isDefault) {
-      importedValue = module.default;
+      importedValue = module?.default;
     } else if (importInfo.isNamespace) {
       importedValue = module;
     } else {
-      importedValue = module[importInfo.importName];
+      importedValue = module?.[importInfo.importName];
     }
 
     // Store the original
