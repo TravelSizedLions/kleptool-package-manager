@@ -59,6 +59,9 @@ export default [
       
       // Recommended TypeScript rules
       ...typescriptEslint.configs.recommended.rules,
+      
+      // Allow Function type usage
+      '@typescript-eslint/no-unsafe-function-type': 'off',
     },
     settings: {
       '@typescript-eslint': {

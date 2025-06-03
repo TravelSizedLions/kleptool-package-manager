@@ -326,30 +326,38 @@ async function __moxxify(meta: ImportMeta): Promise<void> {
   await __resolveModuleImports(moduleInfo);
 }
 
-function __addMockFunction(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMockFunction(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  originalValue: any,
+  importName: string,
+  mocks: Map<string, Function>
+): unknown {
   const proxiedFn = new Proxy(originalValue, {
     apply(target, thisArg, argumentsList) {
       if (mocks.has(importName)) {
         const mockFn = mocks.get(importName);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (mockFn as any).apply(thisArg, argumentsList);
+        return mockFn?.apply(thisArg, argumentsList);
       }
       return target.apply(thisArg, argumentsList);
     },
   });
 
-  proxiedFn.mock = (mockFn: any) => {
+  proxiedFn.mock = (mockFn: Function) => {
     mocks.set(importName, mockFn);
   };
 
   return proxiedFn;
 }
 
-function __addMockObject(originalValue: any, importName: string, mocks: Map<string, any>): any {
+function __addMockObject(
+  originalValue: Record<string, unknown>,
+  importName: string,
+  mocks: Map<string, unknown>
+): unknown {
   return new Proxy(originalValue, {
     get(target, prop) {
       if (prop === 'mock') {
-        return (mockObj: any) => {
+        return (mockObj: unknown) => {
           mocks.set(importName, mockObj);
         };
       }
@@ -365,11 +373,11 @@ function __addMockObject(originalValue: any, importName: string, mocks: Map<stri
       if (mocks.has(importName)) {
         const mockObj = mocks.get(importName);
         if (mockObj && typeof mockObj === 'object') {
-          return mockObj[prop];
+          return mockObj[prop as keyof typeof mockObj];
         }
       }
 
-      return __addMock(target[prop], propPath, mocks);
+      return __addMock(target[prop as keyof typeof target], propPath, mocks);
     },
   });
 }
