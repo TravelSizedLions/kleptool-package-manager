@@ -177,7 +177,7 @@ function __parse(filePath: string): ImportInfo[] {
   return imports;
 }
 
-function createMockableProxy(originalValue: any, modulePath: string, importName: string): any {
+function __moxxyProxy(originalValue: any, modulePath: string, importName: string): any {
   // Safety check: if the value is null, undefined, or not an object/function, don't create a proxy
   if (originalValue === null || originalValue === undefined) {
     return originalValue;
@@ -190,13 +190,10 @@ function createMockableProxy(originalValue: any, modulePath: string, importName:
     return originalValue;
   }
 
-  // Don't capture mocks here - do fresh lookup each time!
-
   return new Proxy(originalValue, {
     get(target, prop) {
-      const mocks = mockRegistry.get(modulePath); // Fresh lookup each time!
+      const mocks = mockRegistry.get(modulePath);
 
-      // Check for specific property mocks first (highest priority)
       const specificKey = `${importName}.${String(prop)}`;
       if (mocks?.has(specificKey)) {
         return mocks.get(specificKey);
@@ -213,37 +210,35 @@ function createMockableProxy(originalValue: any, modulePath: string, importName:
       }
 
       const value = target[prop];
-
-      // If it's a function, wrap it in another proxy for method mocking
-      if (typeof value === 'function') {
-        return new Proxy(value, {
-          apply(fnTarget, thisArg, argumentsList) {
-            const mocks = mockRegistry.get(modulePath); // Fresh lookup for each call!
-            const methodKey = `${importName}.${String(prop)}`;
-            if (mocks?.has(methodKey)) {
-              const mockFn = mocks.get(methodKey);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              return (mockFn as any).apply(thisArg, argumentsList);
-            }
-            return fnTarget.apply(thisArg, argumentsList);
-          },
-        });
+      if (typeof value !== 'function') {
+        return value;
       }
 
-      return value;
+      return new Proxy(value, {
+        apply(fnTarget, thisArg, argumentsList) {
+          const mocks = mockRegistry.get(modulePath);
+          const methodKey = `${importName}.${String(prop)}`;
+          if (!mocks || !mocks.has(methodKey)) {
+            return fnTarget.apply(thisArg, argumentsList);
+          }
+
+          const mockFn = mocks.get(methodKey);
+          const caller = typeof mockFn === 'function' ? mockFn : fnTarget;
+          return caller.apply(thisArg, argumentsList);
+        },
+      });
     },
 
     apply(target, thisArg, argumentsList) {
-      const mocks = mockRegistry.get(modulePath); // Fresh lookup for direct function calls!
+      const mocks = mockRegistry.get(modulePath);
 
-      if (mocks?.has(importName)) {
-        const mockFn = mocks.get(importName);
-        if (typeof mockFn === 'function') {
-          return mockFn.apply(thisArg, argumentsList);
-        }
+      if (!mocks || !mocks.has(importName)) {
+        return target.apply(thisArg, argumentsList);
       }
 
-      return target.apply(thisArg, argumentsList);
+      const mockFn = mocks.get(importName);
+      const caller = typeof mockFn === 'function' ? mockFn : target;
+      return caller.apply(thisArg, argumentsList);
     },
   });
 }
@@ -275,7 +270,7 @@ async function initializeModuleProxies(moduleInfo: ModuleInfo): Promise<void> {
       moduleInfo.originalImports.set(importInfo.localName, importedValue);
 
       // Create a mockable proxy
-      const proxy = createMockableProxy(importedValue, moduleInfo.filePath, importInfo.localName);
+      const proxy = __moxxyProxy(importedValue, moduleInfo.filePath, importInfo.localName);
       moduleInfo.proxies.set(importInfo.localName, proxy);
     } catch (error) {
       console.warn(`❌ Failed to create proxy for ${importInfo.localName}:`, error);
@@ -478,7 +473,7 @@ export function __createModuleProxy(originalValue: any, importName: string, meta
   const moduleInfo = moduleRegistry.get(normalizedPath)!;
   moduleInfo.originalImports.set(importName, originalValue);
 
-  const proxy = createMockableProxy(originalValue, normalizedPath, importName);
+  const proxy = __moxxyProxy(originalValue, normalizedPath, importName);
   moduleInfo.proxies.set(importName, proxy);
 
   return proxy;
