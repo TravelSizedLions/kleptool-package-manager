@@ -1,7 +1,13 @@
 // Target module that uses imports - this is what we'll test mocking on
 
 import defaultFunction from './moxxy-test-module.ts';
-import { namedFunction, namedConstant, testObject, TestClass, namespace } from './moxxy-test-module.ts';
+import {
+  namedFunction,
+  namedConstant,
+  testObject,
+  TestClass,
+  namespace,
+} from './moxxy-test-module.ts';
 
 // Functions that use the imports
 export function useDefault(arg: string) {
@@ -31,4 +37,4 @@ export function useClass(value: string) {
 
 export function useNamespace(arg: string) {
   return namespace.nested.deep.func(arg);
-} 
+}

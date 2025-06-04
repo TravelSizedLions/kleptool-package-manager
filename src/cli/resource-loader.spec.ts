@@ -3,8 +3,6 @@ import { z } from 'zod';
 import * as resourceLoader from './resource-loader.ts';
 import kerror from './kerror.ts';
 
-const moxxy = ~import.meta
-
 describe('resource-loader', () => {
   afterEach(() => {
     moxxy.reset();

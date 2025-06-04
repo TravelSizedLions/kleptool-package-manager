@@ -23,8 +23,7 @@ myfile.spec.ts
 ```ts
 import myfile from 'myfile.ts'
 
-const moxxy = ~import.meta
-
+// moxxy is now globally available in all spec files!
 
 //...allows you to do things like...
 moxxy.fs.mock(() => ({

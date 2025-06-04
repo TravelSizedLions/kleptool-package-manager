@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import keepfile from './keepfile.ts';
 
-const moxxy = ~import.meta
-
 describe('keepfile', () => {
   beforeEach(() => {
     moxxy.reset();

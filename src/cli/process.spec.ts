@@ -1,8 +1,6 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import process from './process.ts';
 
-const moxxy = ~import.meta
-
 describe('process', () => {
   afterEach(() => {
     moxxy.reset();

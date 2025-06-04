@@ -21,13 +21,13 @@ export const testObject = {
   method2(arg: string) {
     return `method2-${arg}`;
   },
-  property: 'test-property'
+  property: 'test-property',
 };
 
 // Class export
 export class TestClass {
   constructor(public value: string) {}
-  
+
   getValue() {
     return this.value;
   }
@@ -39,7 +39,7 @@ export const namespace = {
     deep: {
       func(arg: string) {
         return `deep-${arg}`;
-      }
-    }
-  }
-}; 
+      },
+    },
+  },
+};

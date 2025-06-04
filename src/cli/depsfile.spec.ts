@@ -3,7 +3,6 @@ import depsfile from './depsfile.ts';
 import path from 'node:path';
 
 import { beforeEach } from 'bun:test';
-const moxxy = ~import.meta
 
 describe('DepsFile', () => {
   beforeEach(() => {

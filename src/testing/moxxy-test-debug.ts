@@ -16,12 +16,12 @@ for (const match of matches) {
   console.log('Full match:', fullMatch.trim());
   console.log('Import statement:', importStatement.trim());
   console.log('Module name:', moduleName);
-  
+
   // Test parsing
   const trimmed = importStatement.trim();
   let importNames: string[] = [];
   let isDestructured = false;
-  
+
   if (trimmed.startsWith('{') && trimmed.includes('}')) {
     isDestructured = true;
     const destructuredMatch = trimmed.match(/\{\s*([^}]+)\s*\}/);
@@ -34,7 +34,7 @@ for (const match of matches) {
       importNames = [defaultMatch[1]];
     }
   }
-  
+
   console.log('Is destructured:', isDestructured);
   console.log('Import names:', importNames);
-} 
+}

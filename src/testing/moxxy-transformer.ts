@@ -262,11 +262,11 @@ function __patchConsoleError(): void {
 function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
   const normalizedPath = args.path.replace(/\\/g, '/');
   return (
-    normalizedPath.includes('/testing/moxxy.ts') ||       // Skip the moxxy system itself
+    normalizedPath.includes('/testing/moxxy.ts') || // Skip the moxxy system itself
     normalizedPath.includes('/testing/moxxy-simple.ts') || // Skip the simple moxxy system
-    normalizedPath.includes('/testing/moxxy-new.ts') ||   // Skip the new moxxy system
+    normalizedPath.includes('/testing/moxxy-new.ts') || // Skip the new moxxy system
     normalizedPath.includes('/testing/moxxy-transformer.ts') || // Skip the transformer
-    normalizedPath.includes('/testing/extensions.ts') ||  // Skip the test extensions
+    normalizedPath.includes('/testing/extensions.ts') || // Skip the test extensions
     content.includes('☢️ NUCLEAR')
   );
 }
@@ -276,23 +276,32 @@ function __shouldSkipImport(moduleName: string, filePath: string): boolean {
   if (moduleName === 'bun') {
     return true;
   }
-  
+
   // In test files, allow mocking EVERYTHING (including node: modules)
   if (filePath.includes('.spec.ts') || filePath.includes('.test.ts')) {
     return false;
   }
-  
+
   // Allow mocking of specific packages that are commonly mocked in tests
-  const mockablePackages = ['simple-git', 'node:child_process', 'node:fs', 'node:path', 'node:process'];
+  const mockablePackages = [
+    'simple-git',
+    'node:child_process',
+    'node:fs',
+    'node:path',
+    'node:process',
+  ];
   if (mockablePackages.includes(moduleName)) {
     return false;
   }
-  
+
   // In non-test files, skip other built-in modules and external packages to protect production code
-  if (moduleName.startsWith('node:') || (!moduleName.startsWith('./') && !moduleName.startsWith('../'))) {
+  if (
+    moduleName.startsWith('node:') ||
+    (!moduleName.startsWith('./') && !moduleName.startsWith('../'))
+  ) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -324,7 +333,7 @@ function __parseImportNames(importStatement: string): [string[], boolean, boolea
         .split(',')
         .map((name) => name.trim())
         .filter((name) => !name.startsWith('type ')) // Filter out type-only imports
-        .map((name) => name.includes(' as ') ? name.split(' as ')[1].trim() : name);
+        .map((name) => (name.includes(' as ') ? name.split(' as ')[1].trim() : name));
     }
   } else if (trimmed.includes('* as ')) {
     isNamespace = true;
@@ -378,7 +387,7 @@ function __createDefaultReplacement(
   moduleAlreadyImported: boolean
 ): string {
   const moduleVar = __createModuleVarName(moduleName);
-  
+
   if (moduleAlreadyImported) {
     // Just create the proxy, module is already imported
     return `${NUCLEAR_COMMENT}: Additional import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
@@ -395,7 +404,7 @@ function __createNamespaceReplacement(
   moduleAlreadyImported: boolean
 ): string {
   const moduleVar = __createModuleVarName(moduleName);
-  
+
   if (moduleAlreadyImported) {
     // Just create the proxy, module is already imported
     return `${NUCLEAR_COMMENT}: Additional namespace import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
@@ -426,10 +435,10 @@ function __processImportMatch(
   }
 
   const [importNames, isDestructured, isNamespace, isDefault] = __parseImportNames(importStatement);
-  
+
   // Create a unique key for this specific import statement, not just the module
   const importKey = `${moduleName}::${importStatement}`;
-  
+
   if (declaredNuclearVars.has(importKey)) {
     return null;
   }
@@ -446,8 +455,8 @@ function __processImportMatch(
   const replacementCode = isDestructured
     ? __createDestructuredReplacement(fullMatch, moduleName, importNames, moduleAlreadyImported)
     : isNamespace
-    ? __createNamespaceReplacement(fullMatch, moduleName, importName, moduleAlreadyImported)
-    : __createDefaultReplacement(fullMatch, moduleName, importName, moduleAlreadyImported);
+      ? __createNamespaceReplacement(fullMatch, moduleName, importName, moduleAlreadyImported)
+      : __createDefaultReplacement(fullMatch, moduleName, importName, moduleAlreadyImported);
 
   return {
     original: fullMatch,
@@ -471,7 +480,13 @@ function __processImports(
   let generatedLineOffset = 0;
 
   for (const match of importMatches) {
-    const replacement = __processImportMatch(match, moduleNamesMap, declaredNuclearVars, importedModules, filePath);
+    const replacement = __processImportMatch(
+      match,
+      moduleNamesMap,
+      declaredNuclearVars,
+      importedModules,
+      filePath
+    );
     if (!replacement) continue;
 
     // Removed debug output
@@ -516,19 +531,21 @@ function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, stri
 
 function __replacePrimitiveUsage(content: string, importReplacements: ImportReplacement[]): string {
   let transformedContent = content;
-  
+
   // Extract all imported constant names from destructured imports
   const constantNames: string[] = [];
-  
+
   for (const replacement of importReplacements) {
     // Look for destructured import patterns in the replacement code
-    const constantMatches = replacement.replacement.matchAll(/const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*__moxxy__/g);
+    const constantMatches = replacement.replacement.matchAll(
+      /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*__moxxy__/g
+    );
     for (const match of constantMatches) {
       constantNames.push(match[1]);
     }
   }
-  
-  // Replace standalone constant usage (not as property access) 
+
+  // Replace standalone constant usage (not as property access)
   // Only in actual code, not in the import declarations we just created
   for (const constantName of constantNames) {
     // First, split content to avoid touching import declarations
@@ -538,38 +555,51 @@ function __replacePrimitiveUsage(content: string, importReplacements: ImportRepl
       if (line.includes('__moxxy__') || line.includes('☢️ NUCLEAR')) {
         return line;
       }
-      
+
       // Skip type declarations and interfaces
-      if (line.includes(': ') || line.includes('<') || line.includes('>') || 
-          line.includes('interface ') || line.includes('type ') || 
-          line.includes('Promise<') || line.includes('Array<') ||
-          line.trim().startsWith('*') || line.trim().startsWith('//')) {
+      if (
+        line.includes(': ') ||
+        line.includes('<') ||
+        line.includes('>') ||
+        line.includes('interface ') ||
+        line.includes('type ') ||
+        line.includes('Promise<') ||
+        line.includes('Array<') ||
+        line.trim().startsWith('*') ||
+        line.trim().startsWith('//')
+      ) {
         return line;
       }
-      
+
       // Only transform very specific patterns to avoid breaking object literals
       // Match: return constantName; or constantName as the only thing on a line
       const returnRegex = new RegExp(`\\breturn\\s+${constantName}\\s*;`, 'g');
       const standaloneLineRegex = new RegExp(`^\\s*${constantName}\\s*;?\\s*$`, 'g');
-      
+
       let transformedLine = line;
-      
+
       // Transform return statements
       transformedLine = transformedLine.replace(returnRegex, (match) => {
-        return match.replace(constantName, `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`);
+        return match.replace(
+          constantName,
+          `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
+        );
       });
-      
+
       // Transform standalone usage on its own line
       transformedLine = transformedLine.replace(standaloneLineRegex, (match) => {
-        return match.replace(constantName, `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`);
+        return match.replace(
+          constantName,
+          `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
+        );
       });
-      
+
       return transformedLine;
     });
-    
+
     transformedContent = transformedLines.join('\n');
   }
-  
+
   return transformedContent;
 }
 
@@ -595,15 +625,34 @@ function __createSourceMap(
   sourceMapRegistry.set(args.path, sourceMapEntries);
 }
 
-function __setupMoxxy(): string {
+function __setupMoxxy(isSpecFile: boolean): string {
   const moxxyCwd = process.cwd().replace(/\\/g, '/');
-  return `// Love, Moxxy ~<3
+  let setupCode = `// Love, Moxxy ~<3
 // Import the proxy helper
 const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 // Import the tilde syntax helper
 const { __moxxyTilde__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 
 `;
+
+  // Only add global moxxy to spec files
+  if (isSpecFile) {
+    setupCode += `// Global moxxy injector - lazy initialization to avoid module registration issues
+let __globalMoxxy__;
+Object.defineProperty(globalThis, 'moxxy', {
+  get() {
+    if (!__globalMoxxy__) {
+      __globalMoxxy__ = __moxxyTilde__(import.meta);
+    }
+    return __globalMoxxy__;
+  },
+  configurable: true
+});
+
+`;
+  }
+
+  return setupCode;
 }
 
 // ============================================================================
@@ -648,8 +697,10 @@ Bun.plugin({
       }
 
       const [shebang, contentToTransform] = __extractShebang(content);
-      const [importReplacements, moduleNamesMap, generatedLineOffset] =
-        __processImports(contentToTransform, args.path);
+      const [importReplacements, moduleNamesMap, generatedLineOffset] = __processImports(
+        contentToTransform,
+        args.path
+      );
 
       // Apply import transformations
       let transformedContent = contentToTransform;
@@ -660,23 +711,21 @@ Bun.plugin({
         );
       }
 
-      // Replace direct usage with moxxy proxies  
+      // Replace direct usage with moxxy proxies
       transformedContent = __replaceRuntimeUsage(transformedContent, moduleNamesMap);
-      
+
       // Replace primitive usage to handle constants properly
       transformedContent = __replacePrimitiveUsage(transformedContent, importReplacements);
-      
-      // Transform ~import.meta syntax to __moxxyTilde__(import.meta)
-      transformedContent = transformedContent.replace(/~import\.meta/g, '__moxxyTilde__(import.meta)');
 
       // Create source map
       __createSourceMap(shebang, contentToTransform, args, generatedLineOffset);
 
+      // Check if this is a spec file
+      const isSpecFile = args.path.includes('.spec.');
+
       // Add moxxy setup
-      const moxxyLines = __setupMoxxy();
+      const moxxyLines = __setupMoxxy(isSpecFile);
       const finalContent = shebang + moxxyLines + transformedContent;
-
-
 
       return {
         contents: finalContent,
