@@ -1,11 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, afterEach } from 'bun:test';
 import keepfile from './keepfile.ts';
 
 describe('keepfile', () => {
-  beforeEach(() => {
-    moxxy.reset();
-  });
-
   afterEach(() => {
     keepfile.clear();
   });

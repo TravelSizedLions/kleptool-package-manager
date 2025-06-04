@@ -1,4 +1,4 @@
-import kerror from '../cli/kerror.js';
+import kerror from '../../cli/kerror.ts';
 
 // Bun global is provided by runtime
 declare const Bun: {
@@ -29,7 +29,7 @@ const STACK_TRACE_PATTERNS = [
   /\s+at <anonymous> \((.+):(\d+):(\d+)\)/, // at <anonymous> (file:line:col)
 ];
 
-const NUCLEAR_COMMENT = '// ☢️ NUCLEAR';
+const MOXXY_COMMENT = '// ❤️ Moxxy ❤️';
 const MAX_TRANSLATION_ERRORS = 3;
 const SPECIFIC_PROPS = ['env', 'argv', 'cwd', 'version', 'platform'];
 
@@ -272,12 +272,10 @@ function __shouldSkipTransformation(args: { path: string }, content: string): bo
 
   // Skip internal moxxy files
   if (
-    normalizedPath.includes('/testing/moxxy.ts') || // Skip the moxxy system itself
-    normalizedPath.includes('/testing/moxxy-simple.ts') || // Skip the simple moxxy system
-    normalizedPath.includes('/testing/moxxy-new.ts') || // Skip the new moxxy system
-    normalizedPath.includes('/testing/moxxy-transformer.ts') || // Skip the transformer
+    normalizedPath.includes('/testing/moxxy/moxxy.ts') || // Skip the moxxy system itself
+    normalizedPath.includes('/testing/moxxy/transformer-plugin.ts') || // Skip the transformer
     normalizedPath.includes('/testing/extensions.ts') || // Skip the test extensions
-    content.includes('☢️ NUCLEAR')
+    content.includes(MOXXY_COMMENT)
   ) {
     return true;
   }
@@ -408,10 +406,10 @@ function __createDestructuredReplacement(
 
   if (moduleAlreadyImported) {
     // Just create the proxies, module is already imported
-    return `${NUCLEAR_COMMENT}: Additional imports from ${moduleName}\n${individualProxies}`;
+    return `${MOXXY_COMMENT}: Additional imports from ${moduleName}\n${individualProxies}`;
   } else {
     // Import the module and create proxies
-    return `${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\n${individualProxies}`;
+    return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\n${individualProxies}`;
   }
 }
 
@@ -429,10 +427,10 @@ function __createDefaultReplacement(
 
   if (moduleAlreadyImported) {
     // Just create the proxy, module is already imported
-    return `${NUCLEAR_COMMENT}: Additional import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
+    return `${MOXXY_COMMENT}: Additional import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
   } else {
     // Import the module and create proxy
-    return `${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
+    return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
   }
 }
 
@@ -450,10 +448,10 @@ function __createNamespaceReplacement(
 
   if (moduleAlreadyImported) {
     // Just create the proxy, module is already imported
-    return `${NUCLEAR_COMMENT}: Additional namespace import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
+    return `${MOXXY_COMMENT}: Additional namespace import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
   } else {
     // Import the module and create proxy (pass whole module, not .default)
-    return `${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
+    return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
   }
 }
 
@@ -614,7 +612,7 @@ function __replacePrimitiveUsage(content: string, importReplacements: ImportRepl
     const lines = transformedContent.split('\n');
     const transformedLines = lines.map((line) => {
       // Skip lines that contain __moxxy__ (these are our import declarations)
-      if (line.includes('__moxxy__') || line.includes('☢️ NUCLEAR')) {
+      if (line.includes('__moxxy__') || line.includes(MOXXY_COMMENT)) {
         return line;
       }
 
@@ -689,11 +687,11 @@ function __createSourceMap(
 
 function __setupMoxxy(isSpecFile: boolean): string {
   const moxxyCwd = process.cwd().replace(/\\/g, '/');
-  let setupCode = `// Love, Moxxy ~<3
+  let setupCode = `// With love, Moxxy ~<3
 // Import the proxy helper
-const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
+const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy/moxxy.ts');
 // Import the tilde syntax helper
-const { __moxxyTilde__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
+const { __moxxyTilde__ } = await import('${moxxyCwd}/src/testing/moxxy/moxxy.ts');
 
 `;
 

@@ -1,11 +1,7 @@
-import { describe, it, expect, afterEach } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import process from './process.ts';
 
 describe('process', () => {
-  afterEach(() => {
-    moxxy.reset();
-  });
-
   describe('exec', () => {
     it('should execute a command', async () => {
       moxxy.exec.mock(() => ({

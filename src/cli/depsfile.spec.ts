@@ -7,7 +7,6 @@ import { beforeEach } from 'bun:test';
 describe('DepsFile', () => {
   beforeEach(() => {
     depsfile.clear();
-    moxxy.reset();
   });
 
   describe('load', () => {
