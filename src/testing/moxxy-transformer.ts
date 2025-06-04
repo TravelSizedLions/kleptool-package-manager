@@ -1,9 +1,17 @@
-import { plugin } from 'bun';
 import kerror from '../cli/kerror.js';
 
 // Bun global is provided by runtime
 declare const Bun: {
   file(path: string): { text(): Promise<string> };
+  plugin(options: {
+    name: string;
+    setup(build: {
+      onLoad(
+        options: { filter: RegExp },
+        callback: (args: { path: string }) => Promise<{ contents: string; loader: string }>
+      ): void;
+    }): void;
+  }): void;
 };
 
 // Global declarations for test function wrapping
@@ -261,15 +269,71 @@ function __patchConsoleError(): void {
 
 function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
   const normalizedPath = args.path.replace(/\\/g, '/');
-  return (
-    normalizedPath.includes('.spec.') ||
-    normalizedPath.includes('/testing/') ||
+
+  // Skip internal moxxy files
+  if (
+    normalizedPath.includes('/testing/moxxy.ts') || // Skip the moxxy system itself
+    normalizedPath.includes('/testing/moxxy-simple.ts') || // Skip the simple moxxy system
+    normalizedPath.includes('/testing/moxxy-new.ts') || // Skip the new moxxy system
+    normalizedPath.includes('/testing/moxxy-transformer.ts') || // Skip the transformer
+    normalizedPath.includes('/testing/extensions.ts') || // Skip the test extensions
     content.includes('☢️ NUCLEAR')
-  );
+  ) {
+    return true;
+  }
+
+  // Apply moxxy transformations to:
+  // 1. Test files (.spec.ts or .test.ts) - these need the global moxxy and transformations
+  // 2. Files in the testing directory - test utilities and targets
+  // 3. CLI modules - these need to be mockable by tests
+  const isTestFile = normalizedPath.endsWith('.spec.ts') || normalizedPath.endsWith('.test.ts');
+  const isInTestingDirectory = normalizedPath.includes('/testing/');
+  const isCliModule = normalizedPath.includes('/cli/') && !normalizedPath.includes('src/index.ts');
+
+  // Skip transformation for main application entry points but allow everything else
+  const isMainEntryPoint =
+    normalizedPath.endsWith('/src/index.ts') || normalizedPath.endsWith('/src/main.ts');
+
+  if (isMainEntryPoint) {
+    return true; // Skip transformation for main entry points
+  }
+
+  // Transform test files, testing directory, and CLI modules
+  return !(isTestFile || isInTestingDirectory || isCliModule);
 }
 
-function __shouldSkipImport(moduleName: string): boolean {
-  return moduleName.startsWith('./') || moduleName.startsWith('../') || moduleName === 'bun';
+function __shouldSkipImport(moduleName: string, filePath: string): boolean {
+  // Always skip bun - it's special
+  if (moduleName === 'bun') {
+    return true;
+  }
+
+  // In test files, allow mocking EVERYTHING (including node: modules)
+  if (filePath.includes('.spec.ts') || filePath.includes('.test.ts')) {
+    return false;
+  }
+
+  // Allow mocking of specific packages that are commonly mocked in tests
+  const mockablePackages = [
+    'simple-git',
+    'node:child_process',
+    'node:fs',
+    'node:path',
+    'node:process',
+  ];
+  if (mockablePackages.includes(moduleName)) {
+    return false;
+  }
+
+  // In non-test files, skip other built-in modules and external packages to protect production code
+  if (
+    moduleName.startsWith('node:') ||
+    (!moduleName.startsWith('./') && !moduleName.startsWith('../'))
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 // ============================================================================
@@ -285,18 +349,22 @@ function __extractShebang(content: string): [string, string] {
   return [content.slice(0, firstNewline + 1), content.slice(firstNewline + 1)];
 }
 
-function __parseImportNames(importStatement: string): [string[], boolean, boolean, boolean] {
-  const trimmed = importStatement.trim();
+function __parseImportNames(importStatement: string): [string[], boolean, boolean] {
+  // Normalize whitespace in the import statement (especially for multiline imports)
+  const trimmed = importStatement.replace(/\s+/g, ' ').trim();
   let importNames: string[] = [];
   let isDestructured = false;
   let isNamespace = false;
-  let isDefault = false;
 
   if (trimmed.startsWith('{') && trimmed.includes('}')) {
     isDestructured = true;
     const destructuredMatch = trimmed.match(/\{\s*([^}]+)\s*\}/);
     if (destructuredMatch) {
-      importNames = destructuredMatch[1].split(',').map((name) => name.trim());
+      importNames = destructuredMatch[1]
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => name && !name.startsWith('type ')) // Filter out empty and type-only imports
+        .map((name) => (name.includes(' as ') ? name.split(' as ')[1].trim() : name));
     }
   } else if (trimmed.includes('* as ')) {
     isNamespace = true;
@@ -305,14 +373,13 @@ function __parseImportNames(importStatement: string): [string[], boolean, boolea
       importNames = [namespaceMatch[1]];
     }
   } else {
-    isDefault = true;
     const defaultMatch = trimmed.match(/^(\w+)/);
     if (defaultMatch) {
       importNames = [defaultMatch[1]];
     }
   }
 
-  return [importNames, isDestructured, isNamespace, isDefault];
+  return [importNames, isDestructured, isNamespace];
 }
 
 function __createModuleVarName(moduleName: string): string {
@@ -326,23 +393,68 @@ function __createProxyVarName(moduleName: string): string {
 function __createDestructuredReplacement(
   fullMatch: string,
   moduleName: string,
-  importNames: string[]
+  importNames: string[],
+  moduleAlreadyImported: boolean,
+  importAssertion?: string
 ): string {
   const moduleVar = __createModuleVarName(moduleName);
   const individualProxies = importNames
     .map((name) => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`)
     .join('\n');
 
-  return `${fullMatch}\n${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = await import('${moduleName}');\n${individualProxies}`;
+  const importStatement = importAssertion
+    ? `await import('${moduleName}')${importAssertion}`
+    : `await import('${moduleName}')`;
+
+  if (moduleAlreadyImported) {
+    // Just create the proxies, module is already imported
+    return `${NUCLEAR_COMMENT}: Additional imports from ${moduleName}\n${individualProxies}`;
+  } else {
+    // Import the module and create proxies
+    return `${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\n${individualProxies}`;
+  }
 }
 
 function __createDefaultReplacement(
   fullMatch: string,
   moduleName: string,
-  importName: string
+  importName: string,
+  moduleAlreadyImported: boolean,
+  importAssertion?: string
 ): string {
-  const varName = __createProxyVarName(moduleName);
-  return `${fullMatch}\n${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${varName} = __moxxy__(${importName}, '${importName}', import.meta);`;
+  const moduleVar = __createModuleVarName(moduleName);
+  const importStatement = importAssertion
+    ? `await import('${moduleName}')${importAssertion}`
+    : `await import('${moduleName}')`;
+
+  if (moduleAlreadyImported) {
+    // Just create the proxy, module is already imported
+    return `${NUCLEAR_COMMENT}: Additional import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
+  } else {
+    // Import the module and create proxy
+    return `${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
+  }
+}
+
+function __createNamespaceReplacement(
+  fullMatch: string,
+  moduleName: string,
+  importName: string,
+  moduleAlreadyImported: boolean,
+  importAssertion?: string
+): string {
+  const moduleVar = __createModuleVarName(moduleName);
+  const importStatement = importAssertion
+    ? `await import('${moduleName}')${importAssertion}`
+    : `await import('${moduleName}')`;
+
+  if (moduleAlreadyImported) {
+    // Just create the proxy, module is already imported
+    return `${NUCLEAR_COMMENT}: Additional namespace import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
+  } else {
+    // Import the module and create proxy (pass whole module, not .default)
+    return `${NUCLEAR_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
+  }
 }
 
 function __calculateAddedLines(isDestructured: boolean, importNames: string[]): number {
@@ -355,33 +467,57 @@ function __calculateAddedLines(isDestructured: boolean, importNames: string[]): 
 function __processImportMatch(
   match: RegExpMatchArray,
   moduleNamesMap: Map<string, string>,
-  declaredNuclearVars: Set<string>
+  declaredNuclearVars: Set<string>,
+  importedModules: Set<string>,
+  filePath: string
 ): ImportProcessResult | null {
-  const [fullMatch, importStatement, moduleName] = match;
+  const [fullMatch, importStatement, moduleName, importAssertion] = match;
 
-  if (__shouldSkipImport(moduleName)) {
+  if (__shouldSkipImport(moduleName, filePath)) {
     return null;
   }
 
-  const [importNames, isDestructured] = __parseImportNames(importStatement);
-  const varName = __createProxyVarName(moduleName);
+  const [importNames, isDestructured, isNamespace] = __parseImportNames(importStatement);
 
-  if (!isDestructured && importNames.length > 0) {
-    moduleNamesMap.set(moduleName, importNames[0]);
-  }
+  // Create a unique key for this specific import statement, not just the module
+  const importKey = `${moduleName}::${importStatement}`;
 
-  if (declaredNuclearVars.has(varName)) {
+  if (declaredNuclearVars.has(importKey)) {
     return null;
   }
 
-  declaredNuclearVars.add(varName);
+  declaredNuclearVars.add(importKey);
+
+  // Check if module was already imported
+  const moduleAlreadyImported = importedModules.has(moduleName);
+  importedModules.add(moduleName);
 
   const addedLines = __calculateAddedLines(isDestructured, importNames);
   const importName = importNames[0] || moduleName;
 
   const replacementCode = isDestructured
-    ? __createDestructuredReplacement(fullMatch, moduleName, importNames)
-    : __createDefaultReplacement(fullMatch, moduleName, importName);
+    ? __createDestructuredReplacement(
+        fullMatch,
+        moduleName,
+        importNames,
+        moduleAlreadyImported,
+        importAssertion
+      )
+    : isNamespace
+      ? __createNamespaceReplacement(
+          fullMatch,
+          moduleName,
+          importName,
+          moduleAlreadyImported,
+          importAssertion
+        )
+      : __createDefaultReplacement(
+          fullMatch,
+          moduleName,
+          importName,
+          moduleAlreadyImported,
+          importAssertion
+        );
 
   return {
     original: fullMatch,
@@ -391,20 +527,31 @@ function __processImportMatch(
 }
 
 function __processImports(
-  contentToTransform: string
+  contentToTransform: string,
+  filePath: string
 ): [ImportReplacement[], Map<string, string>, number] {
+  // Match import statements (including multiline ones and import assertions)
   const importMatches = contentToTransform.matchAll(
-    /^import\s+([^'"]*)\s+from\s+['"]([^'"]+)['"];?\s*$/gm
+    /import\s+(?!type\s)([\s\S]*?)\s+from\s+['"]([^'"]+)['"](\s+with\s+\{[^}]*\})?;?\s*/g
   );
 
   const importReplacements: ImportReplacement[] = [];
   const declaredNuclearVars = new Set<string>();
+  const importedModules = new Set<string>();
   const moduleNamesMap = new Map<string, string>();
   let generatedLineOffset = 0;
 
   for (const match of importMatches) {
-    const replacement = __processImportMatch(match, moduleNamesMap, declaredNuclearVars);
+    const replacement = __processImportMatch(
+      match,
+      moduleNamesMap,
+      declaredNuclearVars,
+      importedModules,
+      filePath
+    );
     if (!replacement) continue;
+
+    // Removed debug output
 
     generatedLineOffset += replacement.addedLines;
     importReplacements.push({
@@ -444,6 +591,80 @@ function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, stri
   return transformedContent;
 }
 
+function __replacePrimitiveUsage(content: string, importReplacements: ImportReplacement[]): string {
+  let transformedContent = content;
+
+  // Extract all imported constant names from destructured imports
+  const constantNames: string[] = [];
+
+  for (const replacement of importReplacements) {
+    // Look for destructured import patterns in the replacement code
+    const constantMatches = replacement.replacement.matchAll(
+      /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*__moxxy__/g
+    );
+    for (const match of constantMatches) {
+      constantNames.push(match[1]);
+    }
+  }
+
+  // Replace standalone constant usage (not as property access)
+  // Only in actual code, not in the import declarations we just created
+  for (const constantName of constantNames) {
+    // First, split content to avoid touching import declarations
+    const lines = transformedContent.split('\n');
+    const transformedLines = lines.map((line) => {
+      // Skip lines that contain __moxxy__ (these are our import declarations)
+      if (line.includes('__moxxy__') || line.includes('☢️ NUCLEAR')) {
+        return line;
+      }
+
+      // Skip type declarations and interfaces
+      if (
+        line.includes(': ') ||
+        line.includes('<') ||
+        line.includes('>') ||
+        line.includes('interface ') ||
+        line.includes('type ') ||
+        line.includes('Promise<') ||
+        line.includes('Array<') ||
+        line.trim().startsWith('*') ||
+        line.trim().startsWith('//')
+      ) {
+        return line;
+      }
+
+      // Only transform very specific patterns to avoid breaking object literals
+      // Match: return constantName; or constantName as the only thing on a line
+      const returnRegex = new RegExp(`\\breturn\\s+${constantName}\\s*;`, 'g');
+      const standaloneLineRegex = new RegExp(`^\\s*${constantName}\\s*;?\\s*$`, 'g');
+
+      let transformedLine = line;
+
+      // Transform return statements
+      transformedLine = transformedLine.replace(returnRegex, (match) => {
+        return match.replace(
+          constantName,
+          `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
+        );
+      });
+
+      // Transform standalone usage on its own line
+      transformedLine = transformedLine.replace(standaloneLineRegex, (match) => {
+        return match.replace(
+          constantName,
+          `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
+        );
+      });
+
+      return transformedLine;
+    });
+
+    transformedContent = transformedLines.join('\n');
+  }
+
+  return transformedContent;
+}
+
 function __createSourceMap(
   shebang: string,
   contentToTransform: string,
@@ -466,16 +687,34 @@ function __createSourceMap(
   sourceMapRegistry.set(args.path, sourceMapEntries);
 }
 
-function __setupMoxxy(): string {
+function __setupMoxxy(isSpecFile: boolean): string {
   const moxxyCwd = process.cwd().replace(/\\/g, '/');
-  return `// Love, Moxxy ~<3
-const { $ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
-const __registered = $(import.meta); // Register this module for nuclear injection
-
+  let setupCode = `// Love, Moxxy ~<3
 // Import the proxy helper
 const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
+// Import the tilde syntax helper
+const { __moxxyTilde__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 
 `;
+
+  // Only add global moxxy to spec files
+  if (isSpecFile) {
+    setupCode += `// Global moxxy injector - lazy initialization to avoid module registration issues
+let __globalMoxxy__;
+Object.defineProperty(globalThis, 'moxxy', {
+  get() {
+    if (!__globalMoxxy__) {
+      __globalMoxxy__ = __moxxyTilde__(import.meta);
+    }
+    return __globalMoxxy__;
+  },
+  configurable: true
+});
+
+`;
+  }
+
+  return setupCode;
 }
 
 // ============================================================================
@@ -506,7 +745,7 @@ function __setupErrorBoundaries() {
 __setupErrorBoundaries();
 
 // Register as Bun plugin for automatic transformation
-plugin({
+Bun.plugin({
   name: 'Moxxy Dependency Injection',
   setup(build) {
     build.onLoad({ filter: /[/\\]src[/\\].*\.ts$/ }, async (args) => {
@@ -520,8 +759,10 @@ plugin({
       }
 
       const [shebang, contentToTransform] = __extractShebang(content);
-      const [importReplacements, moduleNamesMap, generatedLineOffset] =
-        __processImports(contentToTransform);
+      const [importReplacements, moduleNamesMap, generatedLineOffset] = __processImports(
+        contentToTransform,
+        args.path
+      );
 
       // Apply import transformations
       let transformedContent = contentToTransform;
@@ -535,11 +776,17 @@ plugin({
       // Replace direct usage with moxxy proxies
       transformedContent = __replaceRuntimeUsage(transformedContent, moduleNamesMap);
 
+      // Replace primitive usage to handle constants properly
+      transformedContent = __replacePrimitiveUsage(transformedContent, importReplacements);
+
       // Create source map
       __createSourceMap(shebang, contentToTransform, args, generatedLineOffset);
 
-      // Combine all parts
-      const moxxyLines = __setupMoxxy();
+      // Check if this is a spec file
+      const isSpecFile = args.path.includes('.spec.');
+
+      // Add moxxy setup
+      const moxxyLines = __setupMoxxy(isSpecFile);
       const finalContent = shebang + moxxyLines + transformedContent;
 
       return {

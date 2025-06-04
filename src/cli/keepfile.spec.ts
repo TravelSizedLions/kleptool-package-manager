@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import keepfile from './keepfile.ts';
 
-import { $ } from '../testing/moxxy.ts';
-const moxxy = $(import.meta)!;
-
 describe('keepfile', () => {
   beforeEach(() => {
     moxxy.reset();
@@ -38,11 +35,9 @@ describe('keepfile', () => {
   });
 
   describe('load', () => {
-    it.skip('should load the keepfile', () => {
+    it('should load the keepfile', () => {
       moxxy.fs.existsSync.mock(() => true);
-      // TODO: Fix mocking for nested module dependencies
-      // Mock readFileSync from node:fs which is used by resource-loader
-      moxxy['readFileSync'].mock(() => '{"dependencies": []}');
+      moxxy.resources.load.mock(() => []);
 
       const result = keepfile.load();
       expect(result).toBeDefined();

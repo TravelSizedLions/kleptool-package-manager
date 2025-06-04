@@ -2,9 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import depsfile from './depsfile.ts';
 import path from 'node:path';
 
-import { $ } from '../testing/moxxy.ts';
 import { beforeEach } from 'bun:test';
-const moxxy = $(import.meta)!;
 
 describe('DepsFile', () => {
   beforeEach(() => {

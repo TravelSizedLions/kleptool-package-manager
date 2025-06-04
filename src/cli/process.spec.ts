@@ -1,9 +1,6 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import process from './process.ts';
 
-import { $ } from '../testing/moxxy.ts';
-const moxxy = $(import.meta)!;
-
 describe('process', () => {
   afterEach(() => {
     moxxy.reset();
