@@ -3,14 +3,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 // Import the target module (this should trigger moxxy transformation)
 import * as target from './moxxy-test-target.ts';
 
-// Import moxxy system for testing
-import { $ } from './moxxy.ts';
-
 describe('Moxxy Unit Tests', () => {
-  let moxxy: ReturnType<typeof $>;
+  let moxxy: ReturnType<typeof ~import.meta>;
 
   beforeEach(() => {
-    moxxy = $(import.meta)!;
+    moxxy = ~import.meta;
   });
 
   afterEach(() => {

@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import keepfile from './keepfile.ts';
 
-import { $ } from '../testing/moxxy.ts';
-const moxxy = $(import.meta)!;
+const moxxy = ~import.meta
 
 describe('keepfile', () => {
   beforeEach(() => {

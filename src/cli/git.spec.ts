@@ -1,10 +1,7 @@
 import { describe, it, expect, afterEach } from 'bun:test';
 import git from './git.ts';
 
-import { $ } from '../testing/moxxy.ts';
-const moxxy = $(import.meta)!;
-
-
+const moxxy = ~import.meta
 
 describe('Git Module', () => {
   afterEach(() => {

@@ -3,8 +3,7 @@ import { z } from 'zod';
 import * as resourceLoader from './resource-loader.ts';
 import kerror from './kerror.ts';
 
-import { $ } from '../testing/moxxy.ts';
-const moxxy = $(import.meta)!;
+const moxxy = ~import.meta
 
 describe('resource-loader', () => {
   afterEach(() => {

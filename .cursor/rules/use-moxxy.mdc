@@ -23,8 +23,7 @@ myfile.spec.ts
 ```ts
 import myfile from 'myfile.ts'
 
-import { $ } from '../../testing/moxxy.ts'
-const moxxy = $(import.meta)!
+const moxxy = ~import.meta
 
 
 //...allows you to do things like...

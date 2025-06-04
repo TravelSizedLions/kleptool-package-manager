@@ -52,7 +52,7 @@ export function __moxxy__(originalValue: any, importName: string, meta: ImportMe
 function __createGlobalProxy(originalValue: any, importName: string): any {
   if (typeof originalValue === 'function') {
     // Function proxy
-    const proxyFn = function(...args: any[]) {
+    const proxyFn = function(this: any, ...args: any[]) {
       const mockValue = __getActiveMock(importName);
       if (mockValue !== undefined) {
         if (typeof mockValue === 'function') {
@@ -88,7 +88,7 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
         const nestedMock = __getActiveNestedMock(importName, propName);
         if (nestedMock !== undefined) {
           if (typeof nestedMock === 'function') {
-            return function(...args: any[]) {
+            return function(this: any, ...args: any[]) {
               return nestedMock.apply(this, args);
             };
           }
@@ -322,12 +322,11 @@ function __createTestInjector(testPath: string, targetModulePath: string): TestI
 // Main Entry Point
 // ============================================================================
 
-export function $(meta: ImportMeta): TestInjector | undefined {
+function __moxxyMain(meta: ImportMeta): TestInjector {
   const filePath = fileURLToPath(meta.url);
   
   if (!filePath.includes('.spec.')) {
-    // Regular module - just return undefined (transformer handles registration)
-    return undefined;
+    throw new Error(`Moxxy can only be used in test files (.spec.ts). Called from: ${filePath}`);
   }
   
   // Test file - create injector
@@ -336,6 +335,12 @@ export function $(meta: ImportMeta): TestInjector | undefined {
   
   return __createTestInjector(testPath, targetModulePath);
 }
+
+// Export for plugin injection (this is what gets transformed from ~import.meta)
+export { __moxxyMain as __moxxyTilde__ };
+
+// Export as default so it can be imported with any name
+export default __moxxyMain;
 
 // ============================================================================
 // Helper Functions

@@ -262,11 +262,11 @@ function __patchConsoleError(): void {
 function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
   const normalizedPath = args.path.replace(/\\/g, '/');
   return (
-    normalizedPath.includes('.spec.') ||
     normalizedPath.includes('/testing/moxxy.ts') ||       // Skip the moxxy system itself
     normalizedPath.includes('/testing/moxxy-simple.ts') || // Skip the simple moxxy system
     normalizedPath.includes('/testing/moxxy-new.ts') ||   // Skip the new moxxy system
     normalizedPath.includes('/testing/moxxy-transformer.ts') || // Skip the transformer
+    normalizedPath.includes('/testing/extensions.ts') ||  // Skip the test extensions
     content.includes('☢️ NUCLEAR')
   );
 }
@@ -598,11 +598,10 @@ function __createSourceMap(
 function __setupMoxxy(): string {
   const moxxyCwd = process.cwd().replace(/\\/g, '/');
   return `// Love, Moxxy ~<3
-const { $ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
-const __registered = $(import.meta); // Register this module for nuclear injection
-
 // Import the proxy helper
 const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
+// Import the tilde syntax helper
+const { __moxxyTilde__ } = await import('${moxxyCwd}/src/testing/moxxy.ts');
 
 `;
 }
@@ -666,11 +665,14 @@ Bun.plugin({
       
       // Replace primitive usage to handle constants properly
       transformedContent = __replacePrimitiveUsage(transformedContent, importReplacements);
+      
+      // Transform ~import.meta syntax to __moxxyTilde__(import.meta)
+      transformedContent = transformedContent.replace(/~import\.meta/g, '__moxxyTilde__(import.meta)');
 
       // Create source map
       __createSourceMap(shebang, contentToTransform, args, generatedLineOffset);
 
-      // Combine all parts
+      // Add moxxy setup
       const moxxyLines = __setupMoxxy();
       const finalContent = shebang + moxxyLines + transformedContent;
 
