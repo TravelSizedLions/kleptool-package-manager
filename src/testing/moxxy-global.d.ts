@@ -1,7 +1,7 @@
 // Global type declarations for Moxxy testing framework
 // This file provides type safety for the globally injected moxxy variable
 
-import type { TestInjector } from './moxxy.js';
+import type { TestInjector } from './moxxy.ts';
 
 declare global {
   /**

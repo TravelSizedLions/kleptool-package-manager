@@ -235,13 +235,15 @@ function __clearMocks(testContext?: string): void {
 
 interface MockableProperty {
   mock(mockValue: MockValue): void;
+  [key: string]: MockableProperty | ((...args: unknown[]) => unknown);
 }
 
-export type TestInjector = {
-  [key: string]: MockableProperty | MockValue;
+export interface TestInjector {
   reset(): void;
   restore(importName?: string): void;
-};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
 
 function __createMockableProperty(importName: string, moduleData: ModuleData): MockableProperty {
   const mockable = {
