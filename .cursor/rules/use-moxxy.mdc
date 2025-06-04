@@ -1,0 +1,43 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+This code base uses a proprietary mocking system for its unit tests to maintain a clean and simplified testing setup.
+
+mocking automatically leverage's bun's plugin system to transform the typescript file in a way that lets you inject mocks for any import.
+
+Example:
+
+myfile.ts
+```ts
+import fs from 'node:fs'
+import {thing} from 'thing'
+import * as myalias from 'thing-to-alias'
+
+...
+
+```
+
+myfile.spec.ts
+```ts
+import myfile from 'myfile.ts'
+
+import { $ } from '../../testing/moxxy.ts'
+const moxxy = $(import.meta)!
+
+
+//...allows you to do things like...
+moxxy.fs.mock(() => ({
+  // fs mocks
+}))
+
+moxxy.myalias.mock(() => ({
+  // mocks the aliased import
+}))
+
+// Allows mocking individual function imports
+moxxy.thing.mock(() => {return 'thing'})
+```
+
+It doesn't work unless the spec file is named after the file it's unit testing. So moxxy is really only for unit tests, not integration tests. Still, pretty slick, no?
