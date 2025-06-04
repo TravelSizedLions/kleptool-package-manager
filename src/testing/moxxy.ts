@@ -293,8 +293,23 @@ function __createTestInjector(testPath: string, targetModulePath: string): TestI
   // Get the target module's exports
   const moduleData = moduleRegistry.get(targetModulePath);
   if (!moduleData) {
-    const available = Array.from(moduleRegistry.keys());
-    throw new Error(`Module ${targetModulePath} not found. Available: ${available.join(', ')}`);
+    // If no target module is found, return a minimal injector with just reset/restore functionality
+    // This allows tests that don't use moxxy to still work
+    return {
+      reset() {
+        __clearMocks();
+      },
+      restore(importName?: string) {
+        if (importName) {
+          const mockRegistry = testMocks.get(activeTestContext.current!);
+          if (mockRegistry) {
+            mockRegistry.delete(importName);
+          }
+        } else {
+          __clearMocks();
+        }
+      },
+    };
   }
 
   const baseInjector = {

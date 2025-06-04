@@ -1,16 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'bun:test';
 
 // Import the target module (this should trigger moxxy transformation)
 import * as target from './moxxy-test-target.ts';
 
 describe('Moxxy Unit Tests', () => {
   beforeEach(() => {});
-
-  afterEach(() => {
-    if (moxxy) {
-      moxxy.reset();
-    }
-  });
 
   describe('Import Detection', () => {
     it('should detect all imports from target module', () => {

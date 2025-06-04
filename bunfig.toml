@@ -3,6 +3,6 @@ preload = ["./src/testing/moxxy-transformer.ts"]
 
 # Use plugin for test transformations  
 [test]
-preload = ["./src/testing/moxxy-transformer.ts", './src/testing/extensions.ts']
+preload = ["./src/testing/moxxy-transformer.ts", './src/testing/extensions.ts', './src/testing/moxxy-setup.ts']
 
 

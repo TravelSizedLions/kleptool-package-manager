@@ -1,11 +1,7 @@
-import { describe, it, expect, afterEach } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import git from './git.ts';
 
 describe('Git Module', () => {
-  afterEach(() => {
-    moxxy.reset();
-  });
-
   describe('debug', () => {
     it('should show what moxxy can see', () => {
       console.log('Moxxy object:', Object.getOwnPropertyNames(moxxy));

@@ -1,13 +1,9 @@
-import { describe, it, expect, afterEach } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import { z } from 'zod';
 import * as resourceLoader from './resource-loader.ts';
 import kerror from './kerror.ts';
 
 describe('resource-loader', () => {
-  afterEach(() => {
-    moxxy.reset();
-  });
-
   describe('load', () => {
     it('should load a resource if it exists', () => {
       const resourcePath = 'test.json';
