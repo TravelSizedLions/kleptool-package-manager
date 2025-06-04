@@ -34,6 +34,9 @@
 
   // Generate coverage reports
   coverage: "klep ts:coverage && klep rust:coverage",
+  
+  // Show coverage summary with global stats
+  'coverage:summary': "klep coverage && bash scripts/coverage-summary.sh",
 
   // Simulate a CI pipeline
   ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep test',
@@ -76,8 +79,8 @@
   'rust:test': 'cd src/rust && cargo test --workspace',
 
   // Coverage
-  'ts:coverage': 'bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage/typescript',
-  'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --output-dir ../../coverage/rust --workspace',
+  'ts:coverage': 'bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/typescript',
+  'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --out text --output-dir ../../coverage/rust --workspace',
 
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
