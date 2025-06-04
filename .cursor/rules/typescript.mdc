@@ -68,3 +68,12 @@ export default {
 }
 
 ```
+
+
+For geneal TS advice:
+- Avoid `any` unless the context you're using it in could be any possible type and `unknown` is causing more headaches than it's worth.
+
+
+
+
+

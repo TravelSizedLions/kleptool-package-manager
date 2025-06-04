@@ -1,9 +1,17 @@
-import { plugin } from 'bun';
 import kerror from '../cli/kerror.js';
 
 // Bun global is provided by runtime
 declare const Bun: {
   file(path: string): { text(): Promise<string> };
+  plugin(options: {
+    name: string;
+    setup(build: {
+      onLoad(
+        options: { filter: RegExp },
+        callback: (args: { path: string }) => Promise<{ contents: string; loader: string }>
+      ): void;
+    }): void;
+  }): void;
 };
 
 // Global declarations for test function wrapping
@@ -318,12 +326,11 @@ function __extractShebang(content: string): [string, string] {
   return [content.slice(0, firstNewline + 1), content.slice(firstNewline + 1)];
 }
 
-function __parseImportNames(importStatement: string): [string[], boolean, boolean, boolean] {
+function __parseImportNames(importStatement: string): [string[], boolean, boolean] {
   const trimmed = importStatement.trim();
   let importNames: string[] = [];
   let isDestructured = false;
   let isNamespace = false;
-  let isDefault = false;
 
   if (trimmed.startsWith('{') && trimmed.includes('}')) {
     isDestructured = true;
@@ -342,14 +349,13 @@ function __parseImportNames(importStatement: string): [string[], boolean, boolea
       importNames = [namespaceMatch[1]];
     }
   } else {
-    isDefault = true;
     const defaultMatch = trimmed.match(/^(\w+)/);
     if (defaultMatch) {
       importNames = [defaultMatch[1]];
     }
   }
 
-  return [importNames, isDestructured, isNamespace, isDefault];
+  return [importNames, isDestructured, isNamespace];
 }
 
 function __createModuleVarName(moduleName: string): string {
@@ -434,7 +440,7 @@ function __processImportMatch(
     return null;
   }
 
-  const [importNames, isDestructured, isNamespace, isDefault] = __parseImportNames(importStatement);
+  const [importNames, isDestructured, isNamespace] = __parseImportNames(importStatement);
 
   // Create a unique key for this specific import statement, not just the module
   const importKey = `${moduleName}::${importStatement}`;
@@ -550,7 +556,7 @@ function __replacePrimitiveUsage(content: string, importReplacements: ImportRepl
   for (const constantName of constantNames) {
     // First, split content to avoid touching import declarations
     const lines = transformedContent.split('\n');
-    const transformedLines = lines.map((line, index) => {
+    const transformedLines = lines.map((line) => {
       // Skip lines that contain __moxxy__ (these are our import declarations)
       if (line.includes('__moxxy__') || line.includes('☢️ NUCLEAR')) {
         return line;

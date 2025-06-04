@@ -4,22 +4,32 @@ import { fileURLToPath } from 'node:url';
 // MOXXY: A Working Mock Injection System
 // ============================================================================
 
+// Type definitions for better type safety
+type MockValue = unknown;
+type OriginalValue = unknown;
+type FunctionMock = (...args: unknown[]) => unknown;
+type ObjectMock = Record<string | symbol, unknown>;
+
 // Global state - keeps it simple
 const moduleRegistry = new Map<string, ModuleData>();
 const activeTestContext = { current: null as string | null };
 
 type ModuleData = {
-  exports: Map<string, any>;
-  proxies: Map<string, any>;
+  exports: Map<string, MockValue>;
+  proxies: Map<string, MockValue>;
 };
 
-type MockRegistry = Map<string, any>;
+type MockRegistry = Map<string, MockValue>;
 
 // ============================================================================
 // Core Registration System
 // ============================================================================
 
-export function __moxxy__(originalValue: any, importName: string, meta: ImportMeta): any {
+export function __moxxy__(
+  originalValue: OriginalValue,
+  importName: string,
+  meta: ImportMeta
+): MockValue {
   const modulePath = __getModulePath(meta);
 
   // Get or create module data
@@ -49,10 +59,10 @@ export function __moxxy__(originalValue: any, importName: string, meta: ImportMe
 // Proxy Creation - The Heart of Mocking
 // ============================================================================
 
-function __createGlobalProxy(originalValue: any, importName: string): any {
+function __createGlobalProxy(originalValue: OriginalValue, importName: string): MockValue {
   if (typeof originalValue === 'function') {
     // Function proxy
-    const proxyFn = function (this: any, ...args: any[]) {
+    const proxyFn = function (this: unknown, ...args: unknown[]) {
       const mockValue = __getActiveMock(importName);
       if (mockValue !== undefined) {
         if (typeof mockValue === 'function') {
@@ -68,8 +78,10 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
     Object.getOwnPropertyNames(originalValue).forEach((key) => {
       if (key !== 'length' && key !== 'name' && key !== 'prototype') {
         try {
-          (proxyFn as any)[key] = (originalValue as any)[key];
-        } catch (e) {
+          (proxyFn as unknown as Record<string, unknown>)[key] = (
+            originalValue as unknown as Record<string, unknown>
+          )[key];
+        } catch {
           // Ignore read-only properties
         }
       }
@@ -88,8 +100,8 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
         const nestedMock = __getActiveNestedMock(importName, propName);
         if (nestedMock !== undefined) {
           if (typeof nestedMock === 'function') {
-            return function (this: any, ...args: any[]) {
-              return nestedMock.apply(this, args);
+            return function (this: unknown, ...args: unknown[]) {
+              return (nestedMock as FunctionMock).apply(this, args);
             };
           }
           return nestedMock;
@@ -97,11 +109,11 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
 
         // Check for whole object mock
         const mockValue = __getActiveMock(importName);
-        if (mockValue && typeof mockValue === 'object' && prop in mockValue) {
-          const mockProp = mockValue[prop];
+        if (mockValue && typeof mockValue === 'object' && mockValue !== null && prop in mockValue) {
+          const mockProp = (mockValue as ObjectMock)[prop];
           if (typeof mockProp === 'function') {
-            return function (...args: any[]) {
-              return mockProp.apply(mockValue, args);
+            return function (...args: unknown[]) {
+              return (mockProp as FunctionMock).apply(mockValue, args);
             };
           }
           return mockProp;
@@ -109,8 +121,8 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
 
         const originalProp = Reflect.get(target, prop, receiver);
         if (typeof originalProp === 'function') {
-          return function (...args: any[]) {
-            return originalProp.apply(target, args);
+          return function (...args: unknown[]) {
+            return (originalProp as FunctionMock).apply(target, args);
           };
         }
         return originalProp;
@@ -125,7 +137,7 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
       return mockValue !== undefined ? mockValue : originalValue;
     },
     {
-      get(target, prop, receiver) {
+      get(target, prop) {
         // Special handling for primitive conversion methods
         if (prop === 'valueOf' || prop === Symbol.toPrimitive) {
           return function () {
@@ -147,20 +159,20 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
         const actualValue = mockValue !== undefined ? mockValue : originalValue;
 
         if (actualValue != null && typeof actualValue === 'object') {
-          return actualValue[prop];
+          return (actualValue as ObjectMock)[prop];
         }
 
         return undefined;
       },
 
       // Make the proxy itself return the value when called or coerced
-      apply(target, thisArg, argumentsList) {
+      apply() {
         const mockValue = __getActiveMock(importName);
         return mockValue !== undefined ? mockValue : originalValue;
       },
 
       // Handle property setting
-      set(target, prop, value) {
+      set() {
         return false; // Primitives are immutable
       },
 
@@ -180,7 +192,7 @@ function __createGlobalProxy(originalValue: any, importName: string): any {
 
 const testMocks = new Map<string, MockRegistry>();
 
-function __getActiveMock(importName: string): any {
+function __getActiveMock(importName: string): MockValue {
   if (!activeTestContext.current) return undefined;
 
   const mockRegistry = testMocks.get(activeTestContext.current);
@@ -189,7 +201,7 @@ function __getActiveMock(importName: string): any {
   return mockRegistry.get(importName);
 }
 
-function __getActiveNestedMock(importName: string, propName: string): any {
+function __getActiveNestedMock(importName: string, propName: string): MockValue {
   if (!activeTestContext.current) return undefined;
 
   const mockRegistry = testMocks.get(activeTestContext.current);
@@ -198,7 +210,7 @@ function __getActiveNestedMock(importName: string, propName: string): any {
   return mockRegistry.get(`${importName}.${propName}`);
 }
 
-function __setMock(importName: string, mockValue: any): void {
+function __setMock(importName: string, mockValue: MockValue): void {
   if (!activeTestContext.current) {
     throw new Error('No active test context');
   }
@@ -222,18 +234,18 @@ function __clearMocks(testContext?: string): void {
 // ============================================================================
 
 interface MockableProperty {
-  mock(mockValue: any): void;
+  mock(mockValue: MockValue): void;
 }
 
 export type TestInjector = {
-  [key: string]: MockableProperty | any;
+  [key: string]: MockableProperty | MockValue;
   reset(): void;
   restore(importName?: string): void;
 };
 
-function __createMockableProperty(importName: string, moduleData: ModuleData): any {
+function __createMockableProperty(importName: string, moduleData: ModuleData): MockableProperty {
   const mockable = {
-    mock(mockValue: any) {
+    mock(mockValue: MockValue) {
       __setMock(importName, mockValue);
     },
   };
@@ -253,7 +265,7 @@ function __createMockableProperty(importName: string, moduleData: ModuleData): a
         if (propName in originalValue) {
           // Create a nested mockable property
           return {
-            mock(mockValue: any) {
+            mock(mockValue: MockValue) {
               // Store the mock for the nested property
               __setMock(`${importName}.${propName}`, mockValue);
             },
@@ -304,7 +316,7 @@ function __createTestInjector(testPath: string, targetModulePath: string): TestI
   return new Proxy(baseInjector, {
     get(target, prop) {
       if (prop in target) {
-        return (target as any)[prop];
+        return (target as Record<string | symbol, unknown>)[prop];
       }
 
       const importName = String(prop);

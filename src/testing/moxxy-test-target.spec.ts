@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import type { TestInjector } from './moxxy.ts';
 
 // Import the target module (this should trigger moxxy transformation)
 import * as target from './moxxy-test-target.ts';
