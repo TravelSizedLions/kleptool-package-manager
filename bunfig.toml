@@ -1,8 +1,12 @@
 # Use plugin for runtime transformations
-preload = ["./src/testing/moxxy-transformer.ts"]
+preload = ["./src/testing/moxxy/transformer-plugin.ts"]
 
 # Use plugin for test transformations  
 [test]
-preload = ["./src/testing/moxxy-transformer.ts", './src/testing/extensions.ts', './src/testing/moxxy-setup.ts']
+preload = [
+  "./src/testing/moxxy/transformer-plugin.ts",
+  "./src/testing/extensions.ts",
+  "./src/testing/moxxy/auto-reset.ts"
+]
 
 

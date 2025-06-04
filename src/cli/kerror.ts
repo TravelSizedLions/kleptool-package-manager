@@ -135,7 +135,7 @@ async function __getStackTraceTranslator() {
   }
 
   try {
-    const transformPlugin = await import('../testing/moxxy-transformer.ts');
+    const transformPlugin = await import('../testing/moxxy/transformer-plugin.ts');
     __translateStackTrace = transformPlugin.translateStackTrace || ((e: Error) => e);
   } catch {
     // If the testing system isn't available, just use identity function
