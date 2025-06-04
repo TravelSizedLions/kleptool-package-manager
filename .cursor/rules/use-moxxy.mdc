@@ -5,7 +5,7 @@ alwaysApply: true
 ---
 This code base uses a proprietary mocking system for its unit tests to maintain a clean and simplified testing setup.
 
-mocking automatically leverage's bun's plugin system to transform the typescript file in a way that lets you inject mocks for any import.
+moxxy leverage's bun's plugin system to recursively transform module imports into proxies for dependency injection. Each `.spec.ts` unit testing file can automatically see and use the imports of the file it's unit testing.
 
 Example:
 

@@ -35,11 +35,9 @@ describe('keepfile', () => {
   });
 
   describe('load', () => {
-    it.skip('should load the keepfile', () => {
+    it('should load the keepfile', () => {
       moxxy.fs.existsSync.mock(() => true);
-      // TODO: Fix mocking for nested module dependencies
-      // Mock readFileSync from node:fs which is used by resource-loader
-      moxxy['readFileSync'].mock(() => '{"dependencies": []}');
+      moxxy.resources.load.mock(() => []);
 
       const result = keepfile.load();
       expect(result).toBeDefined();

@@ -72,6 +72,7 @@ export default {
 
 For geneal TS advice:
 - Avoid `any` unless the context you're using it in could be any possible type and `unknown` is causing more headaches than it's worth.
+- Use never-nester approaches to module design. Try to keep cyclomatic complexity to 6 or less for each function
 
 
 
