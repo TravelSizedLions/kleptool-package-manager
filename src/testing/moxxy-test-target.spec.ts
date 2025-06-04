@@ -33,7 +33,7 @@ describe('Moxxy Unit Tests', () => {
       ];
 
       for (const importName of expectedImports) {
-        const detected = importName in moxxy;
+        const detected = importName in moxxy!;
         console.log(`${importName}: ${detected}`);
         expect(detected).toBe(true);
       }
@@ -138,7 +138,7 @@ describe('Moxxy Unit Tests', () => {
       expect(target.useDefault('test')).toBe('mocked');
       expect(target.useNamed('test')).toBe('also-mocked');
       
-      moxxy.restore('defaultFunction');
+      moxxy!.restore('defaultFunction');
       
       expect(target.useDefault('test')).toBe('default-test'); // Restored
       expect(target.useNamed('test')).toBe('also-mocked'); // Still mocked
@@ -151,7 +151,7 @@ describe('Moxxy Unit Tests', () => {
       expect(target.useDefault('test')).toBe('mocked');
       expect(target.useNamed('test')).toBe('also-mocked');
       
-      moxxy.reset();
+      moxxy!.reset();
       
       expect(target.useDefault('test')).toBe('default-test');
       expect(target.useNamed('test')).toBe('named-test');
