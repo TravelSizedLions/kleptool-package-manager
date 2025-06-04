@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import type { TestInjector } from './moxxy.ts';
 
 // Import the target module (this should trigger moxxy transformation)
 import * as target from './moxxy-test-target.ts';
 
 describe('Moxxy Unit Tests', () => {
-  let moxxy: ReturnType<typeof ~import.meta>;
+  let moxxy: TestInjector;
 
   beforeEach(() => {
     moxxy = ~import.meta;

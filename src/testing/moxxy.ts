@@ -222,7 +222,7 @@ interface MockableProperty {
   mock(mockValue: any): void;
 }
 
-type TestInjector = {
+export type TestInjector = {
   [key: string]: MockableProperty | any;
   reset(): void;
   restore(importName?: string): void;
