@@ -1,5 +1,9 @@
 import kerror from '../../cli/kerror.ts';
 
+// ============================================================================
+// Type Declarations and Interfaces
+// ============================================================================
+
 // Bun global is provided by runtime
 declare const Bun: {
   file(path: string): { text(): Promise<string> };
@@ -14,7 +18,6 @@ declare const Bun: {
   }): void;
 };
 
-// Global declarations for test function wrapping
 type TestFunction = (name: string, fn: () => void | Promise<void>) => unknown;
 
 declare global {
@@ -22,23 +25,6 @@ declare global {
   var test: TestFunction | undefined;
 }
 
-// File-wide constants
-const STACK_TRACE_PATTERNS = [
-  /\s+at .* \((.+):(\d+):(\d+)\)/, // at function (file:line:col)
-  /\s+at (.+):(\d+):(\d+)/, // at file:line:col
-  /\s+at <anonymous> \((.+):(\d+):(\d+)\)/, // at <anonymous> (file:line:col)
-];
-
-const MOXXY_COMMENT = '// ❤️ Moxxy ❤️';
-const MAX_TRANSLATION_ERRORS = 3;
-const SPECIFIC_PROPS = ['env', 'argv', 'cwd', 'version', 'platform'];
-
-// File-wide variables
-let isTranslatingStackTrace = false;
-let translationErrorCount = 0;
-let originalConsoleError: (...args: unknown[]) => void;
-
-// Type declarations
 interface SourceMapEntry {
   originalLine: number;
   generatedLine: number;
@@ -56,10 +42,132 @@ interface ImportProcessResult {
   addedLines: number;
 }
 
-const sourceMapRegistry = new Map<string, SourceMapEntry[]>();
+interface ImportParseResult {
+  importNames: string[];
+  isDestructured: boolean;
+  isNamespace: boolean;
+}
 
 // ============================================================================
-// Stack Trace Processing Functions
+// File-wide Constants and Variables
+// ============================================================================
+
+const STACK_TRACE_PATTERNS = [
+  /\s+at .* \((.+):(\d+):(\d+)\)/, // at function (file:line:col)
+  /\s+at (.+):(\d+):(\d+)/, // at file:line:col
+  /\s+at <anonymous> \((.+):(\d+):(\d+)\)/, // at <anonymous> (file:line:col)
+];
+
+const MOXXY_COMMENT = '// [moxxy]';
+const MAX_TRANSLATION_ERRORS = 3;
+const SPECIFIC_PROPS = ['env', 'argv', 'cwd', 'version', 'platform'];
+
+const MOCKABLE_PACKAGES = [
+  'simple-git',
+  'node:child_process',
+  'node:fs',
+  'node:path',
+  'node:process',
+];
+
+const MOXXY_CWD = process.cwd().replace(/\\/g, '/');
+const NUCLEAR_SETUP_LINES = 6;
+const SHEBANG_PREFIX = '#!';
+
+const IMPORT_REGEX =
+  /import\s+(?!type\s)([\s\S]*?)\s+from\s+['"]([^'"]+)[''](\s+with\s+\{[^}]*\})?;?\s*/g;
+const DESTRUCTURED_IMPORT_REGEX = /\{\s*([^}]+)\s*\}/;
+const NAMESPACE_IMPORT_REGEX = /\*\s+as\s+(\w+)/;
+const DEFAULT_IMPORT_REGEX = /^(\w+)/;
+const CONSTANT_PROXY_REGEX = /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*__moxxy__/g;
+
+// File path constants
+const TESTING_DIR = '/testing/';
+const CLI_DIR = '/cli/';
+const SRC_INDEX_PATH = 'src/index.ts';
+const SRC_MAIN_PATH = '/src/main.ts';
+const SPEC_EXTENSION = '.spec.ts';
+const TEST_EXTENSION = '.test.ts';
+const SPEC_DOT = '.spec.';
+
+// Moxxy system file paths
+const MOXXY_CORE_PATH = '/testing/moxxy/moxxy.ts';
+const MOXXY_TRANSFORMER_PATH = '/testing/moxxy/transformer-plugin.ts';
+const TESTING_EXTENSIONS_PATH = '/testing/extensions.ts';
+
+// Console messages
+const MSG_STACK_TRANSLATION_FAILED = '⚠️  Stack trace translation failed';
+const MSG_STACK_TRANSLATION_DISABLED =
+  '🚫 Stack trace translation disabled due to repeated failures';
+const MSG_SETTING_UP_ERROR_BOUNDARIES = '🛡️  Setting up test error boundaries...';
+const MSG_ERROR_BOUNDARIES_ACTIVATED =
+  '🛡️  Test error boundaries activated with source map translation!';
+const MSG_UNCAUGHT_EXCEPTION = '❌ Uncaught Exception:';
+const MSG_UNCAUGHT_EXCEPTION_FAILED = '❌ Uncaught Exception (translation failed):';
+const MSG_UNHANDLED_REJECTION = '❌ Unhandled Rejection:';
+const MSG_UNHANDLED_REJECTION_FAILED = '❌ Unhandled Rejection (translation failed):';
+const MSG_SKIPPING_MACOS = '🍎 Skipping error boundaries on macOS due to compatibility issues';
+const MSG_SETUP_FAILED = '⚠️  Failed to setup error boundaries:';
+
+// Code analysis patterns
+const TYPE_PREFIX = 'type ';
+const AS_KEYWORD = ' as ';
+const NAMESPACE_AS = '* as ';
+const CURLY_OPEN = '{';
+const CURLY_CLOSE = '}';
+const TYPE_COLON = ': ';
+const ANGLE_OPEN = '<';
+const ANGLE_CLOSE = '>';
+const INTERFACE_KEYWORD = 'interface ';
+const TYPE_KEYWORD = 'type ';
+const PROMISE_TYPE = 'Promise<';
+const ARRAY_TYPE = 'Array<';
+const COMMENT_ASTERISK = '*';
+const COMMENT_DOUBLE_SLASH = '//';
+
+// Path patterns
+const SLASH = '/';
+const DOT = '.';
+const NODE_MODULES = 'node_modules';
+const BUN_PREFIX = 'bun:';
+const NATIVE = 'native';
+const NODE_PREFIX = 'node:';
+const RELATIVE_CURRENT = './';
+const RELATIVE_PARENT = '../';
+
+const GLOBAL_MOXXY_INJECTOR = `
+// Global moxxy injector - lazy initialization to avoid module registration issues
+let __globalMoxxy__;
+Object.defineProperty(globalThis, 'moxxy', {
+  get() {
+    if (!__globalMoxxy__) {
+      __globalMoxxy__ = __moxxyTilde__(import.meta);
+    }
+    return __globalMoxxy__;
+  },
+  configurable: true
+});
+
+`;
+
+const MOXXY_IMPORT = `
+// With love, Moxxy ~<3
+const { __moxxy__ } = await import('${MOXXY_CWD}/src/testing/moxxy/moxxy.ts');
+const { __moxxyTilde__ } = await import('${MOXXY_CWD}/src/testing/moxxy/moxxy.ts');
+
+`;
+
+// OS platform
+const DARWIN_PLATFORM = 'darwin';
+
+const sourceMapRegistry = new Map<string, SourceMapEntry[]>();
+
+let isTranslatingStackTrace = false;
+let translationErrorCount = 0;
+let originalConsoleError: (...args: unknown[]) => void;
+
+// ============================================================================
+// Stack Trace Processing Helper Functions
 // ============================================================================
 
 function __findStackTraceMatch(line: string) {
@@ -81,12 +189,17 @@ function __findBestMapping(mappings: SourceMapEntry[], originalLine: number) {
 
 function __shouldSkipStackTranslation(filePath: string): boolean {
   return (
-    filePath === 'native' ||
-    !filePath.includes('/') ||
-    !filePath.includes('.') ||
-    filePath.includes('node_modules') ||
-    filePath.startsWith('bun:')
+    filePath === NATIVE ||
+    !filePath.includes(SLASH) ||
+    !filePath.includes(DOT) ||
+    filePath.includes(NODE_MODULES) ||
+    filePath.startsWith(BUN_PREFIX)
   );
+}
+
+function __calculateOriginalLineNumber(bestMapping: SourceMapEntry, originalLine: number): number {
+  const offsetWithinMapping = originalLine - bestMapping.generatedLine;
+  return bestMapping.originalLine + offsetWithinMapping;
 }
 
 function __translateSingleStackLine(line: string): string {
@@ -96,23 +209,15 @@ function __translateSingleStackLine(line: string): string {
   const filePath = match[1];
   const originalLine = parseInt(match[2], 10);
 
-  if (__shouldSkipStackTranslation(filePath)) {
-    return line;
-  }
+  if (__shouldSkipStackTranslation(filePath)) return line;
 
   const mappings = sourceMapRegistry.get(filePath);
-  if (!mappings || mappings.length === 0) {
-    return line;
-  }
+  if (!mappings || mappings.length === 0) return line;
 
   const bestMapping = __findBestMapping(mappings, originalLine);
-  if (!bestMapping) {
-    return line;
-  }
+  if (!bestMapping) return line;
 
-  const offsetWithinMapping = originalLine - bestMapping.generatedLine;
-  const originalLineNumber = bestMapping.originalLine + offsetWithinMapping;
-
+  const originalLineNumber = __calculateOriginalLineNumber(bestMapping, originalLine);
   return line.replace(`:${originalLine}:`, `:${originalLineNumber}:`);
 }
 
@@ -131,6 +236,10 @@ function __safelyModifyErrorStack(error: Error, translatedLines: string[]): Erro
   }
 }
 
+// ============================================================================
+// Stack Trace Translation Functions
+// ============================================================================
+
 export function translateStackTrace(error: Error): Error {
   if (isTranslatingStackTrace || !error.stack || translationErrorCount >= MAX_TRANSLATION_ERRORS) {
     return error;
@@ -147,12 +256,12 @@ export function translateStackTrace(error: Error): Error {
       translationError instanceof Error ? translationError.message : String(translationError);
 
     console.warn(
-      `⚠️  Stack trace translation failed (${translationErrorCount}/${MAX_TRANSLATION_ERRORS}):`,
+      `${MSG_STACK_TRANSLATION_FAILED} (${translationErrorCount}/${MAX_TRANSLATION_ERRORS}):`,
       errorMessage
     );
 
     if (translationErrorCount >= MAX_TRANSLATION_ERRORS) {
-      console.warn('🚫 Stack trace translation disabled due to repeated failures');
+      console.warn(MSG_STACK_TRANSLATION_DISABLED);
     }
 
     return error;
@@ -162,7 +271,7 @@ export function translateStackTrace(error: Error): Error {
 }
 
 // ============================================================================
-// Test Function Wrapping
+// Test Function Wrapping Helper Functions
 // ============================================================================
 
 function __createWrappedTestFunction(originalTest: TestFunction): TestFunction {
@@ -188,7 +297,7 @@ function __createWrappedTestFunction(originalTest: TestFunction): TestFunction {
 function __wrapTestFunction(): void {
   if (!globalThis.test || globalThis.originalTest) return;
 
-  console.log('🛡️  Setting up test error boundaries...');
+  console.log(MSG_SETTING_UP_ERROR_BOUNDARIES);
   globalThis.originalTest = globalThis.test;
 
   if (!globalThis.originalTest) {
@@ -198,19 +307,19 @@ function __wrapTestFunction(): void {
   }
 
   globalThis.test = __createWrappedTestFunction(globalThis.originalTest);
-  console.log('🛡️  Test error boundaries activated with source map translation!');
+  console.log(MSG_ERROR_BOUNDARIES_ACTIVATED);
 }
 
 // ============================================================================
-// Process Error Handlers
+// Process Error Handler Helper Functions
 // ============================================================================
 
 function __handleUncaughtException(error: Error): void {
   try {
     const translated = translateStackTrace(error);
-    console.error('❌ Uncaught Exception:', translated);
+    console.error(MSG_UNCAUGHT_EXCEPTION, translated);
   } catch {
-    console.error('❌ Uncaught Exception (translation failed):', error);
+    console.error(MSG_UNCAUGHT_EXCEPTION_FAILED, error);
   }
   process.exit(1);
 }
@@ -219,12 +328,12 @@ function __handleUnhandledRejection(reason: unknown): void {
   try {
     if (reason instanceof Error) {
       const translated = translateStackTrace(reason);
-      console.error('❌ Unhandled Rejection:', translated);
+      console.error(MSG_UNHANDLED_REJECTION, translated);
     } else {
-      console.error('❌ Unhandled Rejection:', reason);
+      console.error(MSG_UNHANDLED_REJECTION, reason);
     }
   } catch {
-    console.error('❌ Unhandled Rejection (translation failed):', reason);
+    console.error(MSG_UNHANDLED_REJECTION_FAILED, reason);
   }
   process.exit(1);
 }
@@ -237,7 +346,7 @@ function __setupProcessErrorHandlers(): void {
 }
 
 // ============================================================================
-// Console Error Patching
+// Console Error Patching Helper Functions
 // ============================================================================
 
 function __translateConsoleArgument(arg: unknown): unknown {
@@ -264,69 +373,59 @@ function __patchConsoleError(): void {
 }
 
 // ============================================================================
-// Transformation Skip Logic
+// Transformation Skip Logic Helper Functions
 // ============================================================================
+
+function __isTestFile(normalizedPath: string): boolean {
+  return normalizedPath.endsWith(SPEC_EXTENSION) || normalizedPath.endsWith(TEST_EXTENSION);
+}
+
+function __isInTestingDirectory(normalizedPath: string): boolean {
+  return normalizedPath.includes(TESTING_DIR);
+}
+
+function __isCliModule(normalizedPath: string): boolean {
+  return normalizedPath.includes(CLI_DIR) && !normalizedPath.includes(SRC_INDEX_PATH);
+}
+
+function __isMainEntryPoint(normalizedPath: string): boolean {
+  return normalizedPath.endsWith(`/${SRC_INDEX_PATH}`) || normalizedPath.endsWith(SRC_MAIN_PATH);
+}
+
+function __isMoxxySystemFile(normalizedPath: string, content: string): boolean {
+  return (
+    normalizedPath.includes(MOXXY_CORE_PATH) ||
+    normalizedPath.includes(MOXXY_TRANSFORMER_PATH) ||
+    normalizedPath.includes(TESTING_EXTENSIONS_PATH) ||
+    content.includes(MOXXY_COMMENT)
+  );
+}
 
 function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
   const normalizedPath = args.path.replace(/\\/g, '/');
 
-  // Skip internal moxxy files
-  if (
-    normalizedPath.includes('/testing/moxxy/moxxy.ts') || // Skip the moxxy system itself
-    normalizedPath.includes('/testing/moxxy/transformer-plugin.ts') || // Skip the transformer
-    normalizedPath.includes('/testing/extensions.ts') || // Skip the test extensions
-    content.includes(MOXXY_COMMENT)
-  ) {
-    return true;
-  }
+  if (__isMoxxySystemFile(normalizedPath, content)) return true;
+  if (__isMainEntryPoint(normalizedPath)) return true;
 
-  // Apply moxxy transformations to:
-  // 1. Test files (.spec.ts or .test.ts) - these need the global moxxy and transformations
-  // 2. Files in the testing directory - test utilities and targets
-  // 3. CLI modules - these need to be mockable by tests
-  const isTestFile = normalizedPath.endsWith('.spec.ts') || normalizedPath.endsWith('.test.ts');
-  const isInTestingDirectory = normalizedPath.includes('/testing/');
-  const isCliModule = normalizedPath.includes('/cli/') && !normalizedPath.includes('src/index.ts');
+  const isTestFile = __isTestFile(normalizedPath);
+  const isInTestingDirectory = __isInTestingDirectory(normalizedPath);
+  const isCliModule = __isCliModule(normalizedPath);
 
-  // Skip transformation for main application entry points but allow everything else
-  const isMainEntryPoint =
-    normalizedPath.endsWith('/src/index.ts') || normalizedPath.endsWith('/src/main.ts');
-
-  if (isMainEntryPoint) {
-    return true; // Skip transformation for main entry points
-  }
-
-  // Transform test files, testing directory, and CLI modules
   return !(isTestFile || isInTestingDirectory || isCliModule);
 }
 
 function __shouldSkipImport(moduleName: string, filePath: string): boolean {
-  // Always skip bun - it's special
-  if (moduleName === 'bun') {
-    return true;
-  }
+  if (moduleName === 'bun') return true;
 
-  // In test files, allow mocking EVERYTHING (including node: modules)
-  if (filePath.includes('.spec.ts') || filePath.includes('.test.ts')) {
+  if (filePath.includes(SPEC_EXTENSION) || filePath.includes(TEST_EXTENSION)) {
     return false;
   }
 
-  // Allow mocking of specific packages that are commonly mocked in tests
-  const mockablePackages = [
-    'simple-git',
-    'node:child_process',
-    'node:fs',
-    'node:path',
-    'node:process',
-  ];
-  if (mockablePackages.includes(moduleName)) {
-    return false;
-  }
+  if (MOCKABLE_PACKAGES.includes(moduleName)) return false;
 
-  // In non-test files, skip other built-in modules and external packages to protect production code
   if (
-    moduleName.startsWith('node:') ||
-    (!moduleName.startsWith('./') && !moduleName.startsWith('../'))
+    moduleName.startsWith(NODE_PREFIX) ||
+    (!moduleName.startsWith(RELATIVE_CURRENT) && !moduleName.startsWith(RELATIVE_PARENT))
   ) {
     return true;
   }
@@ -335,11 +434,11 @@ function __shouldSkipImport(moduleName: string, filePath: string): boolean {
 }
 
 // ============================================================================
-// Content Processing Functions
+// Content Processing Helper Functions
 // ============================================================================
 
 function __extractShebang(content: string): [string, string] {
-  if (!content.startsWith('#!')) return ['', content];
+  if (!content.startsWith(SHEBANG_PREFIX)) return ['', content];
 
   const firstNewline = content.indexOf('\n');
   if (firstNewline === -1) return ['', content];
@@ -347,38 +446,49 @@ function __extractShebang(content: string): [string, string] {
   return [content.slice(0, firstNewline + 1), content.slice(firstNewline + 1)];
 }
 
-function __parseImportNames(importStatement: string): [string[], boolean, boolean] {
-  // Normalize whitespace in the import statement (especially for multiline imports)
+function __parseDestructuredImports(trimmed: string): string[] {
+  const destructuredMatch = trimmed.match(DESTRUCTURED_IMPORT_REGEX);
+  if (!destructuredMatch) return [];
+
+  return destructuredMatch[1]
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name && !name.startsWith(TYPE_PREFIX))
+    .map((name) => (name.includes(AS_KEYWORD) ? name.split(AS_KEYWORD)[1].trim() : name));
+}
+
+function __parseNamespaceImport(trimmed: string): string[] {
+  const namespaceMatch = trimmed.match(NAMESPACE_IMPORT_REGEX);
+  return namespaceMatch ? [namespaceMatch[1]] : [];
+}
+
+function __parseDefaultImport(trimmed: string): string[] {
+  const defaultMatch = trimmed.match(DEFAULT_IMPORT_REGEX);
+  return defaultMatch ? [defaultMatch[1]] : [];
+}
+
+function __parseImportNames(importStatement: string): ImportParseResult {
   const trimmed = importStatement.replace(/\s+/g, ' ').trim();
   let importNames: string[] = [];
   let isDestructured = false;
   let isNamespace = false;
 
-  if (trimmed.startsWith('{') && trimmed.includes('}')) {
+  if (trimmed.startsWith(CURLY_OPEN) && trimmed.includes(CURLY_CLOSE)) {
     isDestructured = true;
-    const destructuredMatch = trimmed.match(/\{\s*([^}]+)\s*\}/);
-    if (destructuredMatch) {
-      importNames = destructuredMatch[1]
-        .split(',')
-        .map((name) => name.trim())
-        .filter((name) => name && !name.startsWith('type ')) // Filter out empty and type-only imports
-        .map((name) => (name.includes(' as ') ? name.split(' as ')[1].trim() : name));
-    }
-  } else if (trimmed.includes('* as ')) {
+    importNames = __parseDestructuredImports(trimmed);
+  } else if (trimmed.includes(NAMESPACE_AS)) {
     isNamespace = true;
-    const namespaceMatch = trimmed.match(/\*\s+as\s+(\w+)/);
-    if (namespaceMatch) {
-      importNames = [namespaceMatch[1]];
-    }
+    importNames = __parseNamespaceImport(trimmed);
   } else {
-    const defaultMatch = trimmed.match(/^(\w+)/);
-    if (defaultMatch) {
-      importNames = [defaultMatch[1]];
-    }
+    importNames = __parseDefaultImport(trimmed);
   }
 
-  return [importNames, isDestructured, isNamespace];
+  return { importNames, isDestructured, isNamespace };
 }
+
+// ============================================================================
+// Module Name Generation Helper Functions
+// ============================================================================
 
 function __createModuleVarName(moduleName: string): string {
   return `__moxxy_module_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -386,6 +496,22 @@ function __createModuleVarName(moduleName: string): string {
 
 function __createProxyVarName(moduleName: string): string {
   return `__moxxy_${moduleName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+}
+
+// ============================================================================
+// Import Replacement Creation Helper Functions
+// ============================================================================
+
+function __createImportStatement(moduleName: string, importAssertion?: string): string {
+  return importAssertion
+    ? `await import('${moduleName}')${importAssertion}`
+    : `await import('${moduleName}')`;
+}
+
+function __createIndividualProxies(importNames: string[], moduleVar: string): string {
+  return importNames
+    .map((name) => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`)
+    .join('\n');
 }
 
 function __createDestructuredReplacement(
@@ -396,21 +522,14 @@ function __createDestructuredReplacement(
   importAssertion?: string
 ): string {
   const moduleVar = __createModuleVarName(moduleName);
-  const individualProxies = importNames
-    .map((name) => `const ${name} = __moxxy__(${moduleVar}.${name}, '${name}', import.meta);`)
-    .join('\n');
-
-  const importStatement = importAssertion
-    ? `await import('${moduleName}')${importAssertion}`
-    : `await import('${moduleName}')`;
+  const individualProxies = __createIndividualProxies(importNames, moduleVar);
+  const importStatement = __createImportStatement(moduleName, importAssertion);
 
   if (moduleAlreadyImported) {
-    // Just create the proxies, module is already imported
     return `${MOXXY_COMMENT}: Additional imports from ${moduleName}\n${individualProxies}`;
-  } else {
-    // Import the module and create proxies
-    return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\n${individualProxies}`;
   }
+
+  return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\n${individualProxies}`;
 }
 
 function __createDefaultReplacement(
@@ -421,17 +540,13 @@ function __createDefaultReplacement(
   importAssertion?: string
 ): string {
   const moduleVar = __createModuleVarName(moduleName);
-  const importStatement = importAssertion
-    ? `await import('${moduleName}')${importAssertion}`
-    : `await import('${moduleName}')`;
+  const importStatement = __createImportStatement(moduleName, importAssertion);
 
   if (moduleAlreadyImported) {
-    // Just create the proxy, module is already imported
     return `${MOXXY_COMMENT}: Additional import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
-  } else {
-    // Import the module and create proxy
-    return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
   }
+
+  return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}.default, '${importName}', import.meta);`;
 }
 
 function __createNamespaceReplacement(
@@ -442,25 +557,25 @@ function __createNamespaceReplacement(
   importAssertion?: string
 ): string {
   const moduleVar = __createModuleVarName(moduleName);
-  const importStatement = importAssertion
-    ? `await import('${moduleName}')${importAssertion}`
-    : `await import('${moduleName}')`;
+  const importStatement = __createImportStatement(moduleName, importAssertion);
 
   if (moduleAlreadyImported) {
-    // Just create the proxy, module is already imported
     return `${MOXXY_COMMENT}: Additional namespace import from ${moduleName}\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
-  } else {
-    // Import the module and create proxy (pass whole module, not .default)
-    return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
   }
+
+  return `${MOXXY_COMMENT}: Make ${moduleName} injectable\nconst ${moduleVar} = ${importStatement};\nconst ${importName} = __moxxy__(${moduleVar}, '${importName}', import.meta);`;
 }
 
 function __calculateAddedLines(isDestructured: boolean, importNames: string[]): number {
   if (isDestructured) {
-    return 2 + importNames.length; // comment + module import + individual proxies
+    return 2 + importNames.length;
   }
-  return 2; // comment + proxy declaration
+  return 2;
 }
+
+// ============================================================================
+// Import Processing Functions
+// ============================================================================
 
 function __processImportMatch(
   match: RegExpMatchArray,
@@ -471,22 +586,14 @@ function __processImportMatch(
 ): ImportProcessResult | null {
   const [fullMatch, importStatement, moduleName, importAssertion] = match;
 
-  if (__shouldSkipImport(moduleName, filePath)) {
-    return null;
-  }
+  if (__shouldSkipImport(moduleName, filePath)) return null;
 
-  const [importNames, isDestructured, isNamespace] = __parseImportNames(importStatement);
-
-  // Create a unique key for this specific import statement, not just the module
+  const { importNames, isDestructured, isNamespace } = __parseImportNames(importStatement);
   const importKey = `${moduleName}::${importStatement}`;
 
-  if (declaredNuclearVars.has(importKey)) {
-    return null;
-  }
+  if (declaredNuclearVars.has(importKey)) return null;
 
   declaredNuclearVars.add(importKey);
-
-  // Check if module was already imported
   const moduleAlreadyImported = importedModules.has(moduleName);
   importedModules.add(moduleName);
 
@@ -528,10 +635,7 @@ function __processImports(
   contentToTransform: string,
   filePath: string
 ): [ImportReplacement[], Map<string, string>, number] {
-  // Match import statements (including multiline ones and import assertions)
-  const importMatches = contentToTransform.matchAll(
-    /import\s+(?!type\s)([\s\S]*?)\s+from\s+['"]([^'"]+)['"](\s+with\s+\{[^}]*\})?;?\s*/g
-  );
+  const importMatches = contentToTransform.matchAll(IMPORT_REGEX);
 
   const importReplacements: ImportReplacement[] = [];
   const declaredNuclearVars = new Set<string>();
@@ -549,8 +653,6 @@ function __processImports(
     );
     if (!replacement) continue;
 
-    // Removed debug output
-
     generatedLineOffset += replacement.addedLines;
     importReplacements.push({
       original: replacement.original,
@@ -561,27 +663,41 @@ function __processImports(
   return [importReplacements, moduleNamesMap, generatedLineOffset];
 }
 
+// ============================================================================
+// Runtime Usage Replacement Helper Functions
+// ============================================================================
+
+function __createFunctionCallReplacement(
+  importName: string,
+  moduleName: string,
+  match: string
+): string {
+  const varName = __createProxyVarName(moduleName);
+  return match.replace(importName, `(${varName} || ${importName})`);
+}
+
+function __createPropertyReplacement(importName: string, moduleName: string, prop: string): string {
+  const varName = __createProxyVarName(moduleName);
+  return `(${varName} || ${importName}).${prop}`;
+}
+
 function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, string>): string {
   let transformedContent = content;
 
   for (const [moduleName, importName] of moduleNamesMap) {
-    const varName = __createProxyVarName(moduleName);
-
-    // Function calls with parentheses
     const functionCallRegex = new RegExp(
       `(?<!\\.)\\b${importName}\\.[a-zA-Z_][a-zA-Z0-9_]*\\s*\\(`,
       'g'
     );
 
     transformedContent = transformedContent.replace(functionCallRegex, (match) => {
-      return match.replace(importName, `(${varName} || ${importName})`);
+      return __createFunctionCallReplacement(importName, moduleName, match);
     });
 
-    // Specific property access
     for (const prop of SPECIFIC_PROPS) {
       const propRegex = new RegExp(`(?<!\\.)\\b${importName}\\.${prop}\\b`, 'g');
       transformedContent = transformedContent.replace(propRegex, () => {
-        return `(${varName} || ${importName}).${prop}`;
+        return __createPropertyReplacement(importName, moduleName, prop);
       });
     }
   }
@@ -589,72 +705,71 @@ function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, stri
   return transformedContent;
 }
 
-function __replacePrimitiveUsage(content: string, importReplacements: ImportReplacement[]): string {
-  let transformedContent = content;
+// ============================================================================
+// Primitive Usage Replacement Helper Functions
+// ============================================================================
 
-  // Extract all imported constant names from destructured imports
+function __shouldSkipLine(line: string): boolean {
+  return (
+    line.includes('__moxxy__') ||
+    line.includes(MOXXY_COMMENT) ||
+    line.includes(TYPE_COLON) ||
+    line.includes(ANGLE_OPEN) ||
+    line.includes(ANGLE_CLOSE) ||
+    line.includes(INTERFACE_KEYWORD) ||
+    line.includes(TYPE_KEYWORD) ||
+    line.includes(PROMISE_TYPE) ||
+    line.includes(ARRAY_TYPE) ||
+    line.trim().startsWith(COMMENT_ASTERISK) ||
+    line.trim().startsWith(COMMENT_DOUBLE_SLASH)
+  );
+}
+
+function __transformConstantUsage(line: string, constantName: string): string {
+  const returnRegex = new RegExp(`\\breturn\\s+${constantName}\\s*;`, 'g');
+  const standaloneLineRegex = new RegExp(`^\\s*${constantName}\\s*;?\\s*$`, 'g');
+
+  let transformedLine = line;
+
+  transformedLine = transformedLine.replace(returnRegex, (match) => {
+    return match.replace(
+      constantName,
+      `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
+    );
+  });
+
+  transformedLine = transformedLine.replace(standaloneLineRegex, (match) => {
+    return match.replace(
+      constantName,
+      `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
+    );
+  });
+
+  return transformedLine;
+}
+
+function __extractConstantNames(importReplacements: ImportReplacement[]): string[] {
   const constantNames: string[] = [];
 
   for (const replacement of importReplacements) {
-    // Look for destructured import patterns in the replacement code
-    const constantMatches = replacement.replacement.matchAll(
-      /const\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*__moxxy__/g
-    );
+    const constantMatches = replacement.replacement.matchAll(CONSTANT_PROXY_REGEX);
     for (const match of constantMatches) {
       constantNames.push(match[1]);
     }
   }
 
-  // Replace standalone constant usage (not as property access)
-  // Only in actual code, not in the import declarations we just created
+  return constantNames;
+}
+
+function __replacePrimitiveUsage(content: string, importReplacements: ImportReplacement[]): string {
+  let transformedContent = content;
+  const constantNames = __extractConstantNames(importReplacements);
+
   for (const constantName of constantNames) {
-    // First, split content to avoid touching import declarations
     const lines = transformedContent.split('\n');
     const transformedLines = lines.map((line) => {
-      // Skip lines that contain __moxxy__ (these are our import declarations)
-      if (line.includes('__moxxy__') || line.includes(MOXXY_COMMENT)) {
-        return line;
-      }
-
-      // Skip type declarations and interfaces
-      if (
-        line.includes(': ') ||
-        line.includes('<') ||
-        line.includes('>') ||
-        line.includes('interface ') ||
-        line.includes('type ') ||
-        line.includes('Promise<') ||
-        line.includes('Array<') ||
-        line.trim().startsWith('*') ||
-        line.trim().startsWith('//')
-      ) {
-        return line;
-      }
-
-      // Only transform very specific patterns to avoid breaking object literals
-      // Match: return constantName; or constantName as the only thing on a line
-      const returnRegex = new RegExp(`\\breturn\\s+${constantName}\\s*;`, 'g');
-      const standaloneLineRegex = new RegExp(`^\\s*${constantName}\\s*;?\\s*$`, 'g');
-
-      let transformedLine = line;
-
-      // Transform return statements
-      transformedLine = transformedLine.replace(returnRegex, (match) => {
-        return match.replace(
-          constantName,
-          `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
-        );
-      });
-
-      // Transform standalone usage on its own line
-      transformedLine = transformedLine.replace(standaloneLineRegex, (match) => {
-        return match.replace(
-          constantName,
-          `(${constantName}.valueOf ? ${constantName}.valueOf() : ${constantName})`
-        );
-      });
-
-      return transformedLine;
+      if (__shouldSkipLine(line)) return line;
+      return __transformConstantUsage(line, constantName);
     });
 
     transformedContent = transformedLines.join('\n');
@@ -662,6 +777,10 @@ function __replacePrimitiveUsage(content: string, importReplacements: ImportRepl
 
   return transformedContent;
 }
+
+// ============================================================================
+// Source Map Creation Functions
+// ============================================================================
 
 function __createSourceMap(
   shebang: string,
@@ -672,12 +791,11 @@ function __createSourceMap(
   const sourceMapEntries: SourceMapEntry[] = [];
   const originalLines = (shebang + contentToTransform).split('\n');
   const shebangLines = shebang ? 1 : 0;
-  const nuclearSetupLines = 6;
 
   for (let i = 0; i < originalLines.length; i++) {
     sourceMapEntries.push({
-      originalLine: i + 1, // 1-indexed
-      generatedLine: i + 1 + shebangLines + nuclearSetupLines + generatedLineOffset,
+      originalLine: i + 1,
+      generatedLine: i + 1 + shebangLines + NUCLEAR_SETUP_LINES + generatedLineOffset,
       source: args.path,
     });
   }
@@ -685,31 +803,15 @@ function __createSourceMap(
   sourceMapRegistry.set(args.path, sourceMapEntries);
 }
 
+// ============================================================================
+// Moxxy Setup Functions
+// ============================================================================
+
 function __setupMoxxy(isSpecFile: boolean): string {
-  const moxxyCwd = process.cwd().replace(/\\/g, '/');
-  let setupCode = `// With love, Moxxy ~<3
-// Import the proxy helper
-const { __moxxy__ } = await import('${moxxyCwd}/src/testing/moxxy/moxxy.ts');
-// Import the tilde syntax helper
-const { __moxxyTilde__ } = await import('${moxxyCwd}/src/testing/moxxy/moxxy.ts');
+  let setupCode = MOXXY_IMPORT;
 
-`;
-
-  // Only add global moxxy to spec files
   if (isSpecFile) {
-    setupCode += `// Global moxxy injector - lazy initialization to avoid module registration issues
-let __globalMoxxy__;
-Object.defineProperty(globalThis, 'moxxy', {
-  get() {
-    if (!__globalMoxxy__) {
-      __globalMoxxy__ = __moxxyTilde__(import.meta);
-    }
-    return __globalMoxxy__;
-  },
-  configurable: true
-});
-
-`;
+    setupCode += GLOBAL_MOXXY_INJECTOR;
   }
 
   return setupCode;
@@ -720,9 +822,8 @@ Object.defineProperty(globalThis, 'moxxy', {
 // ============================================================================
 
 function __setupErrorBoundaries() {
-  // Disable error boundaries on macOS due to infinite recursion issues
-  if (process.platform === 'darwin') {
-    console.log('🍎 Skipping error boundaries on macOS due to compatibility issues');
+  if (process.platform === DARWIN_PLATFORM) {
+    console.log(MSG_SKIPPING_MACOS);
     return;
   }
 
@@ -731,18 +832,16 @@ function __setupErrorBoundaries() {
     __setupProcessErrorHandlers();
     __wrapTestFunction();
   } catch (setupError) {
-    console.warn('⚠️  Failed to setup error boundaries:', setupError);
+    console.warn(MSG_SETUP_FAILED, setupError);
   }
 }
 
 // ============================================================================
-// Plugin Registration
+// Plugin Registration and Main Transform Function
 // ============================================================================
 
-// Initialize error boundaries
 __setupErrorBoundaries();
 
-// Register as Bun plugin for automatic transformation
 Bun.plugin({
   name: 'Moxxy Dependency Injection',
   setup(build) {
@@ -762,7 +861,6 @@ Bun.plugin({
         args.path
       );
 
-      // Apply import transformations
       let transformedContent = contentToTransform;
       for (const replacement of importReplacements) {
         transformedContent = transformedContent.replace(
@@ -771,19 +869,12 @@ Bun.plugin({
         );
       }
 
-      // Replace direct usage with moxxy proxies
       transformedContent = __replaceRuntimeUsage(transformedContent, moduleNamesMap);
-
-      // Replace primitive usage to handle constants properly
       transformedContent = __replacePrimitiveUsage(transformedContent, importReplacements);
 
-      // Create source map
       __createSourceMap(shebang, contentToTransform, args, generatedLineOffset);
 
-      // Check if this is a spec file
-      const isSpecFile = args.path.includes('.spec.');
-
-      // Add moxxy setup
+      const isSpecFile = args.path.includes(SPEC_DOT);
       const moxxyLines = __setupMoxxy(isSpecFile);
       const finalContent = shebang + moxxyLines + transformedContent;
 
