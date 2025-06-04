@@ -141,7 +141,7 @@ let __globalMoxxy__;
 Object.defineProperty(globalThis, 'moxxy', {
   get() {
     if (!__globalMoxxy__) {
-      __globalMoxxy__ = __moxxyTilde__(import.meta);
+      __globalMoxxy__ = __create_moxxy_global_object__(import.meta);
     }
     return __globalMoxxy__;
   },
@@ -153,7 +153,7 @@ Object.defineProperty(globalThis, 'moxxy', {
 const MOXXY_IMPORT = `
 // With love, Moxxy ~<3
 const { __moxxy__ } = await import('${MOXXY_CWD}/src/testing/moxxy/moxxy.ts');
-const { __moxxyTilde__ } = await import('${MOXXY_CWD}/src/testing/moxxy/moxxy.ts');
+const { __create_moxxy_global_object__ } = await import('${MOXXY_CWD}/src/testing/moxxy/moxxy.ts');
 
 `;
 
