@@ -69,6 +69,22 @@ describe('CLI Integration Tests', () => {
   });
 
   describe('CLI options', () => {
+    it('should show help message when no task is provided', async () => {
+      const $test = $mock(testTasks);
+      const result = await $test``;
+
+      expect(result.success).toBe(true);
+      expect(result.exitCode).toBe(0);
+      // Check for common help indicators without being too specific
+      const output = result.stdout.toLowerCase();
+      expect(
+        output.includes('usage') || 
+        output.includes('help') || 
+        output.includes('available') || 
+        output.includes('commands')
+      ).toBe(true);
+    });
+
     it('should respect silent mode', async () => {
       const $test = $mock(testTasks);
       const result = await $test`--silent test:simple`;
