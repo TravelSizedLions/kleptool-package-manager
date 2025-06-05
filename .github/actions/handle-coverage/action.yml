@@ -42,7 +42,7 @@ runs:
     # Compare Coverage
     - name: Download TypeScript Base Coverage from dev
       if: inputs.operation == 'compare'
-      uses: dawidd6/action-download-artifact@v3
+      uses: dawidd6/action-download-artifact@v10
       continue-on-error: true
       with:
         github_token: ${{ inputs.github_token }}
@@ -53,7 +53,7 @@ runs:
 
     - name: Download Rust Base Coverage from dev
       if: inputs.operation == 'compare'
-      uses: dawidd6/action-download-artifact@v3
+      uses: dawidd6/action-download-artifact@v10
       continue-on-error: true
       with:
         github_token: ${{ inputs.github_token }}
