@@ -76,7 +76,7 @@
   'rust:test': 'cd src/rust && cargo test --workspace',
 
   // Coverage
-  'ts:coverage': 'bun test --coverage --coverage-reporter=lcov --coverage-reporter=text --coverage-dir=coverage/typescript',
+  'ts:coverage': 'bash scripts/filter-coverage.sh',
   'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --out json --output-dir ../../coverage/rust --workspace',
 
   // CI/CD Tasks
