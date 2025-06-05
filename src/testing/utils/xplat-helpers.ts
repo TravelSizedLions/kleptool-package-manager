@@ -22,7 +22,19 @@
  * ```
  */
 export function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/');
+  // Convert backslashes to forward slashes
+  let normalized = path.replace(/\\/g, '/');
+  
+  // For test paths starting with Unix-style roots, strip Windows drive letters
+  // This handles cases where path.resolve('/test/path') becomes 'D:/test/path' on Windows
+  if (normalized.match(/^[A-Z]:\//)) {
+    const unixPath = normalized.substring(2);
+    if (unixPath.startsWith('/')) {
+      normalized = unixPath;
+    }
+  }
+  
+  return normalized;
 }
 
 /**

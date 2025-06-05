@@ -5,7 +5,13 @@ import { normalizeCommand } from '../testing/utils/xplat-helpers.ts';
 
 // Create a consistent cross-platform path mock for all tests
 const createPathMock = () => ({
-  resolve: (p: string) => normalizeCommand(p),
+  resolve: (p: string) => {
+    // For test paths that start with '/', keep them as-is to avoid Windows drive letter issues
+    if (p.startsWith('/')) {
+      return p;
+    }
+    return normalizeCommand(p);
+  },
   dirname: () => '/mock/dir',
   join: (...args: string[]) => args.join('/'),
 });
