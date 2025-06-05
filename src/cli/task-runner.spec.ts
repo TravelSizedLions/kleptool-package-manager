@@ -39,6 +39,4 @@ describe('TaskRunner', () => {
 
     expect(taskRunner.do('echo', [])).rejects.toThrow('No tasks found');
   });
-
-
 });

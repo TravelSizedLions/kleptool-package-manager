@@ -191,9 +191,12 @@ function __withCrossPlatformArgs(cmd: string, args: string[]): string {
   return cmd.replace(/\$@/g, escapedArgs);
 }
 
-function __prepareColorEnvironment(env: Record<string, string>, enableColors: boolean): Record<string, string> {
+function __prepareColorEnvironment(
+  env: Record<string, string>,
+  enableColors: boolean
+): Record<string, string> {
   if (!enableColors) return env;
-  
+
   return {
     ...env,
     FORCE_COLOR: '1',
@@ -210,7 +213,10 @@ export async function execWithResult(cmd: string, options: ExecOptions = {}): Pr
     };
 
     const command = __withCrossPlatformArgs(cmd, args || []);
-    const enhancedEnv = __prepareColorEnvironment(env || {}, preserveColors || streamOutput);
+    const enhancedEnv = __prepareColorEnvironment(
+      env || {},
+      Boolean(preserveColors || streamOutput)
+    );
 
     if (streamOutput && preserveColors) {
       const [cmdName, ...cmdArgs] = command.split(' ');
