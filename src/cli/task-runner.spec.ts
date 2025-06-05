@@ -11,12 +11,18 @@ describe('TaskRunner', () => {
 
     mock.module('./process.ts', () => ({
       exec: mock(() => 'Hello, world!'),
+      execWithResult: mock(() => ({
+        stdout: 'Hello, world!\n',
+        stderr: '',
+        success: true,
+        exitCode: 0,
+      })),
       ipc: mock(() => 'Hello, world!'),
     }));
   });
 
   it('should run a task', async () => {
-    const result = await taskRunner.do('echo', []);
+    const result = await taskRunner.do('echo', [], { silent: true });
     // Normalize line endings for cross-platform compatibility
     const normalizedResult = result.replace(/\r\n/g, '\n');
     expect(normalizedResult).toBe('Hello, world!\n');

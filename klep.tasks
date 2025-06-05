@@ -32,11 +32,17 @@
   // Test the project
   test: "klep ts:test && klep rust:test",
 
+  // Test with Windows path simulation
+  'test:win': "klep ts:test:win && klep rust:test",
+
+  // Test without colors (for CI/CD)
+  'test:no-colors': "NO_COLOR=1 klep ts:test && klep rust:test",
+
   // Generate coverage reports
   coverage: "klep ts:coverage && klep rust:coverage",
 
   // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep test',
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep test && klep test:win',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
@@ -73,6 +79,7 @@
 
   // Testing
   'ts:test': 'bun test',
+  'ts:test:win': 'KLEP_SIMULATE_WINDOWS=1 bun test',
   'rust:test': 'cd src/rust && cargo test --workspace',
 
   // Coverage

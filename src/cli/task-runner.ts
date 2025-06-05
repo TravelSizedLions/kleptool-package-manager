@@ -34,7 +34,14 @@ async function __do(alias: string, args: string[], options: TaskRunnerOptions = 
   }
 
   const streamOutput = !options.silent;
-  const result = await process.execWithResult(task, { args, streamOutput, throwOnError: false });
+  // Enable colors by default unless in CI environment or NO_COLOR is set
+  const preserveColors = streamOutput && !nodeProcess.env.CI && !nodeProcess.env.NO_COLOR;
+  const result = await process.execWithResult(task, {
+    args,
+    streamOutput,
+    preserveColors,
+    throwOnError: false,
+  });
 
   if (!result.success) {
     const exitCode = result.exitCode || 1;

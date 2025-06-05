@@ -24,6 +24,7 @@ export type ExecOptions = ProcessOptions & {
   shell?: boolean;
   streamOutput?: boolean;
   throwOnError?: boolean;
+  preserveColors?: boolean;
 };
 
 export type IpcOptions = ProcessOptions & {
@@ -39,6 +40,7 @@ const defaultExecOptions: ExecOptions = {
   shell: true,
   streamOutput: false,
   throwOnError: true,
+  preserveColors: false,
 };
 
 const defaultIpcOptions: IpcOptions = {
@@ -189,25 +191,60 @@ function __withCrossPlatformArgs(cmd: string, args: string[]): string {
   return cmd.replace(/\$@/g, escapedArgs);
 }
 
+function __prepareColorEnvironment(
+  env: Record<string, string>,
+  enableColors: boolean
+): Record<string, string> {
+  // Check both the enableColors parameter AND the environment being passed to subprocess
+  if (!enableColors || env.NO_COLOR || env.CI) return env;
+
+  return {
+    ...env,
+    FORCE_COLOR: '1',
+    TERM: env.TERM || 'xterm-256color',
+  };
+}
+
 // Regular shell command execution with full result
 export async function execWithResult(cmd: string, options: ExecOptions = {}): Promise<ExecResult> {
   try {
-    const { args, cwd, env, timeout, streamOutput } = {
+    const { args, cwd, env, timeout, streamOutput, preserveColors } = {
       ...defaultExecOptions,
       ...options,
     };
 
     const command = __withCrossPlatformArgs(cmd, args || []);
+    const enhancedEnv = __prepareColorEnvironment(
+      env || {},
+      Boolean(preserveColors || streamOutput)
+    );
 
-    const childProcess = exec(command, { cwd, env, timeout });
+    if (streamOutput && preserveColors) {
+      const [cmdName, ...cmdArgs] = command.split(' ');
+      const childProcess = spawn(cmdName, cmdArgs, {
+        cwd,
+        env: enhancedEnv,
+        stdio: 'inherit',
+        shell: true,
+      });
 
-    // Handle streaming if requested
+      const { code } = await __handleProcessCompletion(childProcess, command, timeout);
+
+      return {
+        stdout: '[streamed to console with colors]',
+        stderr: '[streamed to console with colors]',
+        success: code === 0,
+        exitCode: code,
+      };
+    }
+
+    const childProcess = exec(command, { cwd, env: enhancedEnv, timeout });
+
     if (streamOutput) {
       childProcess.stdout?.pipe(process.stdout);
       childProcess.stderr?.pipe(process.stderr);
     }
 
-    // Gather output and wait for process completion
     const [stdout, stderr, { code }] = await Promise.all([
       __receive(childProcess.stdout as Stream.Readable),
       __receive(childProcess.stderr as Stream.Readable),
