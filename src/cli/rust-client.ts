@@ -153,6 +153,8 @@ export default async function singleton(): Promise<RustClient> {
     }
     return __backend;
   } catch (e) {
+    if (kerror.isKlepError(e)) throw e
+
     throw kerror(kerror.Unknown, 'backend-not-found', {
       message: 'Klep backend not found. Likely, the rust backend is not built',
       context: {
