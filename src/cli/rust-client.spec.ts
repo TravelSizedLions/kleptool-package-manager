@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import rustClient from './rust-client.ts';
 import kerror from './kerror.ts';
-import { normalizeCommand } from '../testing/utils/cross-platform.ts';
+import { normalizeCommand } from '../testing/utils/xplat-helpers.ts';
 
 beforeEach(() => {
   moxxy.reset();
