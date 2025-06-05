@@ -78,10 +78,10 @@ describe('CLI Integration Tests', () => {
       // Check for common help indicators without being too specific
       const output = result.stdout.toLowerCase();
       expect(
-        output.includes('usage') || 
-        output.includes('help') || 
-        output.includes('available') || 
-        output.includes('commands')
+        output.includes('usage') ||
+          output.includes('help') ||
+          output.includes('available') ||
+          output.includes('commands')
       ).toBe(true);
     });
 

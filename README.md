@@ -257,7 +257,6 @@ Disorganized, WIP: read, rank, and discard unrelated/out of scope research
 
 ### The A* Algorithm
 
-
 The A* algorithm finds the optimal path between two nodes in a graph by maintaining two sets of nodes and using a scoring function to evaluate potential paths.
 
 #### A* Algorithm Steps
@@ -294,6 +293,8 @@ The A* algorithm finds the optimal path between two nodes in a graph by maintain
 
 5. If loop exits without finding path:
    - **Return failure** (No path exists from $n_{start}$ to $n_{end}$)
+
+Traditionally, A*  is a path optimization algorithm. This implies that we know both the start and end nodes, and are trying to find the shortest path between them.
 
 ### Satisfiability and SMT
 

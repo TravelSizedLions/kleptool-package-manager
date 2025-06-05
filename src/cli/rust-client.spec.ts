@@ -12,7 +12,7 @@ describe('__createDispatcher()', () => {
     it('handles defined blobs', async () => {
       let capturedCommand = '';
       let capturedOptions = {};
-      
+
       // Test: direct method mocking - this should ALSO work
       moxxy.process.ipc.mock((command: string, options: any) => {
         capturedCommand = command;
@@ -22,12 +22,10 @@ describe('__createDispatcher()', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
 
       const client = await rustClient();
       const testData = { test: 'data' };
@@ -35,32 +33,30 @@ describe('__createDispatcher()', () => {
 
       expect(capturedCommand).toBe('/test/path');
       expect(capturedOptions).toEqual({
-        data: JSON.stringify(testData)
+        data: JSON.stringify(testData),
       });
     });
 
     it('handles undefined blobs', async () => {
       let capturedCommand = '';
       let capturedOptions = {};
-      
+
       moxxy.process.mock({
         ipc: (command: string, options: any) => {
           capturedCommand = command;
           capturedOptions = options;
           return Promise.resolve('{"result": "success"}');
-        }
+        },
       });
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -68,23 +64,21 @@ describe('__createDispatcher()', () => {
 
       expect(capturedCommand).toBe('/test/path');
       expect(capturedOptions).toEqual({
-        data: ''
+        data: '',
       });
     });
 
     it('handles undefined process output', async () => {
       moxxy.process.mock({ ipc: () => Promise.resolve(undefined) });
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -95,17 +89,15 @@ describe('__createDispatcher()', () => {
 
     it('handles empty string process output', async () => {
       moxxy.process.mock({ ipc: () => Promise.resolve('') });
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -116,17 +108,15 @@ describe('__createDispatcher()', () => {
 
     it('handles whitespace process output', async () => {
       moxxy.process.mock({ ipc: () => Promise.resolve('   \n\t  ') });
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -138,17 +128,15 @@ describe('__createDispatcher()', () => {
     it('handles actual content from process output', async () => {
       const expectedData = { status: 'success', data: [1, 2, 3] };
       moxxy.process.mock({ ipc: () => Promise.resolve(JSON.stringify(expectedData)) });
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -161,17 +149,15 @@ describe('__createDispatcher()', () => {
   describe('output unmarshalling', () => {
     it('throws rust-client-json-parse-error when output is not valid JSON', async () => {
       moxxy.process.ipc.mock(() => Promise.resolve('invalid json'));
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -188,17 +174,15 @@ describe('__createDispatcher()', () => {
     it('returns valid JSON', async () => {
       const testObject = { complex: { nested: 'object' }, array: [1, 2, 3] };
       moxxy.process.ipc.mock(() => Promise.resolve(JSON.stringify(testObject)));
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -209,17 +193,15 @@ describe('__createDispatcher()', () => {
 
     it('returns valid primitives', async () => {
       moxxy.process.ipc.mock(() => Promise.resolve('"hello world"'));
-      moxxy.path.mock(() => ({ 
+      moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -246,10 +228,10 @@ describe('__getBinarySearchPaths()', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -270,10 +252,10 @@ describe('__getBinarySearchPaths()', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -296,10 +278,10 @@ describe('__getBinarySearchPaths()', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -320,10 +302,10 @@ describe('__getBinarySearchPaths()', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -348,11 +330,11 @@ describe('__getBinarySearchPaths()', () => {
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
-        dirname: (p: string) => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        dirname: () => '/mock/dir',
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -373,10 +355,10 @@ describe('__getBinarySearchPaths()', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -392,10 +374,10 @@ describe('__getBinarySearchPaths()', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       try {
@@ -409,17 +391,15 @@ describe('__getBinarySearchPaths()', () => {
 
     it('does not throw if one or more search pathes are added', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/test/path' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       await expect(rustClient()).resolves.toBeDefined();
@@ -430,18 +410,20 @@ describe('__getBinarySearchPaths()', () => {
 describe('__getRustBinaries()', () => {
   it('handles binaries when they are found', async () => {
     moxxy.existsSync.mock(() => true);
-    moxxy.globby.mock(() => Promise.resolve([
-      { name: 'bin-module1--api1', path: '/path/to/bin1' },
-      { name: 'bin-module2--api2', path: '/path/to/bin2' }
-    ]));
+    moxxy.globby.mock(() =>
+      Promise.resolve([
+        { name: 'bin-module1--api1', path: '/path/to/bin1' },
+        { name: 'bin-module2--api2', path: '/path/to/bin2' },
+      ])
+    );
     moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
     moxxy.path.mock(() => ({
       resolve: (p: string) => p,
       dirname: () => '/mock/dir',
-      join: (...args: string[]) => args.join('/')
+      join: (...args: string[]) => args.join('/'),
     }));
     moxxy.globalThis = {
-      process: { argv: ['/mock/dir/executable'] }
+      process: { argv: ['/mock/dir/executable'] },
     };
 
     const client = await rustClient();
@@ -456,10 +438,10 @@ describe('__getRustBinaries()', () => {
     moxxy.path.mock(() => ({
       resolve: (p: string) => p,
       dirname: () => '/mock/dir',
-      join: (...args: string[]) => args.join('/')
+      join: (...args: string[]) => args.join('/'),
     }));
     moxxy.globalThis = {
-      process: { argv: ['/mock/dir/executable'] }
+      process: { argv: ['/mock/dir/executable'] },
     };
 
     try {
@@ -476,15 +458,17 @@ describe('__createModules()', () => {
   describe('filtering', () => {
     it('filters out files ending in .d', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/path/to/bin' },
-        { name: 'bin-test--api.d', path: '/path/to/bin.d' }
-      ]));
+      moxxy.globby.mock(() =>
+        Promise.resolve([
+          { name: 'bin-test--api', path: '/path/to/bin' },
+          { name: 'bin-test--api.d', path: '/path/to/bin.d' },
+        ])
+      );
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
 
       const client = await rustClient();
@@ -494,15 +478,17 @@ describe('__createModules()', () => {
 
     it('filters out files ending in .pdb', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/path/to/bin' },
-        { name: 'bin-test--api.pdb', path: '/path/to/bin.pdb' }
-      ]));
+      moxxy.globby.mock(() =>
+        Promise.resolve([
+          { name: 'bin-test--api', path: '/path/to/bin' },
+          { name: 'bin-test--api.pdb', path: '/path/to/bin.pdb' },
+        ])
+      );
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
 
       const client = await rustClient();
@@ -512,19 +498,21 @@ describe('__createModules()', () => {
 
     it('does not filter files if they are not debugging files', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api1', path: '/path/to/bin1' },
-        { name: 'bin-test--api2', path: '/path/to/bin2' },
-        { name: 'bin-test--api3.exe', path: '/path/to/bin3.exe' }
-      ]));
+      moxxy.globby.mock(() =>
+        Promise.resolve([
+          { name: 'bin-test--api1', path: '/path/to/bin1' },
+          { name: 'bin-test--api2', path: '/path/to/bin2' },
+          { name: 'bin-test--api3.exe', path: '/path/to/bin3.exe' },
+        ])
+      );
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -535,14 +523,14 @@ describe('__createModules()', () => {
   describe('module creation', () => {
     it('gracefully handles .exe extensions', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api.exe', path: '/path/to/bin.exe' }
-      ]));
+      moxxy.globby.mock(() =>
+        Promise.resolve([{ name: 'bin-test--api.exe', path: '/path/to/bin.exe' }])
+      );
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
 
       const client = await rustClient();
@@ -551,17 +539,17 @@ describe('__createModules()', () => {
 
     it('properly discovers the module from the binary name pattern', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-mymodule--someapi', path: '/path/to/bin' }
-      ]));
+      moxxy.globby.mock(() =>
+        Promise.resolve([{ name: 'bin-mymodule--someapi', path: '/path/to/bin' }])
+      );
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -570,17 +558,17 @@ describe('__createModules()', () => {
 
     it('properly discovers the apiName from the binary name pattern', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-testmodule--customapi', path: '/path/to/bin' }
-      ]));
+      moxxy.globby.mock(() =>
+        Promise.resolve([{ name: 'bin-testmodule--customapi', path: '/path/to/bin' }])
+      );
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -589,20 +577,22 @@ describe('__createModules()', () => {
 
     it('creates a full set of modules when handed various binaries', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-mod1--api1', path: '/path/to/bin1' },
-        { name: 'bin-mod1--api2', path: '/path/to/bin2' },
-        { name: 'bin-mod2--api1', path: '/path/to/bin3' },
-        { name: 'bin-mod3--special', path: '/path/to/bin4' }
-      ]));
+      moxxy.globby.mock(() =>
+        Promise.resolve([
+          { name: 'bin-mod1--api1', path: '/path/to/bin1' },
+          { name: 'bin-mod1--api2', path: '/path/to/bin2' },
+          { name: 'bin-mod2--api1', path: '/path/to/bin3' },
+          { name: 'bin-mod3--special', path: '/path/to/bin4' },
+        ])
+      );
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -617,17 +607,15 @@ describe('__createModules()', () => {
 describe('__addHelp()', () => {
   it('defines a help method on the module collection', async () => {
     moxxy.existsSync.mock(() => true);
-    moxxy.globby.mock(() => Promise.resolve([
-      { name: 'bin-test--api', path: '/path/to/bin' }
-    ]));
+    moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/path/to/bin' }]));
     moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
     moxxy.path.mock(() => ({
       resolve: (p: string) => p,
       dirname: () => '/mock/dir',
-      join: (...args: string[]) => args.join('/')
+      join: (...args: string[]) => args.join('/'),
     }));
     moxxy.globalThis = {
-      process: { argv: ['/mock/dir/executable'] }
+      process: { argv: ['/mock/dir/executable'] },
     };
 
     const client = await rustClient();
@@ -636,24 +624,26 @@ describe('__addHelp()', () => {
 
   it('provides a help string listing all of the apis available for use', async () => {
     moxxy.existsSync.mock(() => true);
-    moxxy.globby.mock(() => Promise.resolve([
-      { name: 'bin-module1--api1', path: '/path/to/bin1' },
-      { name: 'bin-module1--api2', path: '/path/to/bin2' },
-      { name: 'bin-module2--api1', path: '/path/to/bin3' }
-    ]));
+    moxxy.globby.mock(() =>
+      Promise.resolve([
+        { name: 'bin-module1--api1', path: '/path/to/bin1' },
+        { name: 'bin-module1--api2', path: '/path/to/bin2' },
+        { name: 'bin-module2--api1', path: '/path/to/bin3' },
+      ])
+    );
     moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
     moxxy.path.mock(() => ({
       resolve: (p: string) => p,
       dirname: () => '/mock/dir',
-      join: (...args: string[]) => args.join('/')
+      join: (...args: string[]) => args.join('/'),
     }));
     moxxy.globalThis = {
-      process: { argv: ['/mock/dir/executable'] }
+      process: { argv: ['/mock/dir/executable'] },
     };
 
     const client = await rustClient();
     const help = client.help();
-    
+
     expect(help).toContain('Available APIs:');
     expect(help).toContain('module1.api1');
     expect(help).toContain('module1.api2');
@@ -665,17 +655,15 @@ describe('singleton', () => {
   describe('initialization', () => {
     it('constructs a backend if one does not already exist', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/path/to/bin' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/path/to/bin' }]));
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client = await rustClient();
@@ -685,22 +673,20 @@ describe('singleton', () => {
 
     it('returns an existing backend if one already exists', async () => {
       moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([
-        { name: 'bin-test--api', path: '/path/to/bin' }
-      ]));
+      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/path/to/bin' }]));
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       const client1 = await rustClient();
       const client2 = await rustClient();
-      
+
       expect(client1).toBe(client2);
     });
   });
@@ -714,10 +700,10 @@ describe('singleton', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       try {
@@ -736,10 +722,10 @@ describe('singleton', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       try {
@@ -759,10 +745,10 @@ describe('singleton', () => {
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',
-        join: (...args: string[]) => args.join('/')
+        join: (...args: string[]) => args.join('/'),
       }));
       moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] }
+        process: { argv: ['/mock/dir/executable'] },
       };
 
       try {
