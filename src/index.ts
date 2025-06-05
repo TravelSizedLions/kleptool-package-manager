@@ -119,7 +119,7 @@ program
   );
 
 program
-  .argument('<task>', 'The task to run')
+  .argument('[task]', 'The task to run')
   .argument('[args...]', 'The arguments to pass to the task')
   .action(async (task: string, args: string[]) => {
     if (!task) {

@@ -68,6 +68,11 @@ const MOCKABLE_PACKAGES = [
   'node:fs',
   'node:path',
   'node:process',
+  'child_process',
+  'fs',
+  'path',
+  'process',
+  'globby',
 ];
 
 const MOXXY_CWD = process.cwd().replace(/\\/g, '/');

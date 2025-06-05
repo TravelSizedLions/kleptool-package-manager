@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { $mock, runCliWithMockTasks } from '../cli-helpers.ts';
-import { testTasks } from '../test-helpers.ts';
+import { $mock, runCliWithMockTasks } from '../utils/cli-helpers.ts';
+import { testTasks } from '../utils/integration-helpers.ts';
 
 describe('CLI Integration Tests', () => {
   describe('Task execution', () => {
@@ -69,6 +69,22 @@ describe('CLI Integration Tests', () => {
   });
 
   describe('CLI options', () => {
+    it('should show help message when no task is provided', async () => {
+      const $test = $mock(testTasks);
+      const result = await $test``;
+
+      expect(result.success).toBe(true);
+      expect(result.exitCode).toBe(0);
+      // Check for common help indicators without being too specific
+      const output = result.stdout.toLowerCase();
+      expect(
+        output.includes('usage') ||
+          output.includes('help') ||
+          output.includes('available') ||
+          output.includes('commands')
+      ).toBe(true);
+    });
+
     it('should respect silent mode', async () => {
       const $test = $mock(testTasks);
       const result = await $test`--silent test:simple`;

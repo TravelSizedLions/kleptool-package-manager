@@ -1,7 +1,7 @@
 import process, { IpcOptions } from './process.ts';
 import kerror from './kerror.ts';
 import { globby } from 'globby';
-import path from 'path';
+import * as path from 'path';
 import { existsSync } from 'fs';
 
 type RustClient = {
@@ -23,7 +23,7 @@ function __createDispatcher(binPath: string) {
 
     const output = await process.ipc(command, { ...options, data });
 
-    if (!output.trim()) {
+    if (!output?.trim()) {
       return undefined as O;
     }
 
@@ -146,13 +146,15 @@ async function __constructor(): Promise<RustClient> {
   return __addHelp(modules);
 }
 
-export default async function singleton(): Promise<RustClient> {
+async function singleton(): Promise<RustClient> {
   try {
     if (!__backend) {
       __backend = await __constructor();
     }
     return __backend;
   } catch (e) {
+    if (kerror.isKlepError(e)) throw e;
+
     throw kerror(kerror.Unknown, 'backend-not-found', {
       message: 'Klep backend not found. Likely, the rust backend is not built',
       context: {
@@ -162,3 +164,9 @@ export default async function singleton(): Promise<RustClient> {
     });
   }
 }
+
+singleton.__reset__ = () => {
+  __backend = null;
+};
+
+export default singleton;
