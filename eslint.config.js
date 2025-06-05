@@ -95,6 +95,14 @@ export default [
         clearInterval: 'readonly',
         NodeJS: 'readonly',
         moxxy: 'readonly', // Global moxxy for testing
+        describe: 'readonly', // Bun test globals
+        test: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
       },
     },
     plugins: {

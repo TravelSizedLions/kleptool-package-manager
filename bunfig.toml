@@ -6,5 +6,6 @@ preload = ["./src/testing/moxxy/transformer-plugin.ts"]
 preload = [
   "./src/testing/moxxy/transformer-plugin.ts",
   "./src/testing/extensions.ts",
-  "./src/testing/moxxy/auto-reset.ts"
+  "./src/testing/moxxy/auto-reset.ts",
+  "./src/testing/setup/windows-path-setup.ts"
 ]

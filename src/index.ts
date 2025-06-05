@@ -24,6 +24,7 @@ program.version(packageJson.version);
 // Global options
 program.option('-s, --silent', 'Silence command output');
 program.option('--tasks-file <path>', 'Path to tasks file (default: ./klep.tasks)');
+program.option('--no-colors', 'Disable colored output');
 
 program
   .command('init')
@@ -132,6 +133,7 @@ program
       await taskRunner.do(task, args, {
         silent: options.silent,
         tasksFilePath: options.tasksFile,
+        noColors: options.noColors,
       });
     } catch (error) {
       if (kerror.isKlepError(error)) {

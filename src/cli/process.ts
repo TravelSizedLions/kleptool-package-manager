@@ -24,6 +24,7 @@ export type ExecOptions = ProcessOptions & {
   shell?: boolean;
   streamOutput?: boolean;
   throwOnError?: boolean;
+  preserveColors?: boolean;
 };
 
 export type IpcOptions = ProcessOptions & {
@@ -39,6 +40,7 @@ const defaultExecOptions: ExecOptions = {
   shell: true,
   streamOutput: false,
   throwOnError: true,
+  preserveColors: false,
 };
 
 const defaultIpcOptions: IpcOptions = {
@@ -192,14 +194,42 @@ function __withCrossPlatformArgs(cmd: string, args: string[]): string {
 // Regular shell command execution with full result
 export async function execWithResult(cmd: string, options: ExecOptions = {}): Promise<ExecResult> {
   try {
-    const { args, cwd, env, timeout, streamOutput } = {
+    const { args, cwd, env, timeout, streamOutput, preserveColors } = {
       ...defaultExecOptions,
       ...options,
     };
 
     const command = __withCrossPlatformArgs(cmd, args || []);
 
-    const childProcess = exec(command, { cwd, env, timeout });
+    // Prepare environment with color support if needed
+    const enhancedEnv = { ...env };
+    if (preserveColors || streamOutput) {
+      enhancedEnv.FORCE_COLOR = '1';
+      enhancedEnv.TERM = enhancedEnv.TERM || 'xterm-256color';
+    }
+
+    // Use spawn instead of exec for better TTY support when streaming with colors
+    if (streamOutput && preserveColors) {
+      const [cmdName, ...cmdArgs] = command.split(' ');
+      const childProcess = spawn(cmdName, cmdArgs, {
+        cwd,
+        env: enhancedEnv,
+        stdio: 'inherit',
+        shell: true,
+      });
+
+      const { code } = await __handleProcessCompletion(childProcess, command, timeout);
+
+      return {
+        stdout: '[streamed to console with colors]',
+        stderr: '[streamed to console with colors]',
+        success: code === 0,
+        exitCode: code,
+      };
+    }
+
+    // Fallback to exec for non-streaming or non-color scenarios
+    const childProcess = exec(command, { cwd, env: enhancedEnv, timeout });
 
     // Handle streaming if requested
     if (streamOutput) {
