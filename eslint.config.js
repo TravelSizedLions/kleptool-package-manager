@@ -94,7 +94,7 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         NodeJS: 'readonly',
-        moxxy: 'readonly' // Global moxxy for testing
+        moxxy: 'readonly'
       },
     },
     plugins: {

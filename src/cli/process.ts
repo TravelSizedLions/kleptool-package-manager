@@ -191,6 +191,16 @@ function __withCrossPlatformArgs(cmd: string, args: string[]): string {
   return cmd.replace(/\$@/g, escapedArgs);
 }
 
+function __prepareColorEnvironment(env: Record<string, string>, enableColors: boolean): Record<string, string> {
+  if (!enableColors) return env;
+  
+  return {
+    ...env,
+    FORCE_COLOR: '1',
+    TERM: env.TERM || 'xterm-256color',
+  };
+}
+
 // Regular shell command execution with full result
 export async function execWithResult(cmd: string, options: ExecOptions = {}): Promise<ExecResult> {
   try {
@@ -200,15 +210,8 @@ export async function execWithResult(cmd: string, options: ExecOptions = {}): Pr
     };
 
     const command = __withCrossPlatformArgs(cmd, args || []);
+    const enhancedEnv = __prepareColorEnvironment(env || {}, preserveColors || streamOutput);
 
-    // Prepare environment with color support if needed
-    const enhancedEnv = { ...env };
-    if (preserveColors || streamOutput) {
-      enhancedEnv.FORCE_COLOR = '1';
-      enhancedEnv.TERM = enhancedEnv.TERM || 'xterm-256color';
-    }
-
-    // Use spawn instead of exec for better TTY support when streaming with colors
     if (streamOutput && preserveColors) {
       const [cmdName, ...cmdArgs] = command.split(' ');
       const childProcess = spawn(cmdName, cmdArgs, {
@@ -228,16 +231,13 @@ export async function execWithResult(cmd: string, options: ExecOptions = {}): Pr
       };
     }
 
-    // Fallback to exec for non-streaming or non-color scenarios
     const childProcess = exec(command, { cwd, env: enhancedEnv, timeout });
 
-    // Handle streaming if requested
     if (streamOutput) {
       childProcess.stdout?.pipe(process.stdout);
       childProcess.stderr?.pipe(process.stderr);
     }
 
-    // Gather output and wait for process completion
     const [stdout, stderr, { code }] = await Promise.all([
       __receive(childProcess.stdout as Stream.Readable),
       __receive(childProcess.stderr as Stream.Readable),
