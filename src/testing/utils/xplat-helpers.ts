@@ -24,7 +24,7 @@
 export function normalizePath(path: string): string {
   // Convert backslashes to forward slashes
   let normalized = path.replace(/\\/g, '/');
-  
+
   // For test paths starting with Unix-style roots, strip Windows drive letters
   // This handles cases where path.resolve('/test/path') becomes 'D:/test/path' on Windows
   if (normalized.match(/^[A-Z]:\//)) {
@@ -33,7 +33,7 @@ export function normalizePath(path: string): string {
       normalized = unixPath;
     }
   }
-  
+
   return normalized;
 }
 
