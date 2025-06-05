@@ -195,7 +195,8 @@ function __prepareColorEnvironment(
   env: Record<string, string>,
   enableColors: boolean
 ): Record<string, string> {
-  if (!enableColors) return env;
+  // Respect NO_COLOR and CI environment variables
+  if (!enableColors || env.NO_COLOR || env.CI) return env;
 
   return {
     ...env,

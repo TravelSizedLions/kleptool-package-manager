@@ -231,5 +231,81 @@ describe('process', () => {
         TERM: 'xterm-256color',
       });
     });
+
+    it('should respect NO_COLOR environment variable', async () => {
+      let capturedEnv = {};
+
+      moxxy.exec.mock((command: string, options: any) => {
+        capturedEnv = options.env;
+        return {
+          stdout: {
+            on: (event: string, handler: (...args: unknown[]) => void) => {
+              if (event === 'data') setTimeout(() => handler('test\n'), 10);
+              else if (event === 'end') setTimeout(() => handler(), 20);
+            },
+            pipe: () => {},
+          },
+          stderr: {
+            on: (event: string, handler: (...args: unknown[]) => void) => {
+              if (event === 'end') setTimeout(() => handler(), 20);
+            },
+            pipe: () => {},
+          },
+          on: (event: string, handler: (...args: unknown[]) => void) => {
+            if (event === 'close') setTimeout(() => handler(0), 30);
+          },
+          stdin: { write: () => {}, end: () => {} },
+          kill: () => {},
+        };
+      });
+
+      await process.execWithResult('echo test', {
+        preserveColors: true,
+        env: { NO_COLOR: '1', ORIGINAL: 'value' },
+      });
+
+      expect(capturedEnv).toEqual({
+        NO_COLOR: '1',
+        ORIGINAL: 'value',
+      });
+    });
+
+    it('should respect CI environment variable', async () => {
+      let capturedEnv = {};
+
+      moxxy.exec.mock((command: string, options: any) => {
+        capturedEnv = options.env;
+        return {
+          stdout: {
+            on: (event: string, handler: (...args: unknown[]) => void) => {
+              if (event === 'data') setTimeout(() => handler('test\n'), 10);
+              else if (event === 'end') setTimeout(() => handler(), 20);
+            },
+            pipe: () => {},
+          },
+          stderr: {
+            on: (event: string, handler: (...args: unknown[]) => void) => {
+              if (event === 'end') setTimeout(() => handler(), 20);
+            },
+            pipe: () => {},
+          },
+          on: (event: string, handler: (...args: unknown[]) => void) => {
+            if (event === 'close') setTimeout(() => handler(0), 30);
+          },
+          stdin: { write: () => {}, end: () => {} },
+          kill: () => {},
+        };
+      });
+
+      await process.execWithResult('echo test', {
+        preserveColors: true,
+        env: { CI: 'true', ORIGINAL: 'value' },
+      });
+
+      expect(capturedEnv).toEqual({
+        CI: 'true',
+        ORIGINAL: 'value',
+      });
+    });
   });
 });

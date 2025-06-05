@@ -7,8 +7,8 @@
 
 import windowsSimulator from '../utils/windows-path-simulator.ts';
 
-// Check if Windows simulation should be enabled
-if (process.env.KLEP_SIMULATE_WINDOWS === '1') {
+// Check if Windows simulation should be enabled (but not if we're actually on Windows)
+if (process.env.KLEP_SIMULATE_WINDOWS === '1' && process.platform !== 'win32') {
   console.log('🪟 Windows path simulation enabled for testing');
   windowsSimulator.enableWindowsPathSimulation();
 
