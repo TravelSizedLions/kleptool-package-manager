@@ -232,7 +232,7 @@ describe('process', () => {
       });
     });
 
-    it('should respect NO_COLOR environment variable', async () => {
+    it('should respect NO_COLOR environment variable in subprocess env', async () => {
       let capturedEnv = {};
 
       moxxy.exec.mock((command: string, options: any) => {
@@ -270,7 +270,7 @@ describe('process', () => {
       });
     });
 
-    it('should respect CI environment variable', async () => {
+    it('should respect CI environment variable in subprocess env', async () => {
       let capturedEnv = {};
 
       moxxy.exec.mock((command: string, options: any) => {

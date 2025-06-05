@@ -7,7 +7,6 @@ import nodeProcess from 'node:process';
 type TaskRunnerOptions = {
   silent?: boolean;
   tasksFilePath?: string;
-  noColors?: boolean;
 };
 
 async function __do(alias: string, args: string[], options: TaskRunnerOptions = {}) {
@@ -35,9 +34,8 @@ async function __do(alias: string, args: string[], options: TaskRunnerOptions = 
   }
 
   const streamOutput = !options.silent;
-  // Enable colors by default unless explicitly disabled or in CI environment
-  const preserveColors =
-    streamOutput && !options.noColors && !nodeProcess.env.CI && !nodeProcess.env.NO_COLOR;
+  // Enable colors by default unless in CI environment or NO_COLOR is set
+  const preserveColors = streamOutput && !nodeProcess.env.CI && !nodeProcess.env.NO_COLOR;
   const result = await process.execWithResult(task, {
     args,
     streamOutput,

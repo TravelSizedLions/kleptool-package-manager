@@ -195,7 +195,7 @@ function __prepareColorEnvironment(
   env: Record<string, string>,
   enableColors: boolean
 ): Record<string, string> {
-  // Respect NO_COLOR and CI environment variables
+  // Check both the enableColors parameter AND the environment being passed to subprocess
   if (!enableColors || env.NO_COLOR || env.CI) return env;
 
   return {
