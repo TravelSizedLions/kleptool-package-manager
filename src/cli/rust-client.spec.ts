@@ -7,13 +7,11 @@ describe('__createDispatcher()', () => {
       let capturedCommand = '';
       let capturedOptions = {};
       
-      moxxy.process.mock(() => ({
-        ipc: (command: string, options: any) => {
-          capturedCommand = command;
-          capturedOptions = options;
-          return Promise.resolve('{"result": "success"}');
-        }
-      }));
+      moxxy.process.ipc.mock((command: string, options: any) => {
+        capturedCommand = command;
+        capturedOptions = options;
+        return Promise.resolve('{"result": "success"}');
+      });
       moxxy.path.mock(() => ({
         resolve: (p: string) => p,
         dirname: () => '/mock/dir',

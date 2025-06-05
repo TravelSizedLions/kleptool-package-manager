@@ -1,7 +1,7 @@
 import process, { IpcOptions } from './process.ts';
 import kerror from './kerror.ts';
 import { globby } from 'globby';
-import path from 'path';
+import * as path from 'path';
 import { existsSync } from 'fs';
 
 type RustClient = {
