@@ -165,8 +165,7 @@ async function singleton(): Promise<RustClient> {
   }
 }
 
-// Test helper function to reset singleton state
-singleton.__resetSingleton = () => {
+singleton.__reset__ = () => {
   __backend = null;
 };
 

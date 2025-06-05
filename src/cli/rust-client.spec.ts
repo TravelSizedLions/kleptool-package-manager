@@ -4,7 +4,7 @@ import kerror from './kerror.ts';
 
 beforeEach(() => {
   moxxy.reset();
-  (rustClient as any).__resetSingleton();
+  rustClient.__reset__();
 });
 
 describe('__createDispatcher()', () => {
