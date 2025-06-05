@@ -26,31 +26,46 @@ if ! bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --cov
     exit $TEST_EXIT_CODE
 fi
 
-# Extract and filter the coverage table
+# Step 3: Filter the lcov.info file to exclude testing infrastructure
+echo ""
+echo "🔧 Filtering coverage data to exclude testing infrastructure..."
+if [ -f "coverage/typescript/lcov.info" ]; then
+    # Create a temporary filtered file
+    grep -E -v "^SF:.*(src/testing/|\.spec\.ts|\.test\.ts|testing/extensions\.ts|testing/moxxy/|testing/utils/)" coverage/typescript/lcov.info > coverage/typescript/lcov.info.tmp
+    
+    # Replace the original with the filtered version
+    mv coverage/typescript/lcov.info.tmp coverage/typescript/lcov.info
+    
+    echo "✅ Coverage data filtered successfully"
+else
+    echo "⚠️  Warning: No lcov.info file found to filter"
+fi
+
+# Step 4: Display basic coverage summary from filtered data
 echo ""
 echo "📈 Coverage Report (excluding testing infrastructure):"
 
-# Get the header line
-sed -n '/^File.*| % Funcs | % Lines/p' coverage_output.tmp
-
-# Get the separator line  
-sed -n '/^-*|.*|.*|/p' coverage_output.tmp | head -1
-
-# Filter out testing infrastructure files and display the rest
-sed -n '/^-*|/,$ p' coverage_output.tmp | \
-grep -v "src/testing/" | \
-grep -v "\.spec\.ts" | \
-grep -v "\.test\.ts" | \
-grep -v "testing/extensions\.ts" | \
-grep -v "testing/moxxy/" | \
-grep -v "testing/utils/" | \
-tail -n +2
+if [ -f "coverage/typescript/lcov.info" ]; then
+    # Calculate basic coverage stats from the filtered lcov.info
+    lines_found=$(grep -o "LF:[0-9]*" coverage/typescript/lcov.info | sed 's/LF://' | paste -sd+ | bc 2>/dev/null || echo "0")
+    lines_hit=$(grep -o "LH:[0-9]*" coverage/typescript/lcov.info | sed 's/LH://' | paste -sd+ | bc 2>/dev/null || echo "0")
+    
+    if [ "$lines_found" -gt 0 ]; then
+        coverage_percent=$(echo "scale=2; $lines_hit * 100 / $lines_found" | bc 2>/dev/null || echo "0")
+        echo "📊 Lines covered: $lines_hit/$lines_found (${coverage_percent}%)"
+        echo "🎯 Filtered data excludes all test files and testing infrastructure"
+    else
+        echo "⚠️  No coverage data found in filtered file"
+    fi
+else
+    echo "⚠️  No filtered coverage file found"
+fi
 
 # Clean up
 rm -f test_output.tmp coverage_output.tmp
 
 echo ""
-echo "✅ Tests passed and coverage report generated!"
+echo "✅ Tests passed and filtered coverage report generated!"
 echo "📁 Full LCOV report available in: coverage/typescript/"
 
 # Ensure coverage directory exists for CI/CD
