@@ -23,7 +23,7 @@ function __createDispatcher(binPath: string) {
 
     const output = await process.ipc(command, { ...options, data });
 
-    if (!output.trim()) {
+    if (!output?.trim()) {
       return undefined as O;
     }
 
@@ -146,7 +146,7 @@ async function __constructor(): Promise<RustClient> {
   return __addHelp(modules);
 }
 
-export default async function singleton(): Promise<RustClient> {
+async function singleton(): Promise<RustClient> {
   try {
     if (!__backend) {
       __backend = await __constructor();
@@ -164,3 +164,10 @@ export default async function singleton(): Promise<RustClient> {
     });
   }
 }
+
+// Test helper function to reset singleton state
+singleton.__resetSingleton = () => {
+  __backend = null;
+};
+
+export default singleton;
