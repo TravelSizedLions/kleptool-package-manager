@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach } from 'bun:test';
 import rustClient from './rust-client.ts';
 import kerror from './kerror.ts';
 
+// Helper function to normalize paths for cross-platform testing
+const normalizePath = (p: string): string => {
+  // Always return Unix-style paths for consistent testing
+  return p.replace(/\\/g, '/');
+};
+
 beforeEach(() => {
   moxxy.reset();
   rustClient.__reset__();
@@ -15,7 +21,7 @@ describe('__createDispatcher()', () => {
 
       // Test: direct method mocking - this should ALSO work
       moxxy.process.ipc.mock((command: string, options: any) => {
-        capturedCommand = command;
+        capturedCommand = normalizePath(command);
         capturedOptions = options;
         return Promise.resolve('{"result": "success"}');
       });
@@ -43,7 +49,7 @@ describe('__createDispatcher()', () => {
 
       moxxy.process.mock({
         ipc: (command: string, options: any) => {
-          capturedCommand = command;
+          capturedCommand = normalizePath(command);
           capturedOptions = options;
           return Promise.resolve('{"result": "success"}');
         },
