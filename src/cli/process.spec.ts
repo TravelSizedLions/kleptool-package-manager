@@ -1,3 +1,6 @@
+// quality-allow max-function-length 150 file
+// quality-allow max-cyclomatic-complexity 12 file
+
 import { describe, it, expect } from 'bun:test';
 import processModule from './process.ts';
 
