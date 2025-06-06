@@ -1,15 +1,91 @@
 import { describe, it, expect } from 'bun:test';
 import depsfile from './depsfile.ts';
 import path from 'node:path';
-
 import { beforeEach } from 'bun:test';
 
-describe('DepsFile', () => {
-  beforeEach(() => {
-    depsfile.clear();
-  });
+function __createMockFS() {
+  let savedContent = '';
+  let savedPath = '';
+  
+  return {
+    mock: {
+      writeFileSync: (filePath: string, content: string) => {
+        savedPath = filePath;
+        savedContent = content;
+      },
+    },
+    getSavedPath: () => savedPath,
+    getSavedContent: () => savedContent,
+  };
+}
 
-  describe('load', () => {
+function __createMockProcess(cwd = '/test/project') {
+  return {
+    cwd: () => cwd,
+  };
+}
+
+function __setupMocksAndSave(projectPath = '/test/project') {
+  const fsMock = __createMockFS();
+  
+  moxxy.fs.mock(fsMock.mock);
+  moxxy.process.mock(__createMockProcess(projectPath));
+  
+  depsfile.save();
+  
+  const expectedPath = path.join(projectPath, 'klep.deps');
+  expect(path.normalize(fsMock.getSavedPath())).toBe(path.normalize(expectedPath));
+  expect(fsMock.getSavedContent()).toContain('dependencyFolder');
+  expect(fsMock.getSavedContent()).toContain('dependencies');
+  
+  return fsMock;
+}
+
+function __addTestDependency(
+  name: string,
+  dep: any,
+  isDev: boolean,
+  expectedSection: 'dependencies' | 'devDependencies' = isDev ? 'devDependencies' : 'dependencies'
+) {
+  depsfile.addDependency(name, dep, isDev);
+  const result = depsfile.load();
+  
+  expect(result[expectedSection]).toBeDefined();
+  if (isDev) {
+    expect(result.devDependencies![name]).toEqual(dep);
+  } else {
+    expect(result.dependencies[name]).toEqual(dep);
+  }
+  
+  return result;
+}
+
+function __setupComplexDependencies() {
+  depsfile.clear();
+  
+  depsfile.addDependency('existing-dep', {
+    url: 'https://github.com/existing/repo',
+    version: '1.0.0',
+  }, false);
+
+  depsfile.addDependency('existing-dev-dep', {
+    url: 'https://github.com/existing/dev-repo',
+    version: '2.0.0',
+  }, true);
+
+  depsfile.addDependency('complex-dep', {
+    url: 'https://github.com/complex/repo',
+    version: '3.0.0',
+    folder: 'custom',
+    extract: { 'src/': 'lib/' },
+  }, false);
+}
+
+beforeEach(() => {
+  depsfile.clear();
+});
+
+describe('load', () => {
     it('can load a deps file', () => {
       const result = depsfile.load();
       expect(result).toBeDefined();
@@ -20,26 +96,7 @@ describe('DepsFile', () => {
 
   describe('save', () => {
     it('can save a deps file', () => {
-      let savedContent = '';
-      let savedPath = '';
-
-      moxxy.fs.mock({
-        writeFileSync: (filePath: string, content: string) => {
-          savedPath = filePath;
-          savedContent = content;
-        },
-      });
-
-      moxxy.process.mock({
-        cwd: () => '/test/project',
-      });
-
-      depsfile.save();
-
-      const expectedPath = path.join('/test/project', 'klep.deps');
-      expect(path.normalize(savedPath)).toBe(path.normalize(expectedPath));
-      expect(savedContent).toContain('dependencyFolder');
-      expect(savedContent).toContain('dependencies');
+      __setupMocksAndSave();
     });
   });
 
@@ -50,11 +107,7 @@ describe('DepsFile', () => {
         version: '1.0.0',
       };
 
-      depsfile.addDependency('test-dep', dep, false);
-      const result = depsfile.load();
-
-      expect(result.dependencies).toBeDefined();
-      expect(result.dependencies['test-dep']).toEqual(dep);
+      __addTestDependency('test-dep', dep, false);
     });
 
     it('adds a devDependencies object the first time a dev dependency is added', () => {
@@ -63,11 +116,7 @@ describe('DepsFile', () => {
         version: '2.0.0',
       };
 
-      depsfile.addDependency('test-dev-dep', dep, true);
-      const result = depsfile.load();
-
-      expect(result.devDependencies).toBeDefined();
-      expect(result.devDependencies!['test-dev-dep']).toEqual(dep);
+      __addTestDependency('test-dev-dep', dep, true);
     });
 
     it('can add a non-dev dependency', () => {
@@ -77,10 +126,7 @@ describe('DepsFile', () => {
         folder: 'custom-lib',
       };
 
-      depsfile.addDependency('example-lib', dep, false);
-      const result = depsfile.load();
-
-      expect(result.dependencies['example-lib']).toEqual(dep);
+      __addTestDependency('example-lib', dep, false);
     });
 
     it('can add a dev dependency', () => {
@@ -89,10 +135,7 @@ describe('DepsFile', () => {
         version: '1.5.0',
       };
 
-      depsfile.addDependency('dev-tool', dep, true);
-      const result = depsfile.load();
-
-      expect(result.devDependencies!['dev-tool']).toEqual(dep);
+      __addTestDependency('dev-tool', dep, true);
     });
 
     it('can override the default dependencyFolder', () => {
@@ -151,35 +194,7 @@ describe('DepsFile', () => {
 
   describe('exists', () => {
     beforeEach(() => {
-      depsfile.clear();
-      depsfile.addDependency(
-        'existing-dep',
-        {
-          url: 'https://github.com/existing/repo',
-          version: '1.0.0',
-        },
-        false
-      );
-
-      depsfile.addDependency(
-        'existing-dev-dep',
-        {
-          url: 'https://github.com/existing/dev-repo',
-          version: '2.0.0',
-        },
-        true
-      );
-
-      depsfile.addDependency(
-        'complex-dep',
-        {
-          url: 'https://github.com/complex/repo',
-          version: '3.0.0',
-          folder: 'custom',
-          extract: { 'src/': 'lib/' },
-        },
-        false
-      );
+      __setupComplexDependencies();
     });
 
     it('detects existing dependencies with the same name', () => {
@@ -251,28 +266,20 @@ describe('DepsFile', () => {
     });
 
     it('saves out a default deps file if non exists', () => {
-      let savedContent = '';
-      let savedPath = '';
-
+      const fsMock = __createMockFS();
+      
       moxxy.fs.mock({
         existsSync: () => false,
-        writeFileSync: (filePath: string, content: string) => {
-          savedPath = filePath;
-          savedContent = content;
-        },
+        ...fsMock.mock,
       });
-
-      moxxy.process.mock({
-        cwd: () => '/test/project',
-      });
+      moxxy.process.mock(__createMockProcess());
 
       depsfile.initialize();
 
       const expectedPath = path.join('/test/project', 'klep.deps');
-      expect(path.normalize(savedPath)).toBe(path.normalize(expectedPath));
-      expect(savedContent).toContain('dependencyFolder');
-      expect(savedContent).toContain('dependencies');
-      expect(savedContent).toContain('devDependencies');
+      expect(path.normalize(fsMock.getSavedPath())).toBe(path.normalize(expectedPath));
+      expect(fsMock.getSavedContent()).toContain('dependencyFolder');
+      expect(fsMock.getSavedContent()).toContain('dependencies');
+      expect(fsMock.getSavedContent()).toContain('devDependencies');
     });
   });
-});

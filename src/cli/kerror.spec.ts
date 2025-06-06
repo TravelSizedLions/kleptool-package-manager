@@ -2,28 +2,69 @@ import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 
 import kerror from './kerror.ts';
 
-describe('kerror', () => {
-  // Mock console.error to capture output during tests
-  // Yes, this is a hack. Yes, I'm aware. Yes, I'm sorry.
-  // I'm not sure how to test the error printing without this.
-  let consoleSpy: ReturnType<typeof spyOn>;
-  let processExitSpy: ReturnType<typeof spyOn>;
+function __setupErrorMocks() {
+  const consoleSpy = spyOn(console, 'error').mockImplementation(() => {});
+  const processExitSpy = spyOn(process, 'exit').mockImplementation(() => {
+    throw new Error('process.exit called');
+  });
+  
+  return { consoleSpy, processExitSpy };
+}
 
-  beforeEach(() => {
-    consoleSpy = spyOn(console, 'error').mockImplementation(() => {});
-    processExitSpy = spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit called');
-    });
+function __cleanupMocks(consoleSpy: ReturnType<typeof spyOn>, processExitSpy: ReturnType<typeof spyOn>) {
+  consoleSpy.mockRestore();
+  processExitSpy.mockRestore();
+}
+
+function __expectProcessExit(processExitSpy: ReturnType<typeof spyOn>, code = 1) {
+  expect(processExitSpy).toHaveBeenCalledWith(code);
+}
+
+function __createTestError(type = kerror.type.Unknown, id = 'test-id', options = {}) {
+  return kerror(type, id, options);
+}
+
+function __testBoundaryError(errorFactory: () => Error, processExitSpy: ReturnType<typeof spyOn>) {
+  const fn = kerror.boundary(() => {
+    throw errorFactory();
   });
 
-  afterEach(() => {
-    consoleSpy.mockRestore();
-    processExitSpy.mockRestore();
+  expect(async () => await fn()).toThrow('process.exit called');
+  __expectProcessExit(processExitSpy);
+}
+
+function __testBoundaryThrow(throwValue: unknown, processExitSpy: ReturnType<typeof spyOn>, consoleSpy?: ReturnType<typeof spyOn>, expectedConsoleCall?: [string, unknown]) {
+  const fn = kerror.boundary(() => {
+    throw throwValue;
   });
+
+  expect(async () => await fn()).toThrow('process.exit called');
+  __expectProcessExit(processExitSpy);
+  
+  if (consoleSpy && expectedConsoleCall) {
+    expect(consoleSpy).toHaveBeenCalledWith(expectedConsoleCall[0], expectedConsoleCall[1]);
+  }
+}
+
+// Mock console.error to capture output during tests
+// Yes, this is a hack. Yes, I'm aware. Yes, I'm sorry.
+// I'm not sure how to test the error printing without this.
+let consoleSpy: ReturnType<typeof spyOn>;
+let processExitSpy: ReturnType<typeof spyOn>;
+
+beforeEach(() => {
+  const mocks = __setupErrorMocks();
+  consoleSpy = mocks.consoleSpy;
+  processExitSpy = mocks.processExitSpy;
+});
+
+afterEach(() => {
+  __cleanupMocks(consoleSpy, processExitSpy);
+});
 
   describe('KlepError construction', () => {
     it('should create error with minimal options', () => {
-      const error = kerror(kerror.type.Unknown, 'test-id');
+      const error = __createTestError();
 
       expect(error).toBeInstanceOf(kerror.KlepError);
       expect(error.type).toBe(kerror.type.Unknown);
@@ -91,39 +132,19 @@ describe('kerror', () => {
 
   describe('boundary function', () => {
     it('should catch and handle KlepError in sync function', async () => {
-      const fn = kerror.boundary(() => {
-        throw kerror(kerror.type.Task, 'task-failed');
-      });
-
-      expect(async () => await fn()).toThrow('process.exit called');
-      expect(processExitSpy).toHaveBeenCalledWith(1);
+      __testBoundaryError(() => kerror(kerror.type.Task, 'task-failed'), processExitSpy);
     });
 
     it('should catch and handle KlepError in async function', async () => {
-      const fn = kerror.boundary(async () => {
-        throw kerror(kerror.type.Parsing, 'async-parse-error');
-      });
-
-      expect(async () => await fn()).toThrow('process.exit called');
-      expect(processExitSpy).toHaveBeenCalledWith(1);
+      __testBoundaryError(() => kerror(kerror.type.Parsing, 'async-parse-error'), processExitSpy);
     });
 
     it('should handle non-Error throws', async () => {
-      const fn = kerror.boundary(() => {
-        throw 'string error';
-      });
-
-      expect(async () => await fn()).toThrow('process.exit called');
-      expect(consoleSpy).toHaveBeenCalledWith('unexpected not-an-error received', 'string error');
+      __testBoundaryThrow('string error', processExitSpy, consoleSpy, ['unexpected not-an-error received', 'string error']);
     });
 
     it('should handle regular Error instances', async () => {
-      const fn = kerror.boundary(() => {
-        throw new Error('regular error');
-      });
-
-      expect(async () => await fn()).toThrow('process.exit called');
-      expect(consoleSpy).toHaveBeenCalledWith('unexpected error received', expect.any(Error));
+      __testBoundaryThrow(new Error('regular error'), processExitSpy, consoleSpy, ['unexpected error received', expect.any(Error)]);
     });
 
     it('should pass through function arguments', async () => {
@@ -266,4 +287,3 @@ describe('kerror', () => {
       expect(error.id).toBe('legacy-test');
     });
   });
-});
