@@ -20,7 +20,6 @@ pub struct Violation {
 #[derive(Debug, Clone)]
 pub struct FunctionMetrics {
   pub start_line: usize,
-  pub end_line: usize,
   pub length: usize,
   pub max_nesting_depth: usize,
   pub cyclomatic_complexity: usize,
@@ -88,7 +87,6 @@ fn __analyze_function_node(node: Node, _source_code: &str) -> FunctionMetrics {
 
   FunctionMetrics {
     start_line,
-    end_line,
     length,
     max_nesting_depth,
     cyclomatic_complexity,
