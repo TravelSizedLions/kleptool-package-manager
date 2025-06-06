@@ -1,3 +1,4 @@
+// quality-ignore max-cyclomatic-complexity file
 import { describe, it, expect, beforeEach } from 'bun:test';
 import rustClient from './rust-client.ts';
 import kerror from './kerror.ts';

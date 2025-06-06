@@ -1,3 +1,4 @@
+// quality-ignore max-cyclomatic-complexity file
 import { describe, it, expect } from 'bun:test';
 import { $mock, runCliWithMockTasks } from '../utils/cli-helpers.ts';
 import { testTasks } from '../utils/integration-helpers.ts';

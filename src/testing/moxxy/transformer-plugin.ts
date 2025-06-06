@@ -714,6 +714,7 @@ function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, stri
 // Primitive Usage Replacement Helper Functions
 // ============================================================================
 
+// quality-ignore max-cyclomatic-complexity
 function __shouldSkipLine(line: string): boolean {
   return (
     line.includes('__moxxy__') ||

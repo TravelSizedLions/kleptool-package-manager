@@ -1,3 +1,4 @@
+// quality-ignore max-function-length file
 import { describe, it, expect, beforeEach } from 'bun:test';
 
 // Import the target module (this should trigger moxxy transformation)
