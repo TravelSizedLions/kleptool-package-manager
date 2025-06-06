@@ -92,43 +92,37 @@ function __receive(stream: Stream.Readable): Promise<string> {
   });
 }
 
-function __timeout(childProcess: ChildProcess, command: string, timeout: number): NodeJS.Timeout {
-  return setTimeout(() => {
-    childProcess.kill();
-  }, timeout);
-}
-
 function __handleProcessCompletion(
   childProcess: ChildProcess,
   command: string,
   timeout?: number
 ): Promise<{ code: number | null }> {
   return new Promise((resolve, reject) => {
-    let timeoutHandle: NodeJS.Timeout | null = null;
+    let killTimeoutHandle: NodeJS.Timeout | null = null;
+    let rejectTimeoutHandle: NodeJS.Timeout | null = null;
 
     // Setup timeout if specified
     if (timeout && timeout > 0) {
-      timeoutHandle = __timeout(childProcess, command, timeout);
+      killTimeoutHandle = setTimeout(() => {
+        childProcess.kill();
+      }, timeout);
+
+      rejectTimeoutHandle = setTimeout(() => {
+        reject(__timeoutError(command, timeout));
+      }, timeout);
     }
 
     childProcess.on('close', (code) => {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (killTimeoutHandle) clearTimeout(killTimeoutHandle);
+      if (rejectTimeoutHandle) clearTimeout(rejectTimeoutHandle);
       resolve({ code });
     });
 
     childProcess.on('error', (error) => {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (killTimeoutHandle) clearTimeout(killTimeoutHandle);
+      if (rejectTimeoutHandle) clearTimeout(rejectTimeoutHandle);
       reject(__processError(command, error));
     });
-
-    // Handle timeout rejection
-    if (timeoutHandle) {
-      const originalTimeout = timeoutHandle;
-      timeoutHandle = setTimeout(() => {
-        clearTimeout(originalTimeout);
-        reject(__timeoutError(command, timeout!));
-      }, timeout!);
-    }
   });
 }
 

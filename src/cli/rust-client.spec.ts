@@ -4,7 +4,7 @@ import rustClient from './rust-client.ts';
 import kerror from './kerror.ts';
 import { normalizeCommand } from '../testing/utils/xplat-helpers.ts';
 
-function ____createPathMock()() {
+function __createPathMock() {
   return {
     resolve: (p: string) => {
       // For test paths that start with '/', keep them as-is to avoid Windows drive letter issues
@@ -18,10 +18,10 @@ function ____createPathMock()() {
   };
 }
 
-function __createProcessMock(ipcResult: string | undefined = '{"result": "success"}') {
+function __createProcessMock(ipcResult: string | undefined) {
   let capturedCommand = '';
   let capturedOptions = {};
-  
+
   return {
     mock: {
       ipc: (command: string, options: any) => {
@@ -35,23 +35,29 @@ function __createProcessMock(ipcResult: string | undefined = '{"result": "succes
   };
 }
 
-function __createStandardMocks(ipcResult?: string | undefined, globbyResult = [{ name: 'bin-test--api', path: '/test/path' }]) {
-  const processMock = __createProcessMock(ipcResult);
-  
+function __createStandardMocks(
+  ipcResult?: string | undefined,
+  globbyResult = [{ name: 'bin-test--api', path: '/test/path' }]
+) {
+  // Use arguments.length to detect if first parameter was explicitly passed
+  const actualIpcResult = arguments.length === 0 ? '{"result": "success"}' : ipcResult;
+  const processMock = __createProcessMock(actualIpcResult);
+
   moxxy.process.mock(processMock.mock);
-  moxxy.path.mock(____createPathMock()());
+  moxxy.path.mock(__createPathMock());
   moxxy.existsSync.mock(() => true);
   moxxy.globby.mock(() => Promise.resolve(globbyResult));
   moxxy.globalThis = {
     process: { argv: ['/mock/dir/executable'] },
   };
-  
+
   return processMock;
 }
 
 function __setupStandardTest(ipcResult?: string | undefined) {
-  const mocks = __createStandardMocks(ipcResult);
-  return { 
+  // Pass arguments directly to preserve argument presence
+  const mocks = arguments.length === 0 ? __createStandardMocks() : __createStandardMocks(ipcResult);
+  return {
     getClient: () => rustClient(),
     getCapturedCommand: mocks.getCapturedCommand,
     getCapturedOptions: mocks.getCapturedOptions,
@@ -61,15 +67,15 @@ function __setupStandardTest(ipcResult?: string | undefined) {
 function __testProcessOutput(ipcResult: string | undefined, expectedResult: any, testData?: any) {
   return async () => {
     const { getClient, getCapturedCommand, getCapturedOptions } = __setupStandardTest(ipcResult);
-    
+
     const client = await getClient();
     const result = testData ? await client.test.api(testData) : await client.test.api();
-    
+
     expect(getCapturedCommand()).toBe('/test/path');
     expect(getCapturedOptions()).toEqual({
       data: testData ? JSON.stringify(testData) : '',
     });
-    
+
     if (expectedResult !== undefined) {
       expect(result).toEqual(expectedResult);
     }
@@ -79,9 +85,9 @@ function __testProcessOutput(ipcResult: string | undefined, expectedResult: any,
 function __testErrorScenario(ipcResult: string, expectedErrorId: string) {
   return async () => {
     const { getClient } = __setupStandardTest(ipcResult);
-    
+
     const client = await getClient();
-    
+
     try {
       await client.test.api();
       expect(true).toBe(false); // Should not reach here
@@ -94,9 +100,9 @@ function __testErrorScenario(ipcResult: string, expectedErrorId: string) {
 
 function __setupBinarySearchMocks(existsPaths: string[], globbyMappings: Record<string, any[]>) {
   moxxy.existsSync.mock((pathStr: string) => {
-    return existsPaths.some(path => pathStr === path || pathStr.endsWith(path));
+    return existsPaths.some((path) => pathStr === path || pathStr.endsWith(path));
   });
-  
+
   moxxy.globby.mock((pattern: string) => {
     for (const [patternKey, result] of Object.entries(globbyMappings)) {
       if (pattern.includes(patternKey) || pattern === patternKey) {
@@ -105,9 +111,9 @@ function __setupBinarySearchMocks(existsPaths: string[], globbyMappings: Record<
     }
     return Promise.resolve([]);
   });
-  
+
   moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-  moxxy.path.mock(____createPathMock()());
+  moxxy.path.mock(__createPathMock());
   moxxy.globalThis = { process: { argv: ['/mock/dir/executable'] } };
 }
 
@@ -115,7 +121,7 @@ function __setupModuleTest(binaries: { name: string; path: string }[]) {
   moxxy.existsSync.mock(() => true);
   moxxy.globby.mock(() => Promise.resolve(binaries));
   moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-  moxxy.path.mock(____createPathMock()());
+  moxxy.path.mock(__createPathMock());
   moxxy.globalThis = { process: { argv: ['/mock/dir/executable'] } };
 }
 
@@ -136,42 +142,43 @@ describe('__createDispatcher()', () => {
       await __testProcessOutput('{"result": "success"}', testData, testData);
     });
 
-          it('handles undefined blobs', async () => {
-        const { getClient, getCapturedCommand, getCapturedOptions } = __setupStandardTest('{"result": "success"}');
-        
-        const client = await getClient();
-        await client.test.api();
-        
-        expect(getCapturedCommand()).toBe('/test/path');
-        expect(getCapturedOptions()).toEqual({ data: '' });
-      });
+    it('handles undefined blobs', async () => {
+      const { getClient, getCapturedCommand, getCapturedOptions } =
+        __setupStandardTest('{"result": "success"}');
 
-      it('handles undefined process output', async () => {
-        const { getClient } = __setupStandardTest(undefined);
-        
-        const client = await getClient();
-        const result = await client.test.api();
-        
-        expect(result).toBeUndefined();
-      });
+      const client = await getClient();
+      await client.test.api();
 
-      it('handles empty string process output', async () => {
-        const { getClient } = __setupStandardTest('');
-        
-        const client = await getClient();
-        const result = await client.test.api();
-        
-        expect(result).toBeUndefined();
-      });
+      expect(getCapturedCommand()).toBe('/test/path');
+      expect(getCapturedOptions()).toEqual({ data: '' });
+    });
 
-      it('handles whitespace process output', async () => {
-        const { getClient } = __setupStandardTest('   \n\t  ');
-        
-        const client = await getClient();
-        const result = await client.test.api();
-        
-        expect(result).toBeUndefined();
-      });
+    it('handles undefined process output', async () => {
+      const { getClient } = __setupStandardTest(undefined);
+
+      const client = await getClient();
+      const result = await client.test.api();
+
+      expect(result).toBeUndefined();
+    });
+
+    it('handles empty string process output', async () => {
+      const { getClient } = __setupStandardTest('');
+
+      const client = await getClient();
+      const result = await client.test.api();
+
+      expect(result).toBeUndefined();
+    });
+
+    it('handles whitespace process output', async () => {
+      const { getClient } = __setupStandardTest('   \n\t  ');
+
+      const client = await getClient();
+      const result = await client.test.api();
+
+      expect(result).toBeUndefined();
+    });
 
     it('handles actual content from process output', async () => {
       const expectedData = { status: 'success', data: [1, 2, 3] };
@@ -198,21 +205,19 @@ describe('__createDispatcher()', () => {
 describe('__getBinarySearchPaths()', () => {
   describe('development binaries', () => {
     it('includes development binaries if they exist', async () => {
-      __setupBinarySearchMocks(
-        ['src/rust/target/release'],
-        { 'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }] }
-      );
-      
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }],
+      });
+
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
 
     it('does not include development binaries if they do not exist', async () => {
-      __setupBinarySearchMocks(
-        ['dist/rust-binaries'],
-        { 'dist/rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/bundled/path' }] }
-      );
-      
+      __setupBinarySearchMocks(['dist/rust-binaries'], {
+        'dist/rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/bundled/path' }],
+      });
+
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
@@ -220,21 +225,19 @@ describe('__getBinarySearchPaths()', () => {
 
   describe('release binaries', () => {
     it('include release binaries if they exist', async () => {
-      __setupBinarySearchMocks(
-        ['dist/rust-binaries'],
-        { 'dist/rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/release/path' }] }
-      );
-      
+      __setupBinarySearchMocks(['dist/rust-binaries'], {
+        'dist/rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/release/path' }],
+      });
+
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
 
     it('does not include release binaries if they do not exist', async () => {
-      __setupBinarySearchMocks(
-        ['src/rust/target/release'],
-        { 'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }] }
-      );
-      
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }],
+      });
+
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
@@ -242,21 +245,19 @@ describe('__getBinarySearchPaths()', () => {
 
   describe('standalone', () => {
     it('includes bundled binaries if they exist', async () => {
-      __setupBinarySearchMocks(
-        ['rust-binaries'],
-        { 'rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/standalone/path' }] }
-      );
-      
+      __setupBinarySearchMocks(['rust-binaries'], {
+        'rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/standalone/path' }],
+      });
+
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
 
     it('does not include bundled binaries if they do not exist', async () => {
-      __setupBinarySearchMocks(
-        ['src/rust/target/release'],
-        { 'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }] }
-      );
-      
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }],
+      });
+
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
@@ -276,7 +277,9 @@ describe('__getBinarySearchPaths()', () => {
     });
 
     it('does not throw if one or more search pathes are added', async () => {
-      __setupBinarySearchMocks(['any'], { 'any': [{ name: 'bin-test--api', path: '/test/path' }] });
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/test/path' }],
+      });
 
       await expect(rustClient()).resolves.toBeDefined();
     });
@@ -289,7 +292,7 @@ describe('__getRustBinaries()', () => {
       { name: 'bin-module1--api1', path: '/path/to/bin1' },
       { name: 'bin-module2--api2', path: '/path/to/bin2' },
     ]);
-    
+
     expect(client.module1.api1).toBeDefined();
     expect(client.module2.api2).toBeDefined();
   });
@@ -314,7 +317,7 @@ describe('__createModules()', () => {
         { name: 'bin-test--api', path: '/path/to/bin' },
         { name: 'bin-test--api.d', path: '/path/to/bin.d' },
       ]);
-      
+
       expect(client.test.api).toBeDefined();
       expect(Object.keys(client.test)).toHaveLength(1);
     });
@@ -324,7 +327,7 @@ describe('__createModules()', () => {
         { name: 'bin-test--api', path: '/path/to/bin' },
         { name: 'bin-test--api.pdb', path: '/path/to/bin.pdb' },
       ]);
-      
+
       expect(client.test.api).toBeDefined();
       expect(Object.keys(client.test)).toHaveLength(1);
     });
@@ -335,7 +338,7 @@ describe('__createModules()', () => {
         { name: 'bin-test--api2', path: '/path/to/bin2' },
         { name: 'bin-test--api3.exe', path: '/path/to/bin3.exe' },
       ]);
-      
+
       expect(Object.keys(client.test)).toHaveLength(3);
     });
   });
@@ -343,23 +346,23 @@ describe('__createModules()', () => {
   describe('module creation', () => {
     it('gracefully handles .exe extensions', async () => {
       const client = await __testClientWithBinaries([
-        { name: 'bin-test--api.exe', path: '/path/to/bin.exe' }
+        { name: 'bin-test--api.exe', path: '/path/to/bin.exe' },
       ]);
-      
+
       expect(client.test.api).toBeDefined();
     });
 
     it('properly discovers the module from the binary name pattern', async () => {
       const client = await __testClientWithBinaries([
-        { name: 'bin-mymodule--someapi', path: '/path/to/bin' }
+        { name: 'bin-mymodule--someapi', path: '/path/to/bin' },
       ]);
-      
+
       expect(client.mymodule).toBeDefined();
     });
 
     it('properly discovers the apiName from the binary name pattern', async () => {
       const client = await __testClientWithBinaries([
-        { name: 'bin-testmodule--customapi', path: '/path/to/bin' }
+        { name: 'bin-testmodule--customapi', path: '/path/to/bin' },
       ]);
       expect(client.testmodule.customapi).toBeDefined();
     });
@@ -371,11 +374,7 @@ describe('__createModules()', () => {
         { name: 'bin-mod2--api1', path: '/path/to/bin3' },
         { name: 'bin-mod3--special', path: '/path/to/bin4' },
       ]);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
 
-      const client = await rustClient();
       expect(client.mod1.api1).toBeDefined();
       expect(client.mod1.api2).toBeDefined();
       expect(client.mod2.api1).toBeDefined();

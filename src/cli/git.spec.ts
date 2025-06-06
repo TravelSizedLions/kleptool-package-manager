@@ -57,33 +57,6 @@ async function __testRepositoryType(
   return isLocalRepo ? git.isLocalRepository(repoPath) : git.isRemoteRepository(repoPath);
 }
 
-async function __testRepositoryStat(
-  repoPath: string,
-  expected: {
-    isLocal: boolean;
-    isRemote: boolean;
-    tags: string[];
-    branches: string[];
-  },
-  mockConfig: {
-    localMockOptions?: Parameters<typeof __createSimpleGitMock>[0];
-    processMockOptions?: Parameters<typeof __createProcessExecMock>[0];
-  } = {}
-) {
-  const { localMockOptions = {}, processMockOptions = {} } = mockConfig;
-
-  if (expected.isLocal) {
-    moxxy.simpleGit.mock(__createSimpleGitMock(localMockOptions));
-    moxxy.process.exec.mock(__createProcessExecMock({ shouldResolve: false }));
-  } else {
-    moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
-    moxxy.process.exec.mock(__createProcessExecMock(processMockOptions));
-  }
-
-  const result = await git.repositoryStat(repoPath);
-  expect(result).toEqual(expected);
-}
-
 describe('debug', () => {
   it('should show what moxxy can see', () => {
     console.log('Moxxy object:', Object.getOwnPropertyNames(moxxy));

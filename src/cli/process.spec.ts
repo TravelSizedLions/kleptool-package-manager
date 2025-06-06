@@ -74,7 +74,6 @@ function __createSpawnIPCMock(
 }
 
 function __createHangingProcessMock(
-  type: 'exec' | 'spawn' = 'exec',
   options: {
     onKill?: () => void;
   } = {}
@@ -92,6 +91,16 @@ function __createHangingProcessMock(
     },
     on: () => {}, // Never calls close handler
     stdin: { write: () => {}, end: () => {} },
+    stdio: [
+      null, // stdin
+      null, // stdout
+      null, // stderr
+      {
+        // fd3 for IPC - also hangs forever
+        on: () => {},
+        pipe: () => {},
+      },
+    ],
     kill: () => onKill?.(),
   });
 }
@@ -217,7 +226,7 @@ async function __testIpcScenario(
       data: 'input data',
       args: ['arg1', 'arg2'],
     });
-    expect(result).toBe(mockOptions.ipcData || '');
+    expect(result).toBe(mockOptions?.ipcData || '');
   }
 }
 
@@ -271,7 +280,7 @@ async function __testTimeoutScenario(timeout: number, expectedError: { type: str
   let killCalled = false;
 
   moxxy.exec.mock(() =>
-    __createHangingProcessMock('exec', {
+    __createHangingProcessMock({
       onKill: () => {
         killCalled = true;
       },
@@ -399,7 +408,7 @@ describe('ipc', () => {
     let killCalled = false;
 
     moxxy.spawn.mock(() =>
-      __createHangingProcessMock('spawn', {
+      __createHangingProcessMock({
         onKill: () => {
           killCalled = true;
         },
