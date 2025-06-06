@@ -102,16 +102,18 @@ function __createErrorMock(errorMessage: string) {
   };
 }
 
-function __createStreamingMock(options: {
-  captureEnv?: (env: any) => void;
-  captureStreamingCalls?: (stdout: boolean, stderr: boolean) => void;
-  exitCode?: number;
-} = {}) {
+function __createStreamingMock(
+  options: {
+    captureEnv?: (env: any) => void;
+    captureStreamingCalls?: (stdout: boolean, stderr: boolean) => void;
+    exitCode?: number;
+  } = {}
+) {
   const { captureEnv, captureStreamingCalls, exitCode = 0 } = options;
-  
+
   return (command: string, opts: any) => {
     captureEnv?.(opts.env);
-    
+
     const mock = {
       stdout: {
         on: (event: string, handler: (...args: unknown[]) => void) => {
@@ -136,7 +138,7 @@ function __createStreamingMock(options: {
       stdin: { write: () => {}, end: () => {} },
       kill: () => {},
     };
-    
+
     return mock;
   };
 }
@@ -177,11 +179,13 @@ async function __testEnvironmentHandling(
 ) {
   let capturedEnv = {};
 
-  moxxy.exec.mock(__createStreamingMock({
-    captureEnv: (env) => {
-      capturedEnv = env;
-    },
-  }));
+  moxxy.exec.mock(
+    __createStreamingMock({
+      captureEnv: (env) => {
+        capturedEnv = env;
+      },
+    })
+  );
 
   await processModule.execWithResult('echo test', {
     preserveColors,
@@ -244,18 +248,16 @@ async function __testExecResultScenario(
   __assertExecResult(result, expectedResult);
 }
 
-async function __testArgumentHandling(
-  command: string,
-  args: string[],
-  expectedCommand: string
-) {
+async function __testArgumentHandling(command: string, args: string[], expectedCommand: string) {
   let capturedCommand = '';
 
-  moxxy.exec.mock(__createExecMock({
-    captureCommand: (cmd) => {
-      capturedCommand = cmd;
-    },
-  }));
+  moxxy.exec.mock(
+    __createExecMock({
+      captureCommand: (cmd) => {
+        capturedCommand = cmd;
+      },
+    })
+  );
 
   await processModule.execWithResult(command, {
     args,
@@ -265,10 +267,7 @@ async function __testArgumentHandling(
   expect(capturedCommand).toBe(expectedCommand);
 }
 
-async function __testTimeoutScenario(
-  timeout: number,
-  expectedError: { type: string; id: string }
-) {
+async function __testTimeoutScenario(timeout: number, expectedError: { type: string; id: string }) {
   let killCalled = false;
 
   moxxy.exec.mock(() =>
@@ -293,241 +292,236 @@ async function __testTimeoutScenario(
 }
 
 describe('exec', () => {
-    it('should execute a command', async () => {
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'Hello, world!\n',
-        })
-      );
+  it('should execute a command', async () => {
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'Hello, world!\n',
+      })
+    );
 
-      const result = await processModule.exec('echo "Hello, world!"');
-      expect(result).toBe('Hello, world!\n');
+    const result = await processModule.exec('echo "Hello, world!"');
+    expect(result).toBe('Hello, world!\n');
+  });
+
+  it('should substitute $@ with arguments cross-platform', async () => {
+    let capturedCommand = '';
+
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'Args: hello world\n',
+        captureCommand: (cmd) => {
+          capturedCommand = cmd;
+        },
+      })
+    );
+
+    const result = await processModule.execWithResult('echo "Args: $@"', {
+      args: ['hello', 'world'],
+      throwOnError: false,
     });
 
-    it('should substitute $@ with arguments cross-platform', async () => {
-      let capturedCommand = '';
+    expect(result.success).toBe(true);
+    expect(capturedCommand).toBe('echo "Args: hello world"');
+    expect(result.stdout).toBe('Args: hello world\n');
+  });
+});
 
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'Args: hello world\n',
-          captureCommand: (cmd) => {
-            capturedCommand = cmd;
-          },
-        })
-      );
-
-      const result = await processModule.execWithResult('echo "Args: $@"', {
-        args: ['hello', 'world'],
-        throwOnError: false,
-      });
-
-      expect(result.success).toBe(true);
-      expect(capturedCommand).toBe('echo "Args: hello world"');
-      expect(result.stdout).toBe('Args: hello world\n');
+describe('color preservation', () => {
+  it('should preserve original environment when colors are disabled', async () => {
+    await __testColorPreservation('preserve original when disabled', {
+      preserveColors: false,
+      inputEnv: { ORIGINAL: 'value' },
+      expectedEnv: { ORIGINAL: 'value' },
     });
   });
 
-  describe('color preservation', () => {
-    it('should preserve original environment when colors are disabled', async () => {
-      await __testColorPreservation('preserve original when disabled', {
-        preserveColors: false,
-        inputEnv: { ORIGINAL: 'value' },
-        expectedEnv: { ORIGINAL: 'value' },
-      });
-    });
-
-    it('should add color environment variables when colors are enabled', async () => {
-      await __testColorPreservation('add color vars when enabled', {
-        preserveColors: true,
-        inputEnv: { ORIGINAL: 'value' },
-        expectedEnv: {
-          ORIGINAL: 'value',
-          FORCE_COLOR: '1',
-          TERM: 'xterm-256color',
-        },
-      });
-    });
-
-    it('should preserve existing TERM variable when colors are enabled', async () => {
-      await __testColorPreservation('preserve existing TERM', {
-        preserveColors: true,
-        inputEnv: { TERM: 'screen-256color' },
-        expectedEnv: {
-          TERM: 'screen-256color',
-          FORCE_COLOR: '1',
-        },
-      });
-    });
-
-    it('should enable colors for streamOutput even when preserveColors is false', async () => {
-      await __testColorPreservation('enable colors for streamOutput', {
-        preserveColors: false,
-        streamOutput: true,
-        inputEnv: { ORIGINAL: 'value' },
-        expectedEnv: {
-          ORIGINAL: 'value',
-          FORCE_COLOR: '1',
-          TERM: 'xterm-256color',
-        },
-      });
-    });
-
-    it('should respect NO_COLOR environment variable in subprocess env', async () => {
-      await __testEnvironmentHandling(
-        { NO_COLOR: '1', ORIGINAL: 'value' },
-        { NO_COLOR: '1', ORIGINAL: 'value' }
-      );
-    });
-
-    it('should respect CI environment variable in subprocess env', async () => {
-      await __testEnvironmentHandling(
-        { CI: 'true', ORIGINAL: 'value' },
-        { CI: 'true', ORIGINAL: 'value' }
-      );
+  it('should add color environment variables when colors are enabled', async () => {
+    await __testColorPreservation('add color vars when enabled', {
+      preserveColors: true,
+      inputEnv: { ORIGINAL: 'value' },
+      expectedEnv: {
+        ORIGINAL: 'value',
+        FORCE_COLOR: '1',
+        TERM: 'xterm-256color',
+      },
     });
   });
 
-  describe('ipc', () => {
-    it('should handle basic IPC communication', async () => {
-      await __testIpcScenario({ ipcData: 'IPC response data' });
-    });
-
-    it('should handle IPC command failure', async () => {
-      await __testIpcScenario(
-        { exitCode: 1 },
-        true,
-        { type: 'Unknown', id: 'ipc-error-unknown' }
-      );
-    });
-
-    it('should handle IPC with timeout', async () => {
-      let killCalled = false;
-
-      moxxy.spawn.mock(() =>
-        __createHangingProcessMock('spawn', {
-          onKill: () => {
-            killCalled = true;
-          },
-        })()
-      );
-
-      try {
-        await processModule.ipc('hanging-command', { timeout: 100 });
-        expect(true).toBe(false);
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('ipc-error-unknown');
-        expect(killCalled).toBe(true);
-      }
-    });
-
-    it('should handle IPC process errors', async () => {
-      await __testIpcScenario(
-        { errorOnEvent: 'error' },
-        true,
-        { type: 'Unknown', id: 'ipc-error-unknown' }
-      );
-    });
-
-    it('should handle IPC with unknown errors', async () => {
-      moxxy.spawn.mock(__createErrorMock('Spawn failed completely'));
-
-      try {
-        await processModule.ipc('command');
-        expect(true).toBe(false);
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('ipc-error-unknown');
-      }
+  it('should preserve existing TERM variable when colors are enabled', async () => {
+    await __testColorPreservation('preserve existing TERM', {
+      preserveColors: true,
+      inputEnv: { TERM: 'screen-256color' },
+      expectedEnv: {
+        TERM: 'screen-256color',
+        FORCE_COLOR: '1',
+      },
     });
   });
+
+  it('should enable colors for streamOutput even when preserveColors is false', async () => {
+    await __testColorPreservation('enable colors for streamOutput', {
+      preserveColors: false,
+      streamOutput: true,
+      inputEnv: { ORIGINAL: 'value' },
+      expectedEnv: {
+        ORIGINAL: 'value',
+        FORCE_COLOR: '1',
+        TERM: 'xterm-256color',
+      },
+    });
+  });
+
+  it('should respect NO_COLOR environment variable in subprocess env', async () => {
+    await __testEnvironmentHandling(
+      { NO_COLOR: '1', ORIGINAL: 'value' },
+      { NO_COLOR: '1', ORIGINAL: 'value' }
+    );
+  });
+
+  it('should respect CI environment variable in subprocess env', async () => {
+    await __testEnvironmentHandling(
+      { CI: 'true', ORIGINAL: 'value' },
+      { CI: 'true', ORIGINAL: 'value' }
+    );
+  });
+});
+
+describe('ipc', () => {
+  it('should handle basic IPC communication', async () => {
+    await __testIpcScenario({ ipcData: 'IPC response data' });
+  });
+
+  it('should handle IPC command failure', async () => {
+    await __testIpcScenario({ exitCode: 1 }, true, { type: 'Unknown', id: 'ipc-error-unknown' });
+  });
+
+  it('should handle IPC with timeout', async () => {
+    let killCalled = false;
+
+    moxxy.spawn.mock(() =>
+      __createHangingProcessMock('spawn', {
+        onKill: () => {
+          killCalled = true;
+        },
+      })()
+    );
+
+    try {
+      await processModule.ipc('hanging-command', { timeout: 100 });
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('ipc-error-unknown');
+      expect(killCalled).toBe(true);
+    }
+  });
+
+  it('should handle IPC process errors', async () => {
+    await __testIpcScenario({ errorOnEvent: 'error' }, true, {
+      type: 'Unknown',
+      id: 'ipc-error-unknown',
+    });
+  });
+
+  it('should handle IPC with unknown errors', async () => {
+    moxxy.spawn.mock(__createErrorMock('Spawn failed completely'));
+
+    try {
+      await processModule.ipc('command');
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('ipc-error-unknown');
+    }
+  });
+});
 
 describe('execWithResult', () => {
-    it('should handle exec failure with throwOnError disabled', async () => {
-      await __testExecResultScenario('failing-command', {
-        mockOptions: {
-          stdout: 'output',
-          stderr: 'error output',
-          exitCode: 1,
-        },
-        execOptions: { throwOnError: false },
-        expectedResult: {
-          success: false,
-          exitCode: 1,
-          stdout: 'output',
-          stderr: 'error output',
-        },
-      });
-    });
-
-    it('should handle exec failure with throwOnError enabled', async () => {
-      await __testExecResultScenario('failing-command', {
-        mockOptions: { exitCode: 1 },
-        execOptions: { throwOnError: true },
-        expectedResult: {
-          success: false,
-          exitCode: 1,
-        },
-      });
-    });
-
-    it('should handle streamOutput with colors', async () => {
-      let spawnCalled = false;
-      let spawnOptions: any = {};
-
-      moxxy.spawn.mock((cmdName: string, cmdArgs: string[], options: any) => {
-        spawnCalled = true;
-        spawnOptions = options;
-        return {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          kill: () => {},
-        };
-      });
-
-      const result = await processModule.execWithResult('echo test', {
-        streamOutput: true,
-        preserveColors: true,
-      });
-
-      expect(spawnCalled).toBe(true);
-      expect(spawnOptions.stdio).toBe('inherit');
-      expect(result.stdout).toBe('[streamed to console with colors]');
-      expect(result.stderr).toBe('[streamed to console with colors]');
-      expect(result.success).toBe(true);
-    });
-
-    it('should handle process timeout', async () => {
-      await __testTimeoutScenario(100, { type: 'Unknown', id: 'exec-error-unknown' });
-    });
-
-    it('should handle unknown exec errors gracefully', async () => {
-      moxxy.exec.mock(__createErrorMock('Exec failed completely'));
-
-      const result = await processModule.execWithResult('command', {
-        throwOnError: false,
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.exitCode).toBe(null);
-      expect(result.stderr).toContain('Exec failed completely');
-    });
-
-    it('should throw unknown exec errors when throwOnError is true', async () => {
-      moxxy.exec.mock(() => {
-        throw new Error('Exec failed completely');
-      });
-
-      try {
-        await processModule.execWithResult('command', { throwOnError: true });
-        expect(true).toBe(false);
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('exec-error-unknown');
-      }
+  it('should handle exec failure with throwOnError disabled', async () => {
+    await __testExecResultScenario('failing-command', {
+      mockOptions: {
+        stdout: 'output',
+        stderr: 'error output',
+        exitCode: 1,
+      },
+      execOptions: { throwOnError: false },
+      expectedResult: {
+        success: false,
+        exitCode: 1,
+        stdout: 'output',
+        stderr: 'error output',
+      },
     });
   });
+
+  it('should handle exec failure with throwOnError enabled', async () => {
+    await __testExecResultScenario('failing-command', {
+      mockOptions: { exitCode: 1 },
+      execOptions: { throwOnError: true },
+      expectedResult: {
+        success: false,
+        exitCode: 1,
+      },
+    });
+  });
+
+  it('should handle streamOutput with colors', async () => {
+    let spawnCalled = false;
+    let spawnOptions: any = {};
+
+    moxxy.spawn.mock((cmdName: string, cmdArgs: string[], options: any) => {
+      spawnCalled = true;
+      spawnOptions = options;
+      return {
+        on: (event: string, handler: (...args: unknown[]) => void) => {
+          if (event === 'close') setTimeout(() => handler(0), 30);
+        },
+        kill: () => {},
+      };
+    });
+
+    const result = await processModule.execWithResult('echo test', {
+      streamOutput: true,
+      preserveColors: true,
+    });
+
+    expect(spawnCalled).toBe(true);
+    expect(spawnOptions.stdio).toBe('inherit');
+    expect(result.stdout).toBe('[streamed to console with colors]');
+    expect(result.stderr).toBe('[streamed to console with colors]');
+    expect(result.success).toBe(true);
+  });
+
+  it('should handle process timeout', async () => {
+    await __testTimeoutScenario(100, { type: 'Unknown', id: 'exec-error-unknown' });
+  });
+
+  it('should handle unknown exec errors gracefully', async () => {
+    moxxy.exec.mock(__createErrorMock('Exec failed completely'));
+
+    const result = await processModule.execWithResult('command', {
+      throwOnError: false,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.exitCode).toBe(null);
+    expect(result.stderr).toContain('Exec failed completely');
+  });
+
+  it('should throw unknown exec errors when throwOnError is true', async () => {
+    moxxy.exec.mock(() => {
+      throw new Error('Exec failed completely');
+    });
+
+    try {
+      await processModule.execWithResult('command', { throwOnError: true });
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('exec-error-unknown');
+    }
+  });
+});
 
 describe('cross-platform argument handling', () => {
   it('should handle commands without $@ placeholder', async () => {
@@ -559,12 +553,14 @@ describe('stream output modes', () => {
     let stdoutPipeCalled = false;
     let stderrPipeCalled = false;
 
-    moxxy.exec.mock(__createStreamingMock({
-      captureStreamingCalls: (stdout, stderr) => {
-        if (stdout) stdoutPipeCalled = true;
-        if (stderr) stderrPipeCalled = true;
-      },
-    }));
+    moxxy.exec.mock(
+      __createStreamingMock({
+        captureStreamingCalls: (stdout, stderr) => {
+          if (stdout) stdoutPipeCalled = true;
+          if (stderr) stderrPipeCalled = true;
+        },
+      })
+    );
 
     await processModule.execWithResult('echo test', {
       streamOutput: true,
@@ -579,18 +575,22 @@ describe('stream output modes', () => {
 
 describe('_exec backward compatibility', () => {
   it('should return stdout on success', async () => {
-    moxxy.exec.mock(__createExecMock({
-      stdout: 'success output',
-    }));
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'success output',
+      })
+    );
 
     const result = await processModule.exec('echo test');
     expect(result).toBe('success output');
   });
 
   it('should throw error on failure when throwOnError is true', async () => {
-    moxxy.exec.mock(__createExecMock({
-      exitCode: 1,
-    }));
+    moxxy.exec.mock(
+      __createExecMock({
+        exitCode: 1,
+      })
+    );
 
     try {
       await processModule.exec('failing-command', { throwOnError: true });
@@ -602,10 +602,12 @@ describe('_exec backward compatibility', () => {
   });
 
   it('should return stdout even on failure when throwOnError is false', async () => {
-    moxxy.exec.mock(__createExecMock({
-      stdout: 'output before failure',
-      exitCode: 1,
-    }));
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'output before failure',
+        exitCode: 1,
+      })
+    );
 
     const result = await processModule.exec('failing-command', { throwOnError: false });
     expect(result).toBe('output before failure');

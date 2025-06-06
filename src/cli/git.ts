@@ -124,7 +124,7 @@ async function __getLatestCommitFromLocal(url: string): Promise<string> {
 
 async function __getLatestCommitFromRemote(url: string): Promise<string> {
   const output = await __git(['ls-remote', url]);
-  
+
   if (!output) {
     throw kerror(kerror.type.Git, 'no-remote-refs', {
       message: 'Could not get remote refs from repository',
@@ -137,13 +137,13 @@ async function __getLatestCommitFromRemote(url: string): Promise<string> {
   const lines = __parseRemoteOutput(output, url);
   const headLine = __findHeadReference(lines, url);
   const latestCommit = __extractCommitHash(headLine, url);
-  
+
   return latestCommit;
 }
 
 function __parseRemoteOutput(output: string, url: string): string[] {
   const lines = output.split('\n').filter((line) => line.trim());
-  
+
   if (lines.length === 0) {
     throw kerror(kerror.type.Git, 'empty-remote-repository', {
       message: 'Repository appears to be empty',
@@ -152,13 +152,13 @@ function __parseRemoteOutput(output: string, url: string): string[] {
       },
     });
   }
-  
+
   return lines;
 }
 
 function __findHeadReference(lines: string[], url: string): string {
   const headLine = lines.find((line) => line.includes('HEAD'));
-  
+
   if (!headLine) {
     throw kerror(kerror.type.Git, 'no-remote-head-ref', {
       message: 'Could not find HEAD reference in repository',
@@ -167,13 +167,13 @@ function __findHeadReference(lines: string[], url: string): string {
       },
     });
   }
-  
+
   return headLine;
 }
 
 function __extractCommitHash(headLine: string, url: string): string {
   const latestCommit = headLine.split('HEAD')[0].trim();
-  
+
   if (!latestCommit || !__isValidHash(latestCommit)) {
     throw kerror(kerror.type.Git, 'invalid-remote-commit-hash', {
       message: 'Got invalid commit hash from repository',
@@ -183,7 +183,7 @@ function __extractCommitHash(headLine: string, url: string): string {
       },
     });
   }
-  
+
   return latestCommit;
 }
 

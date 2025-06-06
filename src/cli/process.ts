@@ -253,10 +253,10 @@ async function __execWithRegularOutput(
   env: Record<string, string>,
   config: ExecOptions
 ): Promise<ExecResult> {
-  const childProcess = exec(command, { 
-    cwd: config.cwd, 
-    env, 
-    timeout: config.timeout 
+  const childProcess = exec(command, {
+    cwd: config.cwd,
+    env,
+    timeout: config.timeout,
   });
 
   if (config.streamOutput) {

@@ -35,7 +35,7 @@ function __ensureDependenciesExist(dev: boolean) {
     __deps.dependencies = {};
     return;
   }
-  
+
   if (dev && !__deps.devDependencies) {
     __deps.devDependencies = {};
   }
@@ -48,15 +48,15 @@ function __getDependencyList(dev: boolean): Record<string, Dependency> {
 
 function __cleanDependencyProperties(dep: Dependency): Dependency {
   const cleanedDep = { ...dep };
-  
+
   if (__shouldRemoveFolder(dep)) {
     delete cleanedDep.folder;
   }
-  
+
   if (dep.extract === 'all') {
     delete cleanedDep.extract;
   }
-  
+
   return cleanedDep;
 }
 
@@ -64,10 +64,11 @@ function __shouldRemoveFolder(dep: Dependency): boolean {
   if (!dep.folder) {
     return false;
   }
-  
+
   const hasMatchingFolder = dep.folder === __deps.dependencyFolder;
-  const hasDefaultFolder = !__deps.dependencyFolder && dep.folder === defaults.depsfile.entry.dependencyFolder;
-  
+  const hasDefaultFolder =
+    !__deps.dependencyFolder && dep.folder === defaults.depsfile.entry.dependencyFolder;
+
   return hasMatchingFolder || hasDefaultFolder;
 }
 
