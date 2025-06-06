@@ -337,55 +337,55 @@ __print_high_level_summary() {
 }
 
 __generate_coverage_table() {
-    __collect_file_stats
-    __print_high_level_summary
-    __print_table_header
-    
-    local current_file=""
-    local uncovered_lines=()
-    local file_lines_found=0
-    local file_lines_hit=0
-    local entry_count=0
-    local total_entries=${#all_files[@]}
-    
-    while IFS= read -r line; do
-        if __process_lcov_line "$line" current_file uncovered_lines file_lines_found file_lines_hit; then
-            continue
-        fi
-        
-        # End of record reached
-        entry_count=$((entry_count + 1))
-        local is_last_entry="false"
-        if [ "$entry_count" -eq "$total_entries" ]; then
-            is_last_entry="true"
-        fi
-        
-        __process_file_record "$current_file" "$file_lines_found" "$file_lines_hit" "uncovered_lines" "$is_last_entry"
-        
-        # Reset for next file
-        current_file=""
-        file_lines_found=0
-        file_lines_hit=0
-        uncovered_lines=()
-    done < "$LCOV_FILE"
-    
-    __print_table_footer
+  __collect_file_stats
+  __print_high_level_summary
+  __print_table_header
+
+  local current_file=""
+  local uncovered_lines=()
+  local file_lines_found=0
+  local file_lines_hit=0
+  local entry_count=0
+  local total_entries=${#all_files[@]}
+
+  while IFS= read -r line; do
+    if __process_lcov_line "$line" current_file uncovered_lines file_lines_found file_lines_hit; then
+      continue
+    fi
+
+    # End of record reached
+    entry_count=$((entry_count + 1))
+    local is_last_entry="false"
+    if [ "$entry_count" -eq "$total_entries" ]; then
+        is_last_entry="true"
+    fi
+
+    __process_file_record "$current_file" "$file_lines_found" "$file_lines_hit" "uncovered_lines" "$is_last_entry"
+
+    # Reset for next file
+    current_file=""
+    file_lines_found=0
+    file_lines_hit=0
+    uncovered_lines=()
+  done < "$LCOV_FILE"
+
+  __print_table_footer
 }
 
 __display_coverage_report() {
-    echo ""
-    
-    if [ ! -f "$LCOV_FILE" ]; then
-        echo "⚠️  No filtered coverage file found"
-        return 1
-    fi
-    
-    if ! __calculate_overall_coverage; then
-        return 1
-    fi
-    
-    __generate_coverage_table
-    return 0
+  echo ""
+
+  if [ ! -f "$LCOV_FILE" ]; then
+      echo "⚠️  No filtered coverage file found"
+      return 1
+  fi
+
+  if ! __calculate_overall_coverage; then
+      return 1
+  fi
+
+  __generate_coverage_table
+  return 0
 }
 
 __cleanup_temp_files() {
@@ -393,13 +393,13 @@ __cleanup_temp_files() {
 }
 
 __print_completion_message() {
-    echo ""
-    echo "✅ Tests passed and filtered coverage report generated!"
-    echo "📁 Full LCOV report available in: coverage/typescript/"
-    
-    if [ ! -d "coverage/typescript" ]; then
-        echo "⚠️  Warning: Coverage directory not created - check LCOV generation"
-    fi
+  echo ""
+  echo "✅ Tests passed and filtered coverage report generated!"
+  echo "📁 Full LCOV report available in: coverage/typescript/"
+
+  if [ ! -d "coverage/typescript" ]; then
+      echo "⚠️  Warning: Coverage directory not created - check LCOV generation"
+  fi
 }
 
 # Main execution flow
