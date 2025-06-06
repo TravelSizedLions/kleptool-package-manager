@@ -84,6 +84,16 @@ export async function repositoryStat(url: string): Promise<RepositoryStat> {
 
 export async function getLatestCommit(url: string) {
   const repo = await repositoryStat(url);
+  __validateRepository(repo, url);
+
+  if (repo.isLocal) {
+    return await __getLatestCommitFromLocal(url);
+  }
+
+  return await __getLatestCommitFromRemote(url);
+}
+
+function __validateRepository(repo: RepositoryStat | null, url: string) {
   if (!repo) {
     throw kerror(kerror.type.Argument, 'invalid-repository', {
       message: 'Could not get repository information',
@@ -92,27 +102,29 @@ export async function getLatestCommit(url: string) {
       },
     });
   }
+}
 
-  if (repo.isLocal) {
-    const repo = await simpleGit(url);
-    const commits = await repo.log();
+async function __getLatestCommitFromLocal(url: string): Promise<string> {
+  const repo = await simpleGit(url);
+  const commits = await repo.log();
 
-    try {
-      if (!commits.latest) {
-        throw kerror(kerror.type.Git, 'empty-local-repository', {
-          message: 'Repository appears to be empty',
-        });
-      }
-      return commits.latest.hash;
-    } catch {
+  try {
+    if (!commits.latest) {
       throw kerror(kerror.type.Git, 'empty-local-repository', {
         message: 'Repository appears to be empty',
       });
     }
+    return commits.latest.hash;
+  } catch {
+    throw kerror(kerror.type.Git, 'empty-local-repository', {
+      message: 'Repository appears to be empty',
+    });
   }
+}
 
-  // Handle remote repositories more carefully
+async function __getLatestCommitFromRemote(url: string): Promise<string> {
   const output = await __git(['ls-remote', url]);
+  
   if (!output) {
     throw kerror(kerror.type.Git, 'no-remote-refs', {
       message: 'Could not get remote refs from repository',
@@ -122,7 +134,16 @@ export async function getLatestCommit(url: string) {
     });
   }
 
+  const lines = __parseRemoteOutput(output, url);
+  const headLine = __findHeadReference(lines, url);
+  const latestCommit = __extractCommitHash(headLine, url);
+  
+  return latestCommit;
+}
+
+function __parseRemoteOutput(output: string, url: string): string[] {
   const lines = output.split('\n').filter((line) => line.trim());
+  
   if (lines.length === 0) {
     throw kerror(kerror.type.Git, 'empty-remote-repository', {
       message: 'Repository appears to be empty',
@@ -131,8 +152,13 @@ export async function getLatestCommit(url: string) {
       },
     });
   }
+  
+  return lines;
+}
 
+function __findHeadReference(lines: string[], url: string): string {
   const headLine = lines.find((line) => line.includes('HEAD'));
+  
   if (!headLine) {
     throw kerror(kerror.type.Git, 'no-remote-head-ref', {
       message: 'Could not find HEAD reference in repository',
@@ -141,8 +167,13 @@ export async function getLatestCommit(url: string) {
       },
     });
   }
+  
+  return headLine;
+}
 
+function __extractCommitHash(headLine: string, url: string): string {
   const latestCommit = headLine.split('HEAD')[0].trim();
+  
   if (!latestCommit || !__isValidHash(latestCommit)) {
     throw kerror(kerror.type.Git, 'invalid-remote-commit-hash', {
       message: 'Got invalid commit hash from repository',
@@ -152,7 +183,7 @@ export async function getLatestCommit(url: string) {
       },
     });
   }
-
+  
   return latestCommit;
 }
 

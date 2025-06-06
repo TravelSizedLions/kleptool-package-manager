@@ -24,26 +24,51 @@ export function save() {
 }
 
 export function addDependency(name: string, dep: Dependency, dev: boolean = false) {
+  __ensureDependenciesExist(dev);
+  const depslist = __getDependencyList(dev);
+  const cleanedDep = __cleanDependencyProperties(dep);
+  depslist![name] = cleanedDep;
+}
+
+function __ensureDependenciesExist(dev: boolean) {
   if (!dev && !__deps.dependencies) {
     __deps.dependencies = {};
-  } else if (dev && !__deps.devDependencies) {
+    return;
+  }
+  
+  if (dev && !__deps.devDependencies) {
     __deps.devDependencies = {};
   }
+}
 
-  const depslist = dev ? __deps.devDependencies : __deps.dependencies;
+function __getDependencyList(dev: boolean): Record<string, Dependency> {
+  const list = dev ? __deps.devDependencies : __deps.dependencies;
+  return list!; // We know it exists because __ensureDependenciesExist was called
+}
 
-  if (
-    (dep.folder && __deps.dependencyFolder === dep.folder) ||
-    (!__deps.dependencyFolder && dep.folder === defaults.depsfile.entry.dependencyFolder)
-  ) {
-    delete dep.folder;
+function __cleanDependencyProperties(dep: Dependency): Dependency {
+  const cleanedDep = { ...dep };
+  
+  if (__shouldRemoveFolder(dep)) {
+    delete cleanedDep.folder;
   }
-
+  
   if (dep.extract === 'all') {
-    delete dep.extract;
+    delete cleanedDep.extract;
   }
+  
+  return cleanedDep;
+}
 
-  depslist![name] = dep;
+function __shouldRemoveFolder(dep: Dependency): boolean {
+  if (!dep.folder) {
+    return false;
+  }
+  
+  const hasMatchingFolder = dep.folder === __deps.dependencyFolder;
+  const hasDefaultFolder = !__deps.dependencyFolder && dep.folder === defaults.depsfile.entry.dependencyFolder;
+  
+  return hasMatchingFolder || hasDefaultFolder;
 }
 
 function exists(name: string, dep: Dependency): boolean {

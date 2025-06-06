@@ -208,73 +208,93 @@ function __prepareColorEnvironment(
 // Regular shell command execution with full result
 export async function execWithResult(cmd: string, options: ExecOptions = {}): Promise<ExecResult> {
   try {
-    const { args, cwd, env, timeout, streamOutput, preserveColors } = {
-      ...defaultExecOptions,
-      ...options,
-    };
-
-    const command = __withCrossPlatformArgs(cmd, args || []);
+    const config = { ...defaultExecOptions, ...options };
+    const command = __withCrossPlatformArgs(cmd, config.args || []);
     const enhancedEnv = __prepareColorEnvironment(
-      env || {},
-      Boolean(preserveColors || streamOutput)
+      config.env || {},
+      Boolean(config.preserveColors || config.streamOutput)
     );
 
-    if (streamOutput && preserveColors) {
-      const [cmdName, ...cmdArgs] = command.split(' ');
-      const childProcess = spawn(cmdName, cmdArgs, {
-        cwd,
-        env: enhancedEnv,
-        stdio: 'inherit',
-        shell: true,
-      });
-
-      const { code } = await __handleProcessCompletion(childProcess, command, timeout);
-
-      return {
-        stdout: '[streamed to console with colors]',
-        stderr: '[streamed to console with colors]',
-        success: code === 0,
-        exitCode: code,
-      };
+    if (config.streamOutput && config.preserveColors) {
+      return await __execWithColorStreaming(command, enhancedEnv, config);
     }
 
-    const childProcess = exec(command, { cwd, env: enhancedEnv, timeout });
-
-    if (streamOutput) {
-      childProcess.stdout?.pipe(process.stdout);
-      childProcess.stderr?.pipe(process.stderr);
-    }
-
-    const [stdout, stderr, { code }] = await Promise.all([
-      __receive(childProcess.stdout as Stream.Readable),
-      __receive(childProcess.stderr as Stream.Readable),
-      __handleProcessCompletion(childProcess, command, timeout),
-    ]);
-
-    return {
-      stdout,
-      stderr,
-      success: code === 0,
-      exitCode: code,
-    };
+    return await __execWithRegularOutput(command, enhancedEnv, config);
   } catch (e) {
-    if (options.throwOnError && e instanceof Error) {
-      throw kerror(kerror.Unknown, 'exec-error-unknown', {
-        message: `Command "${cmd}" failed with unknown error`,
-        context: {
-          command: cmd,
-          error: e instanceof Error ? e.stack : `Unknown error ${e}`,
-        },
-      });
-    }
-
-    return {
-      stdout: '',
-      stderr: e instanceof Error ? e.message : String(e),
-      success: false,
-      exitCode: null,
-    };
+    return __handleExecError(cmd, e, options.throwOnError);
   }
+}
+
+async function __execWithColorStreaming(
+  command: string,
+  env: Record<string, string>,
+  config: ExecOptions
+): Promise<ExecResult> {
+  const [cmdName, ...cmdArgs] = command.split(' ');
+  const childProcess = spawn(cmdName, cmdArgs, {
+    cwd: config.cwd,
+    env,
+    stdio: 'inherit',
+    shell: true,
+  });
+
+  const { code } = await __handleProcessCompletion(childProcess, command, config.timeout);
+
+  return {
+    stdout: '[streamed to console with colors]',
+    stderr: '[streamed to console with colors]',
+    success: code === 0,
+    exitCode: code,
+  };
+}
+
+async function __execWithRegularOutput(
+  command: string,
+  env: Record<string, string>,
+  config: ExecOptions
+): Promise<ExecResult> {
+  const childProcess = exec(command, { 
+    cwd: config.cwd, 
+    env, 
+    timeout: config.timeout 
+  });
+
+  if (config.streamOutput) {
+    childProcess.stdout?.pipe(process.stdout);
+    childProcess.stderr?.pipe(process.stderr);
+  }
+
+  const [stdout, stderr, { code }] = await Promise.all([
+    __receive(childProcess.stdout as Stream.Readable),
+    __receive(childProcess.stderr as Stream.Readable),
+    __handleProcessCompletion(childProcess, command, config.timeout),
+  ]);
+
+  return {
+    stdout,
+    stderr,
+    success: code === 0,
+    exitCode: code,
+  };
+}
+
+function __handleExecError(cmd: string, error: unknown, throwOnError?: boolean): ExecResult {
+  if (throwOnError && error instanceof Error) {
+    throw kerror(kerror.Unknown, 'exec-error-unknown', {
+      message: `Command "${cmd}" failed with unknown error`,
+      context: {
+        command: cmd,
+        error: error instanceof Error ? error.stack : `Unknown error ${error}`,
+      },
+    });
+  }
+
+  return {
+    stdout: '',
+    stderr: error instanceof Error ? error.message : String(error),
+    success: false,
+    exitCode: null,
+  };
 }
 
 // Regular shell command execution (backward compatibility)
