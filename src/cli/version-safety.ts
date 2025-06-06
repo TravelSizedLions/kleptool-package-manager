@@ -6,7 +6,7 @@ export type VersionSafetyLevel = {
   description: string;
 };
 
-export const VERSION_SAFETY_LEVELS: Record<VersionType, VersionSafetyLevel=== = {
+export const VERSION_SAFETY_LEVELS: Record<VersionType, VersionSafetyLevel> = {
   semver: {
     level: 4,
     type: 'semver',
