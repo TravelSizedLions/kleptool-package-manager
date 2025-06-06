@@ -40,23 +40,6 @@ function __createProcessExecMock(
   }
 }
 
-async function __testRepositoryType(
-  repoPath: string,
-  isLocalRepo: boolean,
-  localMockOptions: Parameters<typeof __createSimpleGitMock>[0] = {},
-  processMockOptions: Parameters<typeof __createProcessExecMock>[0] = {}
-) {
-  if (isLocalRepo) {
-    moxxy.simpleGit.mock(__createSimpleGitMock(localMockOptions));
-    moxxy.process.exec.mock(__createProcessExecMock({ shouldResolve: false }));
-  } else {
-    moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
-    moxxy.process.exec.mock(__createProcessExecMock(processMockOptions));
-  }
-
-  return isLocalRepo ? git.isLocalRepository(repoPath) : git.isRemoteRepository(repoPath);
-}
-
 describe('debug', () => {
   it('should show what moxxy can see', () => {
     console.log('Moxxy object:', Object.getOwnPropertyNames(moxxy));
@@ -91,22 +74,20 @@ describe('debug', () => {
 
 describe('isRemoteRepository', () => {
   it('should return true for valid remote repository', async () => {
-    const result = await __testRepositoryType(
-      'https://github.com/user/repo.git',
-      false,
-      {},
-      { shouldResolve: true, output: 'some-output' }
+    moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
+    moxxy.process.exec.mock(
+      __createProcessExecMock({ shouldResolve: true, output: 'some-output' })
     );
+
+    const result = await git.isRemoteRepository('https://github.com/user/repo.git');
     expect(result).toBe(true);
   });
 
   it('should return false for invalid remote repository', async () => {
-    const result = await __testRepositoryType(
-      'invalid-url',
-      false,
-      {},
-      { shouldResolve: false, error: 'Not found' }
-    );
+    moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
+    moxxy.process.exec.mock(__createProcessExecMock({ shouldResolve: false, error: 'Not found' }));
+
+    const result = await git.isRemoteRepository('invalid-url');
     expect(result).toBe(false);
   });
 });

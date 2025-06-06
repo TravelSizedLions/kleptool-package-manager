@@ -55,10 +55,10 @@ fn __find_functions(
     functions.push(metrics);
   }
 
-  __traverse_children_for_functions(cursor, source_code, function_node_types, functions);
+  __traverse(cursor, source_code, function_node_types, functions);
 }
 
-fn __traverse_children_for_functions(
+fn __traverse(
   cursor: &mut TreeCursor,
   source_code: &str,
   function_node_types: &[&str],

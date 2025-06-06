@@ -134,11 +134,7 @@ async function __getLatestCommitFromRemote(url: string): Promise<string> {
     });
   }
 
-  const lines = __parseRemoteOutput(output, url);
-  const headLine = __findHeadReference(lines, url);
-  const latestCommit = __extractCommitHash(headLine, url);
-
-  return latestCommit;
+  return __extractCommitHash(__findHeadReference(__parseRemoteOutput(output, url), url), url);
 }
 
 function __parseRemoteOutput(output: string, url: string): string[] {

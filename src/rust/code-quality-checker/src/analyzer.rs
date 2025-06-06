@@ -1,4 +1,3 @@
-// quality-ignore max-nesting-depth file
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::fs;
@@ -29,11 +28,11 @@ pub fn analyze_path(path: &Path, config: &AnalysisConfig) -> Result<()> {
   }
 
   if path.is_file() {
-    return analyze_file(path, config);
+    return __analyze_file(path, config);
   }
 
   if path.is_dir() {
-    return analyze_directory(path, config);
+    return __analyze_directory(path, config);
   }
 
   Err(anyhow!(
@@ -42,7 +41,7 @@ pub fn analyze_path(path: &Path, config: &AnalysisConfig) -> Result<()> {
   ))
 }
 
-fn analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
+fn __analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
   for entry in fs::read_dir(dir)? {
     let entry = entry?;
     let path = entry.path();
@@ -51,7 +50,7 @@ fn analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
       if __should_skip_directory(&path) {
         continue;
       }
-      analyze_directory(&path, config)?;
+      __analyze_directory(&path, config)?;
       continue;
     }
 
@@ -62,7 +61,7 @@ fn analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
   Ok(())
 }
 
-fn analyze_file(file_path: &Path, config: &AnalysisConfig) -> Result<()> {
+fn __analyze_file(file_path: &Path, config: &AnalysisConfig) -> Result<()> {
   let extension = __get_file_extension(file_path)?;
   let language = __get_language_for_file(extension)?;
   let function_node_types = get_function_node_types(extension);
@@ -95,7 +94,7 @@ fn __try_analyze_file(path: &Path, config: &AnalysisConfig) {
     return;
   }
 
-  if let Err(e) = analyze_file(path, config) {
+  if let Err(e) = __analyze_file(path, config) {
     eprintln!("Warning: Failed to analyze {}: {}", path.display(), e);
   }
 }
@@ -251,7 +250,6 @@ fn __check_complexity_violation(
   });
 }
 
-// quality-ignore max-nesting-depth
 fn __parse_ignore_directives(source_code: &str) -> IgnoreDirectives {
   let mut directives = IgnoreDirectives::default();
 
@@ -303,52 +301,49 @@ struct AllowDirective {
   is_file_level: bool,
 }
 
-// quality-ignore max-nesting-depth
 fn __parse_quality_ignore(line: &str) -> Option<IgnoreDirective> {
   let trimmed = line.trim();
 
   // Look for patterns like: // quality-ignore max-complexity
-  if let Some(comment_start) = trimmed.find("//") {
-    let comment = &trimmed[comment_start + 2..].trim();
-    if let Some(directive_start) = comment.find("quality-ignore") {
-      let directive_part = &comment[directive_start + 14..].trim(); // "quality-ignore".len() = 14
-      let parts: Vec<&str> = directive_part.split_whitespace().collect();
+  let comment_start = trimmed.find("//")?;
+  let comment = &trimmed[comment_start + 2..].trim();
 
-      if !parts.is_empty() {
-        return Some(IgnoreDirective {
-          rule: parts[0].to_string(),
-          is_file_level: parts.contains(&"file"),
-        });
-      }
-    }
+  let directive_start = comment.find("quality-ignore")?;
+  let directive_part = &comment[directive_start + 14..].trim(); // "quality-ignore".len() = 14
+  let parts: Vec<&str> = directive_part.split_whitespace().collect();
+
+  if parts.is_empty() {
+    return None;
   }
 
-  None
+  Some(IgnoreDirective {
+    rule: parts[0].to_string(),
+    is_file_level: parts.contains(&"file"),
+  })
 }
 
 fn __parse_quality_allow(line: &str) -> Option<AllowDirective> {
   let trimmed = line.trim();
 
   // Look for patterns like: // quality-allow max-complexity 15 [file]
-  if let Some(comment_start) = trimmed.find("//") {
-    let comment = &trimmed[comment_start + 2..].trim();
-    if let Some(directive_start) = comment.find("quality-allow") {
-      let directive_part = &comment[directive_start + 13..].trim(); // "quality-allow".len() = 13
-      let parts: Vec<&str> = directive_part.split_whitespace().collect();
+  let comment_start = trimmed.find("//")?;
+  let comment = &trimmed[comment_start + 2..].trim();
 
-      if parts.len() >= 2 {
-        if let Ok(new_value) = parts[1].parse::<usize>() {
-          return Some(AllowDirective {
-            rule: parts[0].to_string(),
-            new_value,
-            is_file_level: parts.contains(&"file"),
-          });
-        }
-      }
-    }
+  let directive_start = comment.find("quality-allow")?;
+  let directive_part = &comment[directive_start + 13..].trim(); // "quality-allow".len() = 13
+  let parts: Vec<&str> = directive_part.split_whitespace().collect();
+
+  if parts.len() < 2 {
+    return None;
   }
 
-  None
+  let new_value = parts[1].parse::<usize>().ok()?;
+
+  Some(AllowDirective {
+    rule: parts[0].to_string(),
+    new_value,
+    is_file_level: parts.contains(&"file"),
+  })
 }
 
 fn __should_ignore_violation(

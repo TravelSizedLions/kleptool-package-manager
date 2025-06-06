@@ -1,4 +1,3 @@
-// quality-ignore max-cyclomatic-complexity file
 import { describe, it, expect, beforeEach } from 'bun:test';
 import rustClient from './rust-client.ts';
 import kerror from './kerror.ts';
@@ -35,7 +34,7 @@ function __createProcessMock(ipcResult: string | undefined) {
   };
 }
 
-function __createStandardMocks(
+function __createMocks(
   ipcResult?: string | undefined,
   globbyResult = [{ name: 'bin-test--api', path: '/test/path' }]
 ) {
@@ -54,9 +53,9 @@ function __createStandardMocks(
   return processMock;
 }
 
-function __setupStandardTest(ipcResult?: string | undefined) {
+function __setupTest(ipcResult?: string | undefined) {
   // Pass arguments directly to preserve argument presence
-  const mocks = arguments.length === 0 ? __createStandardMocks() : __createStandardMocks(ipcResult);
+  const mocks = arguments.length === 0 ? __createMocks() : __createMocks(ipcResult);
   return {
     getClient: () => rustClient(),
     getCapturedCommand: mocks.getCapturedCommand,
@@ -66,7 +65,7 @@ function __setupStandardTest(ipcResult?: string | undefined) {
 
 function __testProcessOutput(ipcResult: string | undefined, expectedResult: any, testData?: any) {
   return async () => {
-    const { getClient, getCapturedCommand, getCapturedOptions } = __setupStandardTest(ipcResult);
+    const { getClient, getCapturedCommand, getCapturedOptions } = __setupTest(ipcResult);
 
     const client = await getClient();
     const result = testData ? await client.test.api(testData) : await client.test.api();
@@ -84,7 +83,7 @@ function __testProcessOutput(ipcResult: string | undefined, expectedResult: any,
 
 function __testErrorScenario(ipcResult: string, expectedErrorId: string) {
   return async () => {
-    const { getClient } = __setupStandardTest(ipcResult);
+    const { getClient } = __setupTest(ipcResult);
 
     const client = await getClient();
 
@@ -135,16 +134,20 @@ beforeEach(() => {
   rustClient.__reset__();
 });
 
+// quality-ignore max-cyclomatic-complexity
 describe('__createDispatcher()', () => {
+  // quality-ignore max-cyclomatic-complexity
   describe('process output', () => {
+    // quality-ignore max-cyclomatic-complexity
     it('handles defined blobs', async () => {
       const testData = { test: 'data' };
       await __testProcessOutput('{"result": "success"}', testData, testData);
     });
 
+    // quality-ignore max-cyclomatic-complexity
     it('handles undefined blobs', async () => {
       const { getClient, getCapturedCommand, getCapturedOptions } =
-        __setupStandardTest('{"result": "success"}');
+        __setupTest('{"result": "success"}');
 
       const client = await getClient();
       await client.test.api();
@@ -153,8 +156,9 @@ describe('__createDispatcher()', () => {
       expect(getCapturedOptions()).toEqual({ data: '' });
     });
 
+    // quality-ignore max-cyclomatic-complexity
     it('handles undefined process output', async () => {
-      const { getClient } = __setupStandardTest(undefined);
+      const { getClient } = __setupTest(undefined);
 
       const client = await getClient();
       const result = await client.test.api();
@@ -163,7 +167,7 @@ describe('__createDispatcher()', () => {
     });
 
     it('handles empty string process output', async () => {
-      const { getClient } = __setupStandardTest('');
+      const { getClient } = __setupTest('');
 
       const client = await getClient();
       const result = await client.test.api();
@@ -172,7 +176,7 @@ describe('__createDispatcher()', () => {
     });
 
     it('handles whitespace process output', async () => {
-      const { getClient } = __setupStandardTest('   \n\t  ');
+      const { getClient } = __setupTest('   \n\t  ');
 
       const client = await getClient();
       const result = await client.test.api();
@@ -202,6 +206,7 @@ describe('__createDispatcher()', () => {
   });
 });
 
+// quality-ignore max-cyclomatic-complexity
 describe('__getBinarySearchPaths()', () => {
   describe('development binaries', () => {
     it('includes development binaries if they exist', async () => {
@@ -297,6 +302,7 @@ describe('__getRustBinaries()', () => {
     expect(client.module2.api2).toBeDefined();
   });
 
+  // quality-ignore max-cyclomatic-complexity
   it('throws no-rust-binaries-found error when no binaries are found', async () => {
     __setupModuleTest([]);
 
@@ -422,6 +428,7 @@ describe('__addHelp()', () => {
   });
 });
 
+// quality-ignore max-cyclomatic-complexity
 describe('singleton', () => {
   describe('initialization', () => {
     it('constructs a backend if one does not already exist', async () => {
@@ -473,6 +480,7 @@ describe('singleton', () => {
       }
     });
 
+    // quality-ignore max-cyclomatic-complexity
     it('creates a KlepError from a generic Error if the backend is not found', async () => {
       const genericError = new Error('Some generic error');
       moxxy.existsSync.mock(() => {

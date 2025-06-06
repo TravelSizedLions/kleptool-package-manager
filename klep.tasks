@@ -42,10 +42,10 @@
   coverage: "klep ts:coverage && klep rust:coverage",
 
   // Check code quality (never-nester principles)
-  quality: "klep quality:check",
+  quality: "cd src/rust && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10",
 
-  // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep quality && klep test && klep test:win',
+  // Simulate a CI pipeline  
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',

@@ -24,13 +24,13 @@ export function save() {
 }
 
 export function addDependency(name: string, dep: Dependency, dev: boolean = false) {
-  __ensureDependenciesExist(dev);
+  __ensureDependencyProps(dev);
   const depslist = __getDependencyList(dev);
-  const cleanedDep = __cleanDependencyProperties(dep);
+  const cleanedDep = __cleanDependency(dep);
   depslist![name] = cleanedDep;
 }
 
-function __ensureDependenciesExist(dev: boolean) {
+function __ensureDependencyProps(dev: boolean) {
   if (!dev && !__deps.dependencies) {
     __deps.dependencies = {};
     return;
@@ -43,10 +43,10 @@ function __ensureDependenciesExist(dev: boolean) {
 
 function __getDependencyList(dev: boolean): Record<string, Dependency> {
   const list = dev ? __deps.devDependencies : __deps.dependencies;
-  return list!; // We know it exists because __ensureDependenciesExist was called
+  return list!; // We know it exists because __ensureDependencyProps was called
 }
 
-function __cleanDependencyProperties(dep: Dependency): Dependency {
+function __cleanDependency(dep: Dependency): Dependency {
   const cleanedDep = { ...dep };
 
   if (__shouldRemoveFolder(dep)) {

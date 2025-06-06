@@ -406,11 +406,33 @@ function __isMoxxySystemFile(normalizedPath: string, content: string): boolean {
   );
 }
 
+function __isRunningTests(): boolean {
+  // Check if bun is running tests by looking for test-related indicators
+  const isTestCommand = process.argv.some(
+    (arg) =>
+      arg === 'test' || arg.includes('bun:test') || arg.includes('.spec.') || arg.includes('.test.')
+  );
+
+  // Check for test-related environment variables that bun sets
+  const isTestEnvironment =
+    process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test' || !!process.env.IS_BUN_TEST;
+
+  // Check if we're in a bun test runner context
+  const isBunTestRunner =
+    typeof Bun !== 'undefined' && (globalThis as unknown as { test?: unknown }).test !== undefined;
+
+  return isTestCommand || isTestEnvironment || isBunTestRunner;
+}
+
 function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
   const normalizedPath = args.path.replace(/\\/g, '/');
 
   if (__isMoxxySystemFile(normalizedPath, content)) return true;
   if (__isMainEntryPoint(normalizedPath)) return true;
+
+  // Skip transformation if we're not actually running tests
+  // This allows static analysis tools to analyze the original source code
+  if (!__isRunningTests()) return true;
 
   const isTestFile = __isTestFile(normalizedPath);
   const isInTestingDirectory = __isInTestingDirectory(normalizedPath);
@@ -714,21 +736,25 @@ function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, stri
 // Primitive Usage Replacement Helper Functions
 // ============================================================================
 
-// quality-ignore max-cyclomatic-complexity
 function __shouldSkipLine(line: string): boolean {
-  return (
-    line.includes('__moxxy__') ||
-    line.includes(MOXXY_COMMENT) ||
-    line.includes(TYPE_COLON) ||
-    line.includes(ANGLE_OPEN) ||
-    line.includes(ANGLE_CLOSE) ||
-    line.includes(INTERFACE_KEYWORD) ||
-    line.includes(TYPE_KEYWORD) ||
-    line.includes(PROMISE_TYPE) ||
-    line.includes(ARRAY_TYPE) ||
-    line.trim().startsWith(COMMENT_ASTERISK) ||
-    line.trim().startsWith(COMMENT_DOUBLE_SLASH)
-  );
+  const skipPatterns = [
+    '__moxxy__',
+    MOXXY_COMMENT,
+    TYPE_COLON,
+    ANGLE_OPEN,
+    ANGLE_CLOSE,
+    INTERFACE_KEYWORD,
+    TYPE_KEYWORD,
+    PROMISE_TYPE,
+    ARRAY_TYPE,
+  ];
+
+  if (skipPatterns.some((pattern) => line.includes(pattern))) {
+    return true;
+  }
+
+  const trimmed = line.trim();
+  return trimmed.startsWith(COMMENT_ASTERISK) || trimmed.startsWith(COMMENT_DOUBLE_SLASH);
 }
 
 function __transformConstantUsage(line: string, constantName: string): string {
