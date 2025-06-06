@@ -315,27 +315,28 @@ describe('process', () => {
         stdio: [
           { write: () => {}, end: () => {} }, // stdin
           null, // stdout (inherit)
-          null, // stderr (inherit)  
-          { // fd3
+          null, // stderr (inherit)
+          {
+            // fd3
             on: (event: string, handler: (...args: unknown[]) => void) => {
               if (event === 'data') {
                 setTimeout(() => handler('IPC response data'), 10);
               } else if (event === 'end') {
                 setTimeout(() => handler(), 20);
               }
-            }
-          }
+            },
+          },
         ],
         stdin: { write: () => {}, end: () => {} },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(0), 30);
         },
-        kill: () => {}
+        kill: () => {},
       }));
 
       const result = await processModule.ipc('test-command', {
         data: 'input data',
-        args: ['arg1', 'arg2']
+        args: ['arg1', 'arg2'],
       });
 
       expect(result).toBe('IPC response data');
@@ -350,79 +351,76 @@ describe('process', () => {
           {
             on: (event: string, handler: (...args: unknown[]) => void) => {
               if (event === 'end') setTimeout(() => handler(), 20);
-            }
-          }
+            },
+          },
         ],
         stdin: { write: () => {}, end: () => {} },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(1), 30); // Non-zero exit
         },
-        kill: () => {}
+        kill: () => {},
       }));
 
-             try {
-         await processModule.ipc('failing-command');
-         expect(true).toBe(false); // Should not reach here
-       } catch (error: any) {
-         expect(error.type).toBe('Unknown');
-         expect(error.id).toBe('ipc-error-unknown');
+      try {
+        await processModule.ipc('failing-command');
+        expect(true).toBe(false); // Should not reach here
+      } catch (error: any) {
+        expect(error.type).toBe('Unknown');
+        expect(error.id).toBe('ipc-error-unknown');
       }
     });
 
     it('should handle IPC with timeout', async () => {
       let killCalled = false;
-      
+
       moxxy.spawn.mock(() => ({
         stdio: [
           { write: () => {}, end: () => {} },
           null,
           null,
           {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
+            on: () => {
               // Never call the handlers - simulate hanging process
-            }
-          }
+            },
+          },
         ],
         stdin: { write: () => {}, end: () => {} },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
+        on: () => {
           // Simulate process that never exits
         },
-        kill: () => { killCalled = true; }
+        kill: () => {
+          killCalled = true;
+        },
       }));
 
-             try {
-         await processModule.ipc('hanging-command', { timeout: 100 });
-         expect(true).toBe(false); // Should not reach here
-       } catch (error: any) {
-         expect(error.type).toBe('Unknown');
-         expect(error.id).toBe('ipc-error-unknown');
+      try {
+        await processModule.ipc('hanging-command', { timeout: 100 });
+        expect(true).toBe(false); // Should not reach here
+      } catch (error: any) {
+        expect(error.type).toBe('Unknown');
+        expect(error.id).toBe('ipc-error-unknown');
         expect(killCalled).toBe(true);
       }
     });
 
     it('should handle IPC process errors', async () => {
       moxxy.spawn.mock(() => ({
-        stdio: [
-          { write: () => {}, end: () => {} },
-          null,
-          null,
-          { on: () => {} }
-        ],
+        stdio: [{ write: () => {}, end: () => {} }, null, null, { on: () => {} }],
         stdin: { write: () => {}, end: () => {} },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'error') {
             setTimeout(() => handler(new Error('Process spawn failed')), 10);
           }
         },
-        kill: () => {}
+        kill: () => {},
       }));
 
       try {
         await processModule.ipc('invalid-command');
         expect(true).toBe(false); // Should not reach here
-             } catch (error: any) {
-         expect(error.type).toBe('Unknown');
-         expect(error.id).toBe('ipc-error-unknown');
+      } catch (error: any) {
+        expect(error.type).toBe('Unknown');
+        expect(error.id).toBe('ipc-error-unknown');
       }
     });
 
@@ -449,24 +447,24 @@ describe('process', () => {
             if (event === 'data') setTimeout(() => handler('output'), 10);
             else if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         stderr: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'data') setTimeout(() => handler('error output'), 10);
             else if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(1), 30); // Non-zero exit
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => {}
+        kill: () => {},
       }));
 
       const result = await processModule.execWithResult('failing-command', {
-        throwOnError: false
+        throwOnError: false,
       });
 
       expect(result.success).toBe(false);
@@ -481,19 +479,19 @@ describe('process', () => {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         stderr: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(1), 30);
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => {}
+        kill: () => {},
       }));
 
       const result = await processModule.execWithResult('failing-command', { throwOnError: true });
@@ -504,7 +502,7 @@ describe('process', () => {
     it('should handle streamOutput with colors', async () => {
       let spawnCalled = false;
       let spawnOptions: any = {};
-      
+
       moxxy.spawn.mock((cmdName: string, cmdArgs: string[], options: any) => {
         spawnCalled = true;
         spawnOptions = options;
@@ -512,13 +510,13 @@ describe('process', () => {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'close') setTimeout(() => handler(0), 30);
           },
-          kill: () => {}
+          kill: () => {},
         };
       });
 
       const result = await processModule.execWithResult('echo test', {
         streamOutput: true,
-        preserveColors: true
+        preserveColors: true,
       });
 
       expect(spawnCalled).toBe(true);
@@ -530,26 +528,28 @@ describe('process', () => {
 
     it('should handle process timeout', async () => {
       let killCalled = false;
-      
+
       moxxy.exec.mock(() => ({
         stdout: { on: () => {}, pipe: () => {} },
         stderr: { on: () => {}, pipe: () => {} },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
+        on: () => {
           // Never call close - simulate hanging process
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => { killCalled = true; }
+        kill: () => {
+          killCalled = true;
+        },
       }));
 
       try {
-        await processModule.execWithResult('hanging-command', { 
+        await processModule.execWithResult('hanging-command', {
           timeout: 100,
-          throwOnError: true 
+          throwOnError: true,
         });
         expect(true).toBe(false); // Should not reach here
-             } catch (error: any) {
-         expect(error.type).toBe('Unknown');
-         expect(error.id).toBe('exec-error-unknown');
+      } catch (error: any) {
+        expect(error.type).toBe('Unknown');
+        expect(error.id).toBe('exec-error-unknown');
         expect(killCalled).toBe(true);
       }
     });
@@ -560,7 +560,7 @@ describe('process', () => {
       });
 
       const result = await processModule.execWithResult('command', {
-        throwOnError: false
+        throwOnError: false,
       });
 
       expect(result.success).toBe(false);
@@ -590,24 +590,24 @@ describe('process', () => {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         stderr: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(0), 30);
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => {}
+        kill: () => {},
       }));
 
       await processModule.execWithResult('simple-command', {
         args: ['arg1', 'arg2'],
-        throwOnError: false
+        throwOnError: false,
       });
 
       // Should work without errors (command constructed as "simple-command arg1 arg2")
@@ -615,7 +615,7 @@ describe('process', () => {
 
     it('should handle arguments with spaces and quotes', async () => {
       let capturedCommand = '';
-      
+
       moxxy.exec.mock((command: string) => {
         capturedCommand = command;
         return {
@@ -623,33 +623,35 @@ describe('process', () => {
             on: (event: string, handler: (...args: unknown[]) => void) => {
               if (event === 'end') setTimeout(() => handler(), 20);
             },
-            pipe: () => {}
+            pipe: () => {},
           },
           stderr: {
             on: (event: string, handler: (...args: unknown[]) => void) => {
               if (event === 'end') setTimeout(() => handler(), 20);
             },
-            pipe: () => {}
+            pipe: () => {},
           },
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'close') setTimeout(() => handler(0), 30);
           },
           stdin: { write: () => {}, end: () => {} },
-          kill: () => {}
+          kill: () => {},
         };
       });
 
       await processModule.execWithResult('echo $@', {
         args: ['hello world', 'arg with "quotes"', "arg with 'single quotes'"],
-        throwOnError: false
+        throwOnError: false,
       });
 
-      expect(capturedCommand).toBe('echo "hello world" "arg with \\"quotes\\"" "arg with \'single quotes\'"');
+      expect(capturedCommand).toBe(
+        'echo "hello world" "arg with \\"quotes\\"" "arg with \'single quotes\'"'
+      );
     });
 
     it('should handle empty args array', async () => {
       let capturedCommand = '';
-      
+
       moxxy.exec.mock((command: string) => {
         capturedCommand = command;
         return {
@@ -657,25 +659,25 @@ describe('process', () => {
             on: (event: string, handler: (...args: unknown[]) => void) => {
               if (event === 'end') setTimeout(() => handler(), 20);
             },
-            pipe: () => {}
+            pipe: () => {},
           },
           stderr: {
             on: (event: string, handler: (...args: unknown[]) => void) => {
               if (event === 'end') setTimeout(() => handler(), 20);
             },
-            pipe: () => {}
+            pipe: () => {},
           },
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'close') setTimeout(() => handler(0), 30);
           },
           stdin: { write: () => {}, end: () => {} },
-          kill: () => {}
+          kill: () => {},
         };
       });
 
       await processModule.execWithResult('echo $@', {
         args: [],
-        throwOnError: false
+        throwOnError: false,
       });
 
       expect(capturedCommand).toBe('echo ');
@@ -686,36 +688,37 @@ describe('process', () => {
     it('should pipe stdout and stderr when streamOutput is enabled', async () => {
       let stdoutPipeCalled = false;
       let stderrPipeCalled = false;
-      
+
       moxxy.exec.mock(() => ({
         stdout: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: (target: any) => {
+
+          pipe: () => {
             // Can't easily test piping to process.stdout, so just mark it as called
             stdoutPipeCalled = true;
-          }
+          },
         },
         stderr: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: (target: any) => {
+          pipe: () => {
             stderrPipeCalled = true;
-          }
+          },
         },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(0), 30);
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => {}
+        kill: () => {},
       }));
 
       await processModule.execWithResult('echo test', {
         streamOutput: true,
         preserveColors: false,
-        throwOnError: false
+        throwOnError: false,
       });
 
       expect(stdoutPipeCalled).toBe(true);
@@ -731,19 +734,19 @@ describe('process', () => {
             if (event === 'data') setTimeout(() => handler('success output'), 10);
             else if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         stderr: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(0), 30);
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => {}
+        kill: () => {},
       }));
 
       const result = await processModule.exec('echo test');
@@ -756,19 +759,19 @@ describe('process', () => {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         stderr: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(1), 30);
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => {}
+        kill: () => {},
       }));
 
       try {
@@ -787,23 +790,23 @@ describe('process', () => {
             if (event === 'data') setTimeout(() => handler('output before failure'), 10);
             else if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         stderr: {
           on: (event: string, handler: (...args: unknown[]) => void) => {
             if (event === 'end') setTimeout(() => handler(), 20);
           },
-          pipe: () => {}
+          pipe: () => {},
         },
         on: (event: string, handler: (...args: unknown[]) => void) => {
           if (event === 'close') setTimeout(() => handler(1), 30);
         },
         stdin: { write: () => {}, end: () => {} },
-        kill: () => {}
+        kill: () => {},
       }));
 
       const result = await processModule.exec('failing-command', { throwOnError: false });
       expect(result).toBe('output before failure');
     });
   });
-}); 
+});
