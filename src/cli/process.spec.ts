@@ -152,15 +152,12 @@ function __createStreamingMock(
   };
 }
 
-async function __testColorPreservation(
-  testName: string,
-  options: {
-    preserveColors?: boolean;
-    streamOutput?: boolean;
-    inputEnv: Record<string, string>;
-    expectedEnv: Record<string, string>;
-  }
-) {
+async function __testColorPreservation(options: {
+  preserveColors?: boolean;
+  streamOutput?: boolean;
+  inputEnv: Record<string, string>;
+  expectedEnv: Record<string, string>;
+}) {
   let capturedEnv = {};
 
   moxxy.exec.mock(
@@ -230,13 +227,6 @@ async function __testIpcScenario(
   }
 }
 
-function __assertExecResult(result: any, expected: any) {
-  if (expected.success !== undefined) expect(result.success).toBe(expected.success);
-  if (expected.exitCode !== undefined) expect(result.exitCode).toBe(expected.exitCode);
-  if (expected.stdout !== undefined) expect(result.stdout).toBe(expected.stdout);
-  if (expected.stderr !== undefined) expect(result.stderr).toBe(expected.stderr);
-}
-
 async function __testExecResultScenario(
   command: string,
   options: {
@@ -254,50 +244,11 @@ async function __testExecResultScenario(
 
   moxxy.exec.mock(__createExecMock(mockOptions));
   const result = await processModule.execWithResult(command, execOptions);
-  __assertExecResult(result, expectedResult);
-}
 
-async function __testArgumentHandling(command: string, args: string[], expectedCommand: string) {
-  let capturedCommand = '';
-
-  moxxy.exec.mock(
-    __createExecMock({
-      captureCommand: (cmd) => {
-        capturedCommand = cmd;
-      },
-    })
-  );
-
-  await processModule.execWithResult(command, {
-    args,
-    throwOnError: false,
-  });
-
-  expect(capturedCommand).toBe(expectedCommand);
-}
-
-async function __testTimeoutScenario(timeout: number, expectedError: { type: string; id: string }) {
-  let killCalled = false;
-
-  moxxy.exec.mock(() =>
-    __createHangingProcessMock({
-      onKill: () => {
-        killCalled = true;
-      },
-    })()
-  );
-
-  try {
-    await processModule.execWithResult('hanging-command', {
-      timeout,
-      throwOnError: true,
-    });
-    expect(true).toBe(false);
-  } catch (error: any) {
-    expect(error.type).toBe(expectedError.type);
-    expect(error.id).toBe(expectedError.id);
-    expect(killCalled).toBe(true);
-  }
+  if (expectedResult.success !== undefined) expect(result.success).toBe(expectedResult.success);
+  if (expectedResult.exitCode !== undefined) expect(result.exitCode).toBe(expectedResult.exitCode);
+  if (expectedResult.stdout !== undefined) expect(result.stdout).toBe(expectedResult.stdout);
+  if (expectedResult.stderr !== undefined) expect(result.stderr).toBe(expectedResult.stderr);
 }
 
 describe('exec', () => {
@@ -337,7 +288,7 @@ describe('exec', () => {
 
 describe('color preservation', () => {
   it('should preserve original environment when colors are disabled', async () => {
-    await __testColorPreservation('preserve original when disabled', {
+    await __testColorPreservation({
       preserveColors: false,
       inputEnv: { ORIGINAL: 'value' },
       expectedEnv: { ORIGINAL: 'value' },
@@ -345,7 +296,7 @@ describe('color preservation', () => {
   });
 
   it('should add color environment variables when colors are enabled', async () => {
-    await __testColorPreservation('add color vars when enabled', {
+    await __testColorPreservation({
       preserveColors: true,
       inputEnv: { ORIGINAL: 'value' },
       expectedEnv: {
@@ -357,7 +308,7 @@ describe('color preservation', () => {
   });
 
   it('should preserve existing TERM variable when colors are enabled', async () => {
-    await __testColorPreservation('preserve existing TERM', {
+    await __testColorPreservation({
       preserveColors: true,
       inputEnv: { TERM: 'screen-256color' },
       expectedEnv: {
@@ -368,7 +319,7 @@ describe('color preservation', () => {
   });
 
   it('should enable colors for streamOutput even when preserveColors is false', async () => {
-    await __testColorPreservation('enable colors for streamOutput', {
+    await __testColorPreservation({
       preserveColors: false,
       streamOutput: true,
       inputEnv: { ORIGINAL: 'value' },
@@ -502,7 +453,27 @@ describe('execWithResult', () => {
   });
 
   it('should handle process timeout', async () => {
-    await __testTimeoutScenario(100, { type: 'Unknown', id: 'exec-error-unknown' });
+    let killCalled = false;
+
+    moxxy.exec.mock(() =>
+      __createHangingProcessMock({
+        onKill: () => {
+          killCalled = true;
+        },
+      })()
+    );
+
+    try {
+      await processModule.execWithResult('hanging-command', {
+        timeout: 100,
+        throwOnError: true,
+      });
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('exec-error-unknown');
+      expect(killCalled).toBe(true);
+    }
   });
 
   it('should handle unknown exec errors gracefully', async () => {
@@ -545,15 +516,43 @@ describe('cross-platform argument handling', () => {
   });
 
   it('should handle arguments with spaces and quotes', async () => {
-    await __testArgumentHandling(
-      'echo $@',
-      ['hello world', 'arg with "quotes"', "arg with 'single quotes'"],
+    let capturedCommand = '';
+
+    moxxy.exec.mock(
+      __createExecMock({
+        captureCommand: (cmd) => {
+          capturedCommand = cmd;
+        },
+      })
+    );
+
+    await processModule.execWithResult('echo $@', {
+      args: ['hello world', 'arg with "quotes"', "arg with 'single quotes'"],
+      throwOnError: false,
+    });
+
+    expect(capturedCommand).toBe(
       'echo "hello world" "arg with \\"quotes\\"" "arg with \'single quotes\'"'
     );
   });
 
   it('should handle empty args array', async () => {
-    await __testArgumentHandling('echo $@', [], 'echo ');
+    let capturedCommand = '';
+
+    moxxy.exec.mock(
+      __createExecMock({
+        captureCommand: (cmd) => {
+          capturedCommand = cmd;
+        },
+      })
+    );
+
+    await processModule.execWithResult('echo $@', {
+      args: [],
+      throwOnError: false,
+    });
+
+    expect(capturedCommand).toBe('echo ');
   });
 });
 

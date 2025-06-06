@@ -134,17 +134,13 @@ beforeEach(() => {
   rustClient.__reset__();
 });
 
-// quality-ignore max-cyclomatic-complexity
 describe('__createDispatcher()', () => {
-  // quality-ignore max-cyclomatic-complexity
   describe('process output', () => {
-    // quality-ignore max-cyclomatic-complexity
     it('handles defined blobs', async () => {
       const testData = { test: 'data' };
       await __testProcessOutput('{"result": "success"}', testData, testData);
     });
 
-    // quality-ignore max-cyclomatic-complexity
     it('handles undefined blobs', async () => {
       const { getClient, getCapturedCommand, getCapturedOptions } =
         __setupTest('{"result": "success"}');
@@ -156,7 +152,6 @@ describe('__createDispatcher()', () => {
       expect(getCapturedOptions()).toEqual({ data: '' });
     });
 
-    // quality-ignore max-cyclomatic-complexity
     it('handles undefined process output', async () => {
       const { getClient } = __setupTest(undefined);
 
@@ -206,7 +201,6 @@ describe('__createDispatcher()', () => {
   });
 });
 
-// quality-ignore max-cyclomatic-complexity
 describe('__getBinarySearchPaths()', () => {
   describe('development binaries', () => {
     it('includes development binaries if they exist', async () => {
@@ -302,7 +296,6 @@ describe('__getRustBinaries()', () => {
     expect(client.module2.api2).toBeDefined();
   });
 
-  // quality-ignore max-cyclomatic-complexity
   it('throws no-rust-binaries-found error when no binaries are found', async () => {
     __setupModuleTest([]);
 

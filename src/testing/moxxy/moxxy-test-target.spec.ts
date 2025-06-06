@@ -1,9 +1,7 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 
 // Import the target module (this should trigger moxxy transformation)
 import * as target from './moxxy-test-target.ts';
-
-beforeEach(() => {});
 
 describe('Import Detection', () => {
   it('should detect all imports from target module', () => {
@@ -33,13 +31,13 @@ describe('Basic Function Mocking', () => {
   });
 
   it('should mock default function import', () => {
-    (moxxy as any).defaultFunction.mock(() => 'mocked-default');
+    moxxy.defaultFunction.mock(() => 'mocked-default');
 
     expect(target.useDefault('test')).toBe('mocked-default');
   });
 
   it('should mock named function import', () => {
-    (moxxy as any).namedFunction.mock(() => 'mocked-named');
+    moxxy.namedFunction.mock(() => 'mocked-named');
 
     expect(target.useNamed('test')).toBe('mocked-named');
   });
@@ -47,14 +45,14 @@ describe('Basic Function Mocking', () => {
 
 describe('Object Property Mocking', () => {
   it('should mock object methods', () => {
-    (moxxy as any).testObject.method1.mock(() => 'mocked-method1');
+    moxxy.testObject.method1.mock(() => 'mocked-method1');
 
     expect(target.useObjectMethod('test')).toBe('mocked-method1');
   });
 
   it('should mock object properties', () => {
     // Mock the entire object
-    (moxxy as any).testObject.mock({
+    moxxy.testObject.mock({
       property: 'mocked-property',
       method1: (arg: string) => `mocked-method1-${arg}`,
     });
@@ -70,7 +68,7 @@ describe('Class Mocking', () => {
       return { getValue: () => `mocked-${value}` };
     };
 
-    (moxxy as any).TestClass.mock(MockClass);
+    moxxy.TestClass.mock(MockClass);
 
     expect(target.useClass('test')).toBe('mocked-test');
   });
@@ -78,7 +76,7 @@ describe('Class Mocking', () => {
 
 describe('Constant Mocking', () => {
   it('should mock constants', () => {
-    (moxxy as any).namedConstant.mock('mocked-constant');
+    moxxy.namedConstant.mock('mocked-constant');
 
     expect(target.useConstant()).toBe('mocked-constant');
   });
@@ -86,7 +84,7 @@ describe('Constant Mocking', () => {
 
 describe('Nested Object Mocking', () => {
   it('should mock deeply nested properties', () => {
-    (moxxy as any).namespace.mock({
+    moxxy.namespace.mock({
       nested: {
         deep: {
           func: (arg: string) => `mocked-deep-${arg}`,
@@ -100,7 +98,7 @@ describe('Nested Object Mocking', () => {
 
 describe('Test Isolation', () => {
   it('should isolate mocks between tests - first test', () => {
-    (moxxy as any).defaultFunction.mock(() => 'first-test-mock');
+    moxxy.defaultFunction.mock(() => 'first-test-mock');
 
     expect(target.useDefault('test')).toBe('first-test-mock');
   });
@@ -110,7 +108,7 @@ describe('Test Isolation', () => {
     expect(target.useDefault('test')).toBe('default-test');
 
     // Set a different mock
-    (moxxy as any).defaultFunction.mock(() => 'second-test-mock');
+    moxxy.defaultFunction.mock(() => 'second-test-mock');
 
     expect(target.useDefault('test')).toBe('second-test-mock');
   });
@@ -118,26 +116,26 @@ describe('Test Isolation', () => {
 
 describe('Mock Management', () => {
   it('should clear individual mocks with restore', () => {
-    (moxxy as any).defaultFunction.mock(() => 'mocked');
-    (moxxy as any).namedFunction.mock(() => 'also-mocked');
+    moxxy.defaultFunction.mock(() => 'mocked');
+    moxxy.namedFunction.mock(() => 'also-mocked');
 
     expect(target.useDefault('test')).toBe('mocked');
     expect(target.useNamed('test')).toBe('also-mocked');
 
-    moxxy!.restore('defaultFunction');
+    moxxy.restore('defaultFunction');
 
     expect(target.useDefault('test')).toBe('default-test'); // Restored
     expect(target.useNamed('test')).toBe('also-mocked'); // Still mocked
   });
 
   it('should clear all mocks with reset', () => {
-    (moxxy as any).defaultFunction.mock(() => 'mocked');
-    (moxxy as any).namedFunction.mock(() => 'also-mocked');
+    moxxy.defaultFunction.mock(() => 'mocked');
+    moxxy.namedFunction.mock(() => 'also-mocked');
 
     expect(target.useDefault('test')).toBe('mocked');
     expect(target.useNamed('test')).toBe('also-mocked');
 
-    moxxy!.reset();
+    moxxy.reset();
 
     expect(target.useDefault('test')).toBe('default-test');
     expect(target.useNamed('test')).toBe('named-test');

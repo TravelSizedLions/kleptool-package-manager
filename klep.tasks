@@ -89,9 +89,6 @@
   'ts:coverage': 'bash scripts/filter-coverage.sh',
   'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --out json --output-dir ../../coverage/rust --workspace',
 
-  // Code Quality Tasks
-  'quality:check': 'cd src/rust && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10',
-
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
   'ci:build': 'klep build',

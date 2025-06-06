@@ -33,7 +33,6 @@ export function addDependency(name: string, dep: Dependency, dev: boolean = fals
 function __ensureDependencyProps(dev: boolean) {
   if (!dev && !__deps.dependencies) {
     __deps.dependencies = {};
-    return;
   }
 
   if (dev && !__deps.devDependencies) {

@@ -22,6 +22,17 @@ pub struct IgnoreDirectives {
     std::collections::HashMap<usize, std::collections::HashMap<String, usize>>,
 }
 
+struct IgnoreDirective {
+  rule: String,
+  is_file_level: bool,
+}
+
+struct AllowDirective {
+  rule: String,
+  new_value: usize,
+  is_file_level: bool,
+}
+
 pub fn analyze_path(path: &Path, config: &AnalysisConfig) -> Result<()> {
   if !path.exists() {
     return Err(anyhow!("Path does not exist: {}", path.display()));
@@ -46,10 +57,7 @@ fn __analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
     let entry = entry?;
     let path = entry.path();
 
-    if path.is_dir() {
-      if __should_skip_directory(&path) {
-        continue;
-      }
+    if path.is_dir() && !__should_skip_directory(&path) {
       __analyze_directory(&path, config)?;
       continue;
     }
@@ -286,19 +294,6 @@ fn __parse_ignore_directives(source_code: &str) -> IgnoreDirectives {
   }
 
   directives
-}
-
-#[derive(Debug)]
-struct IgnoreDirective {
-  rule: String,
-  is_file_level: bool,
-}
-
-#[derive(Debug)]
-struct AllowDirective {
-  rule: String,
-  new_value: usize,
-  is_file_level: bool,
 }
 
 fn __parse_quality_ignore(line: &str) -> Option<IgnoreDirective> {
