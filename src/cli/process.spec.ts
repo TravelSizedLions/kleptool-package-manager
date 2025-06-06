@@ -1,35 +1,133 @@
 import { describe, it, expect } from 'bun:test';
 import processModule from './process.ts';
 
+// Helper functions for common mocking patterns
+function __createExecMock(
+  options: {
+    stdout?: string;
+    stderr?: string;
+    exitCode?: number;
+    captureCommand?: (command: string) => void;
+    captureOptions?: (options: any) => void;
+  } = {}
+) {
+  const { stdout = '', stderr = '', exitCode = 0, captureCommand, captureOptions } = options;
+
+  return (command: string, execOptions?: any) => {
+    if (captureCommand) captureCommand(command);
+    if (captureOptions && execOptions) captureOptions(execOptions);
+
+    return {
+      stdout: {
+        on: (event: string, handler: (...args: unknown[]) => void) => {
+          if (event === 'data' && stdout) {
+            setTimeout(() => handler(stdout), 10);
+          } else if (event === 'end') {
+            setTimeout(() => handler(), 20);
+          }
+        },
+        pipe: () => {},
+      },
+      stderr: {
+        on: (event: string, handler: (...args: unknown[]) => void) => {
+          if (event === 'data' && stderr) {
+            setTimeout(() => handler(stderr), 10);
+          } else if (event === 'end') {
+            setTimeout(() => handler(), 20);
+          }
+        },
+        pipe: () => {},
+      },
+      on: (event: string, handler: (...args: unknown[]) => void) => {
+        if (event === 'close') setTimeout(() => handler(exitCode), 30);
+      },
+      stdin: { write: () => {}, end: () => {} },
+      kill: () => {},
+    };
+  };
+}
+
+function __createSpawnIPCMock(
+  options: {
+    ipcData?: string;
+    exitCode?: number;
+    errorOnEvent?: string;
+  } = {}
+) {
+  const { ipcData = '', exitCode = 0, errorOnEvent } = options;
+
+  return {
+    stdio: [
+      { write: () => {}, end: () => {} }, // stdin
+      null, // stdout (inherit)
+      null, // stderr (inherit)
+      {
+        // fd3 for IPC
+        on: (event: string, handler: (...args: unknown[]) => void) => {
+          if (event === 'data' && ipcData) {
+            setTimeout(() => handler(ipcData), 10);
+          } else if (event === 'end') {
+            setTimeout(() => handler(), 20);
+          }
+        },
+      },
+    ],
+    stdin: { write: () => {}, end: () => {} },
+    on: (event: string, handler: (...args: unknown[]) => void) => {
+      if (event === 'close') {
+        setTimeout(() => handler(exitCode), 30);
+      } else if (event === errorOnEvent) {
+        setTimeout(() => handler(new Error('Process spawn failed')), 10);
+      }
+    },
+    kill: () => {},
+  };
+}
+
+function __createHangingProcessMock(
+  type: 'exec' | 'spawn' = 'exec',
+  options: {
+    onKill?: () => void;
+  } = {}
+) {
+  const { onKill } = options;
+
+  const hangingMock = {
+    stdout: { on: () => {}, pipe: () => {} },
+    stderr: { on: () => {}, pipe: () => {} },
+    on: () => {
+      // Never call close - simulate hanging process
+    },
+    stdin: { write: () => {}, end: () => {} },
+    kill: () => {
+      if (onKill) onKill();
+    },
+  };
+
+  if (type === 'spawn') {
+    return {
+      ...hangingMock,
+      stdio: [{ write: () => {}, end: () => {} }, null, null, { on: () => {} }],
+    };
+  }
+
+  return hangingMock;
+}
+
+function __createErrorMock(errorMessage: string) {
+  return () => {
+    throw new Error(errorMessage);
+  };
+}
+
 describe('process', () => {
   describe('exec', () => {
     it('should execute a command', async () => {
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'data') {
-              setTimeout(() => handler('Hello, world!\n'), 10);
-            } else if (event === 'end') {
-              setTimeout(() => handler(), 20);
-            }
-          },
-          pipe: () => {},
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(0), 30);
-        },
-        stdin: {
-          write: () => {},
-          end: () => {},
-        },
-        kill: () => {},
-      }));
+      moxxy.exec.mock(
+        __createExecMock({
+          stdout: 'Hello, world!\n',
+        })
+      );
 
       const result = await processModule.exec('echo "Hello, world!"');
       expect(result).toBe('Hello, world!\n');
@@ -38,35 +136,14 @@ describe('process', () => {
     it('should substitute $@ with arguments cross-platform', async () => {
       let capturedCommand = '';
 
-      moxxy.exec.mock((command: string) => {
-        capturedCommand = command;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') {
-                setTimeout(() => handler('Args: hello world\n'), 10);
-              } else if (event === 'end') {
-                setTimeout(() => handler(), 20);
-              }
-            },
-            pipe: () => {},
+      moxxy.exec.mock(
+        __createExecMock({
+          stdout: 'Args: hello world\n',
+          captureCommand: (cmd) => {
+            capturedCommand = cmd;
           },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: {
-            write: () => {},
-            end: () => {},
-          },
-          kill: () => {},
-        };
-      });
+        })
+      );
 
       const result = await processModule.execWithResult('echo "Args: $@"', {
         args: ['hello', 'world'],
@@ -83,29 +160,14 @@ describe('process', () => {
     it('should preserve original environment when colors are disabled', async () => {
       let capturedEnv = {};
 
-      moxxy.exec.mock((command: string, options: any) => {
-        capturedEnv = options.env;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') setTimeout(() => handler('test\n'), 10);
-              else if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
+      moxxy.exec.mock(
+        __createExecMock({
+          stdout: 'test\n',
+          captureOptions: (options) => {
+            capturedEnv = options.env;
           },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
+        })
+      );
 
       await processModule.execWithResult('echo test', {
         preserveColors: false,
@@ -118,29 +180,14 @@ describe('process', () => {
     it('should add color environment variables when colors are enabled', async () => {
       let capturedEnv = {};
 
-      moxxy.exec.mock((command: string, options: any) => {
-        capturedEnv = options.env;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') setTimeout(() => handler('test\n'), 10);
-              else if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
+      moxxy.exec.mock(
+        __createExecMock({
+          stdout: 'test\n',
+          captureOptions: (options) => {
+            capturedEnv = options.env;
           },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
+        })
+      );
 
       await processModule.execWithResult('echo test', {
         preserveColors: true,
@@ -157,29 +204,14 @@ describe('process', () => {
     it('should preserve existing TERM variable when colors are enabled', async () => {
       let capturedEnv = {};
 
-      moxxy.exec.mock((command: string, options: any) => {
-        capturedEnv = options.env;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') setTimeout(() => handler('test\n'), 10);
-              else if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
+      moxxy.exec.mock(
+        __createExecMock({
+          stdout: 'test\n',
+          captureOptions: (options) => {
+            capturedEnv = options.env;
           },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
+        })
+      );
 
       await processModule.execWithResult('echo test', {
         preserveColors: true,
@@ -311,28 +343,11 @@ describe('process', () => {
 
   describe('ipc', () => {
     it('should handle basic IPC communication', async () => {
-      moxxy.spawn.mock(() => ({
-        stdio: [
-          { write: () => {}, end: () => {} }, // stdin
-          null, // stdout (inherit)
-          null, // stderr (inherit)
-          {
-            // fd3
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') {
-                setTimeout(() => handler('IPC response data'), 10);
-              } else if (event === 'end') {
-                setTimeout(() => handler(), 20);
-              }
-            },
-          },
-        ],
-        stdin: { write: () => {}, end: () => {} },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(0), 30);
-        },
-        kill: () => {},
-      }));
+      moxxy.spawn.mock(() =>
+        __createSpawnIPCMock({
+          ipcData: 'IPC response data',
+        })
+      );
 
       const result = await processModule.ipc('test-command', {
         data: 'input data',
@@ -343,23 +358,11 @@ describe('process', () => {
     });
 
     it('should handle IPC command failure', async () => {
-      moxxy.spawn.mock(() => ({
-        stdio: [
-          { write: () => {}, end: () => {} },
-          null,
-          null,
-          {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-          },
-        ],
-        stdin: { write: () => {}, end: () => {} },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(1), 30); // Non-zero exit
-        },
-        kill: () => {},
-      }));
+      moxxy.spawn.mock(() =>
+        __createSpawnIPCMock({
+          exitCode: 1, // Non-zero exit
+        })
+      );
 
       try {
         await processModule.ipc('failing-command');
@@ -373,25 +376,13 @@ describe('process', () => {
     it('should handle IPC with timeout', async () => {
       let killCalled = false;
 
-      moxxy.spawn.mock(() => ({
-        stdio: [
-          { write: () => {}, end: () => {} },
-          null,
-          null,
-          {
-            on: () => {
-              // Never call the handlers - simulate hanging process
-            },
+      moxxy.spawn.mock(() =>
+        __createHangingProcessMock('spawn', {
+          onKill: () => {
+            killCalled = true;
           },
-        ],
-        stdin: { write: () => {}, end: () => {} },
-        on: () => {
-          // Simulate process that never exits
-        },
-        kill: () => {
-          killCalled = true;
-        },
-      }));
+        })
+      );
 
       try {
         await processModule.ipc('hanging-command', { timeout: 100 });
@@ -404,16 +395,11 @@ describe('process', () => {
     });
 
     it('should handle IPC process errors', async () => {
-      moxxy.spawn.mock(() => ({
-        stdio: [{ write: () => {}, end: () => {} }, null, null, { on: () => {} }],
-        stdin: { write: () => {}, end: () => {} },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'error') {
-            setTimeout(() => handler(new Error('Process spawn failed')), 10);
-          }
-        },
-        kill: () => {},
-      }));
+      moxxy.spawn.mock(() =>
+        __createSpawnIPCMock({
+          errorOnEvent: 'error',
+        })
+      );
 
       try {
         await processModule.ipc('invalid-command');
@@ -425,9 +411,7 @@ describe('process', () => {
     });
 
     it('should handle IPC with unknown errors', async () => {
-      moxxy.spawn.mock(() => {
-        throw new Error('Spawn failed completely');
-      });
+      moxxy.spawn.mock(__createErrorMock('Spawn failed completely'));
 
       try {
         await processModule.ipc('command');
@@ -441,27 +425,13 @@ describe('process', () => {
 
   describe('execWithResult', () => {
     it('should handle exec failure with throwOnError disabled', async () => {
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'data') setTimeout(() => handler('output'), 10);
-            else if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'data') setTimeout(() => handler('error output'), 10);
-            else if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(1), 30); // Non-zero exit
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {},
-      }));
+      moxxy.exec.mock(
+        __createExecMock({
+          stdout: 'output',
+          stderr: 'error output',
+          exitCode: 1,
+        })
+      );
 
       const result = await processModule.execWithResult('failing-command', {
         throwOnError: false,
@@ -474,25 +444,11 @@ describe('process', () => {
     });
 
     it('should handle exec failure with throwOnError enabled', async () => {
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(1), 30);
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {},
-      }));
+      moxxy.exec.mock(
+        __createExecMock({
+          exitCode: 1,
+        })
+      );
 
       const result = await processModule.execWithResult('failing-command', { throwOnError: true });
       expect(result.success).toBe(false);
@@ -529,17 +485,13 @@ describe('process', () => {
     it('should handle process timeout', async () => {
       let killCalled = false;
 
-      moxxy.exec.mock(() => ({
-        stdout: { on: () => {}, pipe: () => {} },
-        stderr: { on: () => {}, pipe: () => {} },
-        on: () => {
-          // Never call close - simulate hanging process
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {
-          killCalled = true;
-        },
-      }));
+      moxxy.exec.mock(() =>
+        __createHangingProcessMock('exec', {
+          onKill: () => {
+            killCalled = true;
+          },
+        })
+      );
 
       try {
         await processModule.execWithResult('hanging-command', {
@@ -555,9 +507,7 @@ describe('process', () => {
     });
 
     it('should handle unknown exec errors gracefully', async () => {
-      moxxy.exec.mock(() => {
-        throw new Error('Exec failed completely');
-      });
+      moxxy.exec.mock(__createErrorMock('Exec failed completely'));
 
       const result = await processModule.execWithResult('command', {
         throwOnError: false,
