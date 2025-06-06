@@ -6,142 +6,197 @@ use tree_sitter::Parser;
 use crate::languages::{get_function_node_types, get_language_for_extension};
 use crate::metrics::{analyze_tree, Violation};
 
-pub struct CodeAnalyzer {
-    max_nesting_depth: usize,
-    max_function_length: usize,
-    max_complexity: usize,
+pub struct AnalysisConfig {
+    pub max_nesting_depth: usize,
+    pub max_function_length: usize,
+    pub max_complexity: usize,
 }
 
-impl CodeAnalyzer {
-    pub fn new(max_nesting_depth: usize, max_function_length: usize, max_complexity: usize) -> Self {
-        Self {
-            max_nesting_depth,
-            max_function_length,
-            max_complexity,
-        }
+pub fn analyze_path(path: &Path, config: &AnalysisConfig) -> Result<()> {
+    if !path.exists() {
+        return Err(anyhow!("Path does not exist: {}", path.display()));
     }
+    
+    if path.is_file() {
+        return analyze_file(path, config);
+    }
+    
+    if path.is_dir() {
+        return analyze_directory(path, config);
+    }
+    
+    Err(anyhow!("Path is neither file nor directory: {}", path.display()))
+}
 
-    pub fn analyze_path(&self, path: &Path) -> Result<()> {
+fn analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_dir() {
+            if __should_skip_directory(&path) {
+                continue;
+            }
+            analyze_directory(&path, config)?;
+            continue;
+        }
+        
         if path.is_file() {
-            self.analyze_file(path)?;
-        } else if path.is_dir() {
-            self.analyze_directory(path)?;
-        } else {
-            return Err(anyhow!("Path does not exist: {}", path.display()));
+            __try_analyze_file(&path, config);
         }
-        Ok(())
     }
+    Ok(())
+}
 
-    fn analyze_directory(&self, dir: &Path) -> Result<()> {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            
-            if path.is_dir() {
-                // Skip node_modules, .git, and other common directories
-                if let Some(dirname) = path.file_name() {
-                    if matches!(dirname.to_str(), Some("node_modules" | ".git" | "target" | "coverage" | "dist")) {
-                        continue;
-                    }
-                }
-                self.analyze_directory(&path)?;
-            } else if path.is_file() {
-                // Only analyze supported file types
-                if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
-                    if matches!(extension, "ts" | "tsx" | "js" | "jsx" | "rs" | "py" | "sh" | "bash") {
-                        if let Err(e) = self.analyze_file(&path) {
-                            eprintln!("Warning: Failed to analyze {}: {}", path.display(), e);
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
+fn analyze_file(file_path: &Path, config: &AnalysisConfig) -> Result<()> {
+    let extension = __get_file_extension(file_path)?;
+    let language = __get_language_for_file(extension)?;
+    let function_node_types = get_function_node_types(extension);
+    let source_code = fs::read_to_string(file_path)?;
+    let tree = __parse_source_code(&source_code, &language)?;
+    let function_metrics = analyze_tree(&tree, &source_code, &function_node_types);
+    let violations = __check_violations(&function_metrics, config);
+    __print_violations(file_path, &violations);
+    Ok(())
+}
+
+fn __should_skip_directory(path: &Path) -> bool {
+    let Some(dirname) = path.file_name() else {
+        return false;
+    };
+    
+    matches!(dirname.to_str(), Some("node_modules" | ".git" | "target" | "coverage" | "dist"))
+}
+
+fn __try_analyze_file(path: &Path, config: &AnalysisConfig) {
+    let Some(extension) = path.extension().and_then(|e| e.to_str()) else {
+        return;
+    };
+    
+    if !__is_supported_extension(extension) {
+        return;
     }
+    
+    if let Err(e) = analyze_file(path, config) {
+        eprintln!("Warning: Failed to analyze {}: {}", path.display(), e);
+    }
+}
 
-    fn analyze_file(&self, file_path: &Path) -> Result<()> {
-        let extension = file_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .ok_or_else(|| anyhow!("No file extension found"))?;
+fn __is_supported_extension(extension: &str) -> bool {
+    matches!(extension, "ts" | "tsx" | "js" | "jsx" | "rs" | "py" | "sh" | "bash")
+}
 
-        let language = get_language_for_extension(extension)
-            .ok_or_else(|| anyhow!("Unsupported file extension: {}", extension))?;
+fn __get_file_extension(file_path: &Path) -> Result<&str> {
+    file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| anyhow!("No file extension found"))
+}
 
-        let function_node_types = get_function_node_types(extension);
-        
-        let source_code = fs::read_to_string(file_path)?;
-        
-        let mut parser = Parser::new();
-        parser
-            .set_language(&language)
-            .map_err(|e| anyhow!("Error setting language: {}", e))?;
+fn __get_language_for_file(extension: &str) -> Result<tree_sitter::Language> {
+    get_language_for_extension(extension)
+        .ok_or_else(|| anyhow!("Unsupported file extension: {}", extension))
+}
 
-        let tree = parser
-            .parse(&source_code, None)
-            .ok_or_else(|| anyhow!("Failed to parse file"))?;
+fn __parse_source_code(source_code: &str, language: &tree_sitter::Language) -> Result<tree_sitter::Tree> {
+    let mut parser = Parser::new();
+    parser
+        .set_language(language)
+        .map_err(|e| anyhow!("Error setting language: {}", e))?;
 
-        let function_metrics = analyze_tree(&tree, &source_code, &function_node_types);
-        
-        let mut violations = Vec::new();
-        
-        for metrics in function_metrics {
-            // Check nesting depth
-            if metrics.max_nesting_depth > self.max_nesting_depth {
-                violations.push(Violation {
-                    rule: "max-nesting-depth".to_string(),
-                    line: metrics.start_line,
-                    column: 1,
-                    message: format!(
-                        "Function has nesting depth {} which exceeds maximum of {}",
-                        metrics.max_nesting_depth, self.max_nesting_depth
-                    ),
-                    actual_value: metrics.max_nesting_depth,
-                    max_allowed: self.max_nesting_depth,
-                });
-            }
-            
-            // Check function length
-            if metrics.length > self.max_function_length {
-                violations.push(Violation {
-                    rule: "max-function-length".to_string(),
-                    line: metrics.start_line,
-                    column: 1,
-                    message: format!(
-                        "Function has {} lines which exceeds maximum of {}",
-                        metrics.length, self.max_function_length
-                    ),
-                    actual_value: metrics.length,
-                    max_allowed: self.max_function_length,
-                });
-            }
-            
-            // Check cyclomatic complexity
-            if metrics.cyclomatic_complexity > self.max_complexity {
-                violations.push(Violation {
-                    rule: "max-cyclomatic-complexity".to_string(),
-                    line: metrics.start_line,
-                    column: 1,
-                    message: format!(
-                        "Function has cyclomatic complexity {} which exceeds maximum of {}",
-                        metrics.cyclomatic_complexity, self.max_complexity
-                    ),
-                    actual_value: metrics.cyclomatic_complexity,
-                    max_allowed: self.max_complexity,
-                });
-            }
-        }
+    parser
+        .parse(source_code, None)
+        .ok_or_else(|| anyhow!("Failed to parse file"))
+}
 
-        if !violations.is_empty() {
-            println!("{}:", file_path.display());
-            for violation in &violations {
-                println!(
-                    "  {}:{} - {} ({})",
-                    violation.line, violation.column, violation.message, violation.rule
-                );
-            }
-        }
+fn __check_violations(function_metrics: &[crate::metrics::FunctionMetrics], config: &AnalysisConfig) -> Vec<Violation> {
+    let mut violations = Vec::new();
+    
+    for metrics in function_metrics {
+        __check_nesting_depth_violation(metrics, config, &mut violations);
+        __check_function_length_violation(metrics, config, &mut violations);
+        __check_complexity_violation(metrics, config, &mut violations);
+    }
+    
+    violations
+}
 
-        Ok(())
+fn __check_nesting_depth_violation(
+    metrics: &crate::metrics::FunctionMetrics,
+    config: &AnalysisConfig,
+    violations: &mut Vec<Violation>
+) {
+    if metrics.max_nesting_depth <= config.max_nesting_depth {
+        return;
+    }
+    
+    violations.push(Violation {
+        rule: "max-nesting-depth".to_string(),
+        line: metrics.start_line,
+        column: 1,
+        message: format!(
+            "Function has nesting depth {} which exceeds maximum of {}",
+            metrics.max_nesting_depth, config.max_nesting_depth
+        ),
+        actual_value: metrics.max_nesting_depth,
+        max_allowed: config.max_nesting_depth,
+    });
+}
+
+fn __check_function_length_violation(
+    metrics: &crate::metrics::FunctionMetrics,
+    config: &AnalysisConfig,
+    violations: &mut Vec<Violation>
+) {
+    if metrics.length <= config.max_function_length {
+        return;
+    }
+    
+    violations.push(Violation {
+        rule: "max-function-length".to_string(),
+        line: metrics.start_line,
+        column: 1,
+        message: format!(
+            "Function has {} lines which exceeds maximum of {}",
+            metrics.length, config.max_function_length
+        ),
+        actual_value: metrics.length,
+        max_allowed: config.max_function_length,
+    });
+}
+
+fn __check_complexity_violation(
+    metrics: &crate::metrics::FunctionMetrics,
+    config: &AnalysisConfig,
+    violations: &mut Vec<Violation>
+) {
+    if metrics.cyclomatic_complexity <= config.max_complexity {
+        return;
+    }
+    
+    violations.push(Violation {
+        rule: "max-cyclomatic-complexity".to_string(),
+        line: metrics.start_line,
+        column: 1,
+        message: format!(
+            "Function has cyclomatic complexity {} which exceeds maximum of {}",
+            metrics.cyclomatic_complexity, config.max_complexity
+        ),
+        actual_value: metrics.cyclomatic_complexity,
+        max_allowed: config.max_complexity,
+    });
+}
+
+fn __print_violations(file_path: &Path, violations: &[Violation]) {
+    if violations.is_empty() {
+        return;
+    }
+    
+    println!("{}:", file_path.display());
+    for violation in violations {
+        println!(
+            "  {}:{} - {} ({})",
+            violation.line, violation.column, violation.message, violation.rule
+        );
     }
 } 

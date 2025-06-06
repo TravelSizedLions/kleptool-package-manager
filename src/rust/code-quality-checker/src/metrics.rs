@@ -47,15 +47,26 @@ fn __find_functions(
         functions.push(metrics);
     }
     
-    if cursor.goto_first_child() {
-        loop {
-            __find_functions(cursor, source_code, function_node_types, functions);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-        cursor.goto_parent();
+    __traverse_children_for_functions(cursor, source_code, function_node_types, functions);
+}
+
+fn __traverse_children_for_functions(
+    cursor: &mut TreeCursor,
+    source_code: &str,
+    function_node_types: &[&str],
+    functions: &mut Vec<FunctionMetrics>,
+) {
+    if !cursor.goto_first_child() {
+        return;
     }
+    
+    loop {
+        __find_functions(cursor, source_code, function_node_types, functions);
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+    cursor.goto_parent();
 }
 
 fn __analyze_function_node(node: Node, _source_code: &str) -> FunctionMetrics {
@@ -84,33 +95,42 @@ fn __calculate_max_nesting_depth(node: Node) -> usize {
 }
 
 fn __traverse_for_nesting(node: &Node, current_depth: &mut usize, max_depth: &mut usize) {
-    // Increment depth for nesting constructs
-    let increases_depth = matches!(
-        node.kind(),
-        "if_statement" | "while_statement" | "for_statement" | "loop_statement" 
-        | "match_expression" | "try_statement" | "with_statement"
-        | "if_expression" | "while_expression" | "for_expression"
-        | "block" | "compound_statement"
-    );
+    let increases_depth = __node_increases_nesting_depth(node);
     
     if increases_depth {
         *current_depth += 1;
         *max_depth = (*max_depth).max(*current_depth);
     }
     
-    // Recursively check children
-    let mut cursor = node.walk();
-    if cursor.goto_first_child() {
-        loop {
-            __traverse_for_nesting(&cursor.node(), current_depth, max_depth);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
-        }
-    }
+    __traverse_children_for_nesting(node, current_depth, max_depth);
     
     if increases_depth {
         *current_depth -= 1;
+    }
+}
+
+fn __node_increases_nesting_depth(node: &Node) -> bool {
+    matches!(
+        node.kind(),
+        "if_statement" | "while_statement" | "for_statement" | "loop_statement" 
+        | "match_expression" | "try_statement" | "with_statement"
+        | "if_expression" | "while_expression" | "for_expression"
+        // Note: removed "block" and "compound_statement" to avoid double-counting
+        // The control flow statements above already imply their blocks
+    )
+}
+
+fn __traverse_children_for_nesting(node: &Node, current_depth: &mut usize, max_depth: &mut usize) {
+    let mut cursor = node.walk();
+    if !cursor.goto_first_child() {
+        return;
+    }
+    
+    loop {
+        __traverse_for_nesting(&cursor.node(), current_depth, max_depth);
+        if !cursor.goto_next_sibling() {
+            break;
+        }
     }
 }
 
@@ -121,8 +141,17 @@ fn __calculate_cyclomatic_complexity(node: Node) -> usize {
 }
 
 fn __traverse_for_complexity(node: &Node, complexity: &mut usize) {
-    // Decision points that increase cyclomatic complexity
-    let is_decision_point = matches!(
+    let is_decision_point = __node_is_decision_point(node);
+    
+    if is_decision_point {
+        __handle_decision_point(node, complexity);
+    }
+    
+    __traverse_children_for_complexity(node, complexity);
+}
+
+fn __node_is_decision_point(node: &Node) -> bool {
+    matches!(
         node.kind(),
         // Conditional statements
         "if_statement" | "if_expression" | "conditional_expression" | "ternary_expression"
@@ -137,38 +166,46 @@ fn __traverse_for_complexity(node: &Node, complexity: &mut usize) {
         | "binary_expression" | "logical_and" | "logical_or"
         // Function calls that can branch (sometimes)
         | "yield_expression" | "await_expression"
-    );
-    
-    if is_decision_point {
-        // Special handling for logical operators
-        if node.kind() == "binary_expression" {
-            // Only count logical AND/OR as decision points
-            let mut cursor = node.walk();
-            if cursor.goto_first_child() {
-                loop {
-                    let child = cursor.node();
-                    if matches!(child.kind(), "&&" | "||" | "and" | "or") {
-                        *complexity += 1;
-                        break;
-                    }
-                    if !cursor.goto_next_sibling() {
-                        break;
-                    }
-                }
-            }
-        } else {
-            *complexity += 1;
-        }
+    )
+}
+
+fn __handle_decision_point(node: &Node, complexity: &mut usize) {
+    if node.kind() == "binary_expression" {
+        __handle_binary_expression_complexity(node, complexity);
+        return;
     }
     
-    // Recursively check children
+    *complexity += 1;
+}
+
+fn __handle_binary_expression_complexity(node: &Node, complexity: &mut usize) {
     let mut cursor = node.walk();
-    if cursor.goto_first_child() {
-        loop {
-            __traverse_for_complexity(&cursor.node(), complexity);
-            if !cursor.goto_next_sibling() {
-                break;
-            }
+    if !cursor.goto_first_child() {
+        return;
+    }
+    
+    loop {
+        let child = cursor.node();
+        if matches!(child.kind(), "&&" | "||" | "and" | "or") {
+            *complexity += 1;
+            break;
+        }
+        if !cursor.goto_next_sibling() {
+            break;
+        }
+    }
+}
+
+fn __traverse_children_for_complexity(node: &Node, complexity: &mut usize) {
+    let mut cursor = node.walk();
+    if !cursor.goto_first_child() {
+        return;
+    }
+    
+    loop {
+        __traverse_for_complexity(&cursor.node(), complexity);
+        if !cursor.goto_next_sibling() {
+            break;
         }
     }
 } 

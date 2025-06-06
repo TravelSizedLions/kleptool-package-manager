@@ -44,8 +44,12 @@ fn main() -> Result<()> {
 
     match &cli.command {
         Commands::Check { path, max_depth, max_length, max_complexity, format: _ } => {
-            let analyzer = analyzer::CodeAnalyzer::new(*max_depth, *max_length, *max_complexity);
-            analyzer.analyze_path(path)?;
+            let config = analyzer::AnalysisConfig {
+                max_nesting_depth: *max_depth,
+                max_function_length: *max_length,
+                max_complexity: *max_complexity,
+            };
+            analyzer::analyze_path(path, &config)?;
         }
     }
 
