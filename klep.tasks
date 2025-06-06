@@ -41,8 +41,11 @@
   // Generate coverage reports
   coverage: "klep ts:coverage && klep rust:coverage",
 
+  // Check code quality (never-nester principles)
+  quality: "klep quality:check",
+
   // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep test && klep test:win',
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep quality && klep test && klep test:win',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
@@ -85,6 +88,9 @@
   // Coverage
   'ts:coverage': 'bash scripts/filter-coverage.sh',
   'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --out json --output-dir ../../coverage/rust --workspace',
+
+  // Code Quality Tasks
+  'quality:check': 'cd src/rust && ./target/release/code-quality-checker check ../../src --max-depth 4 --max-length 100',
 
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
