@@ -94,4 +94,13 @@
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'bun run --bun tsc --noEmit',
+
+  // High-Performance AST-Based Rust Mutation Testing v2 🚀
+  'mutation:v2:build': 'cd src/rust && cargo build --release',
+  'mutation:v2:dry-run': 'klep mutation:v2:build && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel 4 --dry-run --verbose',
+  'mutation:v2': 'klep mutation:v2:build && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(nproc) --verbose',
+  'mutation:v2:full': 'klep mutation:v2:build && ./src/rust/target/release/klep-mutation-v2 --source src --parallel $(nproc) --verbose',
+  'mutation:v2:fast': 'klep mutation:v2:build && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(($(nproc) * 2))',
+  'mutation:v2:production': 'klep mutation:v2:build && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(nproc) --verbose',
+  'mutation:v2:ci': 'klep mutation:v2:build && THREADS=$(nproc) && echo "🚀 Using $THREADS threads for CI mutation testing" && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $THREADS --output mutations-report.json',
 }
