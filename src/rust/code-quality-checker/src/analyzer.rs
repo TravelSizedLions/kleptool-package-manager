@@ -9,13 +9,15 @@ use crate::metrics::{analyze_tree, Violation};
 pub struct CodeAnalyzer {
     max_nesting_depth: usize,
     max_function_length: usize,
+    max_complexity: usize,
 }
 
 impl CodeAnalyzer {
-    pub fn new(max_nesting_depth: usize, max_function_length: usize) -> Self {
+    pub fn new(max_nesting_depth: usize, max_function_length: usize, max_complexity: usize) -> Self {
         Self {
             max_nesting_depth,
             max_function_length,
+            max_complexity,
         }
     }
 
@@ -111,6 +113,21 @@ impl CodeAnalyzer {
                     ),
                     actual_value: metrics.length,
                     max_allowed: self.max_function_length,
+                });
+            }
+            
+            // Check cyclomatic complexity
+            if metrics.cyclomatic_complexity > self.max_complexity {
+                violations.push(Violation {
+                    rule: "max-cyclomatic-complexity".to_string(),
+                    line: metrics.start_line,
+                    column: 1,
+                    message: format!(
+                        "Function has cyclomatic complexity {} which exceeds maximum of {}",
+                        metrics.cyclomatic_complexity, self.max_complexity
+                    ),
+                    actual_value: metrics.cyclomatic_complexity,
+                    max_allowed: self.max_complexity,
                 });
             }
         }

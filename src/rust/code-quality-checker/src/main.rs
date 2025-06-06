@@ -29,6 +29,10 @@ enum Commands {
         #[arg(long, default_value = "50")]
         max_length: usize,
         
+        /// Maximum allowed cyclomatic complexity
+        #[arg(long, default_value = "10")]
+        max_complexity: usize,
+        
         /// Output format
         #[arg(long, default_value = "text")]
         format: String,
@@ -39,8 +43,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Check { path, max_depth, max_length, format: _ } => {
-            let analyzer = analyzer::CodeAnalyzer::new(*max_depth, *max_length);
+        Commands::Check { path, max_depth, max_length, max_complexity, format: _ } => {
+            let analyzer = analyzer::CodeAnalyzer::new(*max_depth, *max_length, *max_complexity);
             analyzer.analyze_path(path)?;
         }
     }

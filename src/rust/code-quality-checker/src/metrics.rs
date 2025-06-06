@@ -23,6 +23,7 @@ pub struct FunctionMetrics {
     pub end_line: usize,
     pub length: usize,
     pub max_nesting_depth: usize,
+    pub cyclomatic_complexity: usize,
 }
 
 pub fn analyze_tree(tree: &Tree, source_code: &str, function_node_types: &[&str]) -> Vec<FunctionMetrics> {
@@ -63,12 +64,14 @@ fn __analyze_function_node(node: Node, _source_code: &str) -> FunctionMetrics {
     let length = end_line - start_line + 1;
     
     let max_nesting_depth = __calculate_max_nesting_depth(node);
+    let cyclomatic_complexity = __calculate_cyclomatic_complexity(node);
     
     FunctionMetrics {
         start_line,
         end_line,
         length,
         max_nesting_depth,
+        cyclomatic_complexity,
     }
 }
 
@@ -108,5 +111,64 @@ fn __traverse_for_nesting(node: &Node, current_depth: &mut usize, max_depth: &mu
     
     if increases_depth {
         *current_depth -= 1;
+    }
+}
+
+fn __calculate_cyclomatic_complexity(node: Node) -> usize {
+    let mut complexity = 1; // Base complexity
+    __traverse_for_complexity(&node, &mut complexity);
+    complexity
+}
+
+fn __traverse_for_complexity(node: &Node, complexity: &mut usize) {
+    // Decision points that increase cyclomatic complexity
+    let is_decision_point = matches!(
+        node.kind(),
+        // Conditional statements
+        "if_statement" | "if_expression" | "conditional_expression" | "ternary_expression"
+        // Loops
+        | "while_statement" | "while_expression" | "for_statement" | "for_expression" 
+        | "loop_statement" | "do_statement"
+        // Pattern matching/switch
+        | "match_expression" | "match_arm" | "switch_statement" | "case_clause"
+        // Exception handling
+        | "try_statement" | "catch_clause" | "except_clause"
+        // Logical operators (short-circuit evaluation creates new paths)
+        | "binary_expression" | "logical_and" | "logical_or"
+        // Function calls that can branch (sometimes)
+        | "yield_expression" | "await_expression"
+    );
+    
+    if is_decision_point {
+        // Special handling for logical operators
+        if node.kind() == "binary_expression" {
+            // Only count logical AND/OR as decision points
+            let mut cursor = node.walk();
+            if cursor.goto_first_child() {
+                loop {
+                    let child = cursor.node();
+                    if matches!(child.kind(), "&&" | "||" | "and" | "or") {
+                        *complexity += 1;
+                        break;
+                    }
+                    if !cursor.goto_next_sibling() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            *complexity += 1;
+        }
+    }
+    
+    // Recursively check children
+    let mut cursor = node.walk();
+    if cursor.goto_first_child() {
+        loop {
+            __traverse_for_complexity(&cursor.node(), complexity);
+            if !cursor.goto_next_sibling() {
+                break;
+            }
+        }
     }
 } 
