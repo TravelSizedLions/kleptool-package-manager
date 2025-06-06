@@ -161,6 +161,19 @@ pub struct MutationStats {
     pub survived: usize,
     pub duration: f64,
     pub files_tested: usize,
+    pub per_file_stats: Vec<FileStats>,
+}
+
+/// Per-file mutation testing statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileStats {
+    pub file_path: String,
+    pub total_mutations: usize,
+    pub behavioral_kills: usize,
+    pub compile_errors: usize,
+    pub survived: usize,
+    pub kill_rate: f64,
+    pub survived_mutations: Vec<Mutation>,
 }
 
 /// Context for generating mutations from AST nodes

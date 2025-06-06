@@ -27,19 +27,21 @@ jobs:
     - name: Build Project
       run: klep ci:build
 
-    - name: Test and Generate Coverage
-      run: klep coverage
+    - name: Test and Generate Behavioral Coverage
+      run: klep mutation:v2:ci
 
-    - name: Upload Coverage
+    - name: Upload Behavioral Coverage
       uses: ./.github/actions/handle-coverage
       with:
         operation: upload
         github_token: ${{ secrets.GITHUB_TOKEN }}
         barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
+        coverage_type: mutation
 
-    - name: Create Coverage Badges
+    - name: Create Behavioral Coverage Badges
       uses: ./.github/actions/handle-coverage
       with:
         operation: badge
         github_token: ${{ secrets.GIST_TOKEN }}
         gist_id: ${{ secrets.GIST_ID }}
+        coverage_type: mutation

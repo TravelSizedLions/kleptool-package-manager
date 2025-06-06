@@ -6,6 +6,10 @@ inputs:
     description: 'The operation to perform (upload, compare, badge)'
     required: true
     default: 'upload'
+  coverage_type:
+    description: 'The type of coverage (lcov, mutation)'
+    required: false
+    default: 'lcov'
   github_token:
     description: 'GitHub token for downloading artifacts'
     required: false
@@ -22,9 +26,9 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    # Upload Coverage
+    # Upload Coverage (LCOV)
     - name: Upload Coverage (TypeScript)
-      if: inputs.operation == 'upload'
+      if: inputs.operation == 'upload' && inputs.coverage_type == 'lcov'
       uses: actions/upload-artifact@v4
       with:
         name: dev-typescript-coverage
@@ -32,16 +36,25 @@ runs:
         retention-days: 30
 
     - name: Upload Coverage (Rust)
-      if: inputs.operation == 'upload'
+      if: inputs.operation == 'upload' && inputs.coverage_type == 'lcov'
       uses: actions/upload-artifact@v4
       with:
         name: dev-rust-coverage
         path: ./coverage/rust/lcov.info
         retention-days: 30
 
-    # Compare Coverage
+    # Upload Behavioral Coverage (Mutation Testing)
+    - name: Upload Behavioral Coverage Report
+      if: inputs.operation == 'upload' && inputs.coverage_type == 'mutation'
+      uses: actions/upload-artifact@v4
+      with:
+        name: dev-mutation-coverage
+        path: ./mutations-report.json
+        retention-days: 30
+
+    # Compare Coverage (LCOV)
     - name: Download TypeScript Base Coverage from dev
-      if: inputs.operation == 'compare'
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'lcov'
       uses: dawidd6/action-download-artifact@v10
       continue-on-error: true
       with:
@@ -52,7 +65,7 @@ runs:
         if_no_artifact_found: warn
 
     - name: Download Rust Base Coverage from dev
-      if: inputs.operation == 'compare'
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'lcov'
       uses: dawidd6/action-download-artifact@v10
       continue-on-error: true
       with:
@@ -62,8 +75,21 @@ runs:
         path: ./base-coverage/rust/
         if_no_artifact_found: warn
 
+    # Compare Behavioral Coverage (Mutation Testing)
+    - name: Download Base Mutation Coverage from dev
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'mutation'
+      uses: dawidd6/action-download-artifact@v10
+      continue-on-error: true
+      with:
+        github_token: ${{ inputs.github_token }}
+        branch: dev
+        name: dev-mutation-coverage
+        path: ./base-coverage/mutation/
+        if_no_artifact_found: warn
+
     - name: Check if TypeScript base coverage exists
       id: check-ts-base
+      if: inputs.coverage_type == 'lcov'
       shell: bash
       run: |
         if [ -f "./base-coverage/typescript/lcov.info" ]; then
@@ -74,6 +100,7 @@ runs:
 
     - name: Check if Rust base coverage exists
       id: check-rust-base
+      if: inputs.coverage_type == 'lcov'
       shell: bash
       run: |
         if [ -f "./base-coverage/rust/lcov.info" ]; then
@@ -82,8 +109,19 @@ runs:
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: Check if mutation base coverage exists
+      id: check-mutation-base
+      if: inputs.coverage_type == 'mutation'
+      shell: bash
+      run: |
+        if [ -f "./base-coverage/mutation/mutations-report.json" ]; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Compare Coverage (TypeScript)
-      if: inputs.operation == 'compare' && steps.check-ts-base.outputs.exists == 'true'
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'lcov' && steps.check-ts-base.outputs.exists == 'true'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
@@ -94,7 +132,7 @@ runs:
         show-annotations: "warning"
 
     - name: Compare Coverage (Rust)
-      if: inputs.operation == 'compare' && steps.check-rust-base.outputs.exists == 'true'
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'lcov' && steps.check-rust-base.outputs.exists == 'true'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
@@ -104,8 +142,23 @@ runs:
         send-summary-comment: true
         show-annotations: "warning"
 
+    # Compare Mutation Testing Results
+    - name: Compare Behavioral Coverage (with baseline)
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'mutation' && steps.check-mutation-base.outputs.exists == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: ./scripts/compare-mutation-coverage.sh "./mutations-report.json" "./base-coverage/mutation/mutations-report.json"
+
+    - name: Generate Behavioral Coverage Report (no baseline)
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'mutation' && steps.check-mutation-base.outputs.exists == 'false'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: ./scripts/compare-mutation-coverage.sh "./mutations-report.json"
+
     - name: Generate TypeScript Coverage Report (no baseline)
-      if: inputs.operation == 'compare' && steps.check-ts-base.outputs.exists == 'false'
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'lcov' && steps.check-ts-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
@@ -116,7 +169,7 @@ runs:
         app-name: "TypeScript (No Baseline)"
 
     - name: Generate Rust Coverage Report (no baseline)
-      if: inputs.operation == 'compare' && steps.check-rust-base.outputs.exists == 'false'
+      if: inputs.operation == 'compare' && inputs.coverage_type == 'lcov' && steps.check-rust-base.outputs.exists == 'false'
       uses: barecheck/code-coverage-action@v1
       with:
         barecheck-github-app-token: ${{ inputs.barecheck_token }}
@@ -126,15 +179,15 @@ runs:
         show-annotations: "warning"
         app-name: "Rust (No Baseline)"
 
-    # Badge Creation
+    # Badge Creation (LCOV)
     - name: Extract Coverage Percentages
-      if: inputs.operation == 'badge'
+      if: inputs.operation == 'badge' && inputs.coverage_type == 'lcov'
       id: coverage-percentages
       shell: bash
       run: ./scripts/extract-coverage.sh
 
     - name: Create or Update Coverage Badges
-      if: inputs.operation == 'badge'
+      if: inputs.operation == 'badge' && inputs.coverage_type == 'lcov'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
@@ -142,3 +195,20 @@ runs:
         TS_COVERAGE: ${{ steps.coverage-percentages.outputs.typescript_coverage }}
         RUST_COVERAGE: ${{ steps.coverage-percentages.outputs.rust_coverage }}
       run: ./scripts/update-coverage-badges.sh
+
+    # Badge Creation (Mutation Testing)
+    - name: Extract Behavioral Coverage Percentages
+      if: inputs.operation == 'badge' && inputs.coverage_type == 'mutation'
+      id: mutation-percentages
+      shell: bash
+      run: ./scripts/extract-mutation-coverage.sh
+
+    - name: Create or Update Behavioral Coverage Badges
+      if: inputs.operation == 'badge' && inputs.coverage_type == 'mutation'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GIST_ID: ${{ inputs.gist_id }}
+        KILL_RATE: ${{ steps.mutation-percentages.outputs.kill_rate }}
+        BEHAVIORAL_RATE: ${{ steps.mutation-percentages.outputs.behavioral_rate }}
+      run: ./scripts/update-mutation-badges.sh

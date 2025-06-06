@@ -14,7 +14,7 @@ use ast_parser::TypeScriptParser;
 use file_safety::SafeFileManager;
 use mutation_engine::MutationEngine;
 use mutation_runner::MutationRunner;
-use types::{MutationConfig, MutationStats};
+use types::{MutationConfig, MutationStats, FileStats, KillType};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -196,15 +196,54 @@ fn generate_report(
     target_files: &[PathBuf],
     duration: std::time::Duration,
 ) -> MutationStats {
-
+    use std::collections::HashMap;
 
     let total = results.len();
-    let behavioral_kills = results.iter().filter(|r| matches!(r.kill_type, types::KillType::BehavioralKill)).count();
-    let compile_errors = results.iter().filter(|r| matches!(r.kill_type, types::KillType::CompileError)).count();
-    let survived = results.iter().filter(|r| matches!(r.kill_type, types::KillType::Survived)).count();
+    let behavioral_kills = results.iter().filter(|r| matches!(r.kill_type, KillType::BehavioralKill)).count();
+    let compile_errors = results.iter().filter(|r| matches!(r.kill_type, KillType::CompileError)).count();
+    let survived = results.iter().filter(|r| matches!(r.kill_type, KillType::Survived)).count();
     
     let behavioral_rate = if total > 0 { (behavioral_kills as f64 / total as f64) * 100.0 } else { 0.0 };
     let kill_rate = if total > 0 { ((behavioral_kills + compile_errors) as f64 / total as f64) * 100.0 } else { 0.0 };
+
+    // Generate per-file statistics
+    let mut file_results: HashMap<String, Vec<&types::MutationResult>> = HashMap::new();
+    for result in results {
+        let file_path = result.mutation.file.to_string_lossy().to_string();
+        file_results.entry(file_path).or_default().push(result);
+    }
+
+    let mut per_file_stats: Vec<FileStats> = file_results
+        .into_iter()
+        .map(|(file_path, file_mutations)| {
+            let total_mutations = file_mutations.len();
+            let behavioral_kills = file_mutations.iter().filter(|r| matches!(r.kill_type, KillType::BehavioralKill)).count();
+            let compile_errors = file_mutations.iter().filter(|r| matches!(r.kill_type, KillType::CompileError)).count();
+            let survived = file_mutations.iter().filter(|r| matches!(r.kill_type, KillType::Survived)).count();
+            let kill_rate = if total_mutations > 0 { 
+                ((behavioral_kills + compile_errors) as f64 / total_mutations as f64) * 100.0 
+            } else { 0.0 };
+            
+            let survived_mutations: Vec<types::Mutation> = file_mutations
+                .iter()
+                .filter(|r| matches!(r.kill_type, KillType::Survived))
+                .map(|r| r.mutation.clone())
+                .collect();
+
+            FileStats {
+                file_path,
+                total_mutations,
+                behavioral_kills,
+                compile_errors,
+                survived,
+                kill_rate,
+                survived_mutations,
+            }
+        })
+        .collect();
+
+    // Sort by kill rate (lowest first - files needing most attention)
+    per_file_stats.sort_by(|a, b| a.kill_rate.partial_cmp(&b.kill_rate).unwrap_or(std::cmp::Ordering::Equal));
 
     println!("\n🎯 COMPREHENSIVE MUTATION TESTING RESULTS");
     println!("{}", "=".repeat(60));
@@ -215,6 +254,44 @@ fn generate_report(
     println!("💀 Total killed: {}/{} ({:.1}%)", behavioral_kills + compile_errors, total, kill_rate);
     println!("⏱️  Total time: {:.2}s", duration.as_secs_f64());
     println!("🚀 Mutations per second: {:.1}", total as f64 / duration.as_secs_f64());
+
+    // Display per-file breakdown
+    println!("\n📁 PER-FILE COVERAGE BREAKDOWN");
+    println!("{}", "=".repeat(60));
+    for file_stat in &per_file_stats {
+        let status_icon = if file_stat.kill_rate >= 95.0 {
+            "🟢"
+        } else if file_stat.kill_rate >= 80.0 {
+            "🟡"
+        } else {
+            "🔴"
+        };
+        
+        println!("{} {} ({:.1}% kill rate)", 
+            status_icon, 
+            file_stat.file_path.replace("src/cli/", ""),
+            file_stat.kill_rate
+        );
+        println!("   {} mutations | {} kills | {} survived", 
+            file_stat.total_mutations, 
+            file_stat.behavioral_kills + file_stat.compile_errors,
+            file_stat.survived
+        );
+        
+        if !file_stat.survived_mutations.is_empty() && file_stat.survived_mutations.len() <= 3 {
+            println!("   Survivors:");
+            for survivor in &file_stat.survived_mutations {
+                println!("     • Line {}: {} → {}", 
+                    survivor.line, 
+                    survivor.original, 
+                    survivor.mutated
+                );
+            }
+        } else if file_stat.survived_mutations.len() > 3 {
+            println!("   {} survivors (see JSON report for details)", file_stat.survived_mutations.len());
+        }
+        println!();
+    }
 
     let grade = if behavioral_rate >= 80.0 {
         "🟢 EXCELLENT behavioral coverage!"
@@ -237,6 +314,7 @@ fn generate_report(
         survived,
         duration: duration.as_secs_f64(),
         files_tested: target_files.len(),
+        per_file_stats,
     }
 }
 

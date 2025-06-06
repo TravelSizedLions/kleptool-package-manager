@@ -27,12 +27,13 @@ jobs:
     - name: Build Project
       run: klep ci:build
 
-    - name: Test and Generate Coverage
-      run: klep coverage
+    - name: Test and Generate Behavioral Coverage
+      run: klep mutation:v2:ci
 
-    - name: Compare Coverage
+    - name: Compare Behavioral Coverage 
       uses: ./.github/actions/handle-coverage
       with:
         operation: compare
         github_token: ${{ secrets.GITHUB_TOKEN }}
         barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
+        coverage_type: mutation
