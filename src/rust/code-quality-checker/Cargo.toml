@@ -2,6 +2,12 @@
 name = "code-quality-checker"
 version = "0.1.0"
 edition = "2021"
+description = "A tree-sitter based code quality analyzer for checking nesting depth, function length, and cyclomatic complexity"
+license = "MIT"
+repository = "https://github.com/TravelSizedLions/kleptool-package-manager"
+readme = "README.md"
+keywords = ["code-quality", "static-analysis", "tree-sitter", "linting"]
+categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
 tree-sitter = "0.25"
