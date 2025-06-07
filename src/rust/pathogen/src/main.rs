@@ -283,7 +283,11 @@ fn __link_or_copy_file(src_path: &Path, dst_path: &Path) -> Result<()> {
   use std::fs;
 
   if let Ok(src_canonical) = src_path.canonicalize() {
-    if std::os::unix::fs::symlink(&src_canonical, dst_path).is_err() {
+    // Try creating a symlink (cross-platform compatible)
+    let symlink_result = __create_symlink(&src_canonical, dst_path);
+
+    // Fall back to copying if symlink fails
+    if symlink_result.is_err() {
       if src_canonical.is_dir() {
         copy_directory_recursively(&src_canonical, dst_path)?;
       } else {
@@ -293,6 +297,28 @@ fn __link_or_copy_file(src_path: &Path, dst_path: &Path) -> Result<()> {
   }
 
   Ok(())
+}
+
+#[cfg(unix)]
+fn __create_symlink(src: &Path, dst: &Path) -> std::io::Result<()> {
+  std::os::unix::fs::symlink(src, dst)
+}
+
+#[cfg(windows)]
+fn __create_symlink(src: &Path, dst: &Path) -> std::io::Result<()> {
+  if src.is_dir() {
+    std::os::windows::fs::symlink_dir(src, dst)
+  } else {
+    std::os::windows::fs::symlink_file(src, dst)
+  }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn __create_symlink(_src: &Path, _dst: &Path) -> std::io::Result<()> {
+  Err(std::io::Error::new(
+    std::io::ErrorKind::Unsupported,
+    "Symlinks not supported on this platform",
+  ))
 }
 
 fn __setup_source_directory_for_mutation(

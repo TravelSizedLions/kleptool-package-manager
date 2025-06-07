@@ -28,7 +28,7 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: dev-mutation-coverage
-        path: ./mutations-report.json
+        path: ./pathogen-report.json
         retention-days: 30
 
     # Compare Behavioral Coverage
@@ -48,7 +48,7 @@ runs:
       if: inputs.operation == 'compare'
       shell: bash
       run: |
-        if [ -f "./base-coverage/mutation/mutations-report.json" ]; then
+        if [ -f "./base-coverage/mutation/pathogen-report.json" ]; then
           echo "exists=true" >> $GITHUB_OUTPUT
         else
           echo "exists=false" >> $GITHUB_OUTPUT
@@ -60,14 +60,14 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
-      run: ./scripts/compare-mutation-coverage.sh "./mutations-report.json" "./base-coverage/mutation/mutations-report.json"
+      run: ./scripts/compare-mutation-coverage.sh "./pathogen-report.json" "./base-coverage/mutation/pathogen-report.json"
 
     - name: Generate Behavioral Coverage Report (no baseline)
       if: inputs.operation == 'compare' && steps.check-mutation-base.outputs.exists == 'false'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
-      run: ./scripts/compare-mutation-coverage.sh "./mutations-report.json"
+      run: ./scripts/compare-mutation-coverage.sh "./pathogen-report.json"
 
     # Badge Creation
     - name: Extract Behavioral Coverage Percentages
