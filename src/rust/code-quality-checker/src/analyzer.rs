@@ -38,21 +38,30 @@ pub fn analyze_path(path: &Path, config: &AnalysisConfig) -> Result<()> {
     return Err(anyhow!("Path does not exist: {}", path.display()));
   }
 
-  if path.is_file() {
-    return __analyze_file(path, config);
+  let total_violations = if path.is_file() {
+    __analyze_file(path, config)?
+  } else if path.is_dir() {
+    __analyze_directory(path, config)?
+  } else {
+    return Err(anyhow!(
+      "Path is neither file nor directory: {}",
+      path.display()
+    ));
+  };
+
+  if total_violations > 0 {
+    return Err(anyhow!(
+      "Code quality check failed: {} violation(s) found",
+      total_violations
+    ));
   }
 
-  if path.is_dir() {
-    return __analyze_directory(path, config);
-  }
-
-  Err(anyhow!(
-    "Path is neither file nor directory: {}",
-    path.display()
-  ))
+  Ok(())
 }
 
-fn __analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
+fn __analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<usize> {
+  let mut total_violations = 0;
+
   for entry in fs::read_dir(dir)? {
     let entry = entry?;
     let path = entry.path();
@@ -62,18 +71,18 @@ fn __analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
     }
 
     if path.is_dir() {
-      __analyze_directory(&path, config)?;
+      total_violations += __analyze_directory(&path, config)?;
       continue;
     }
 
     if path.is_file() {
-      __try_analyze_file(&path, config);
+      total_violations += __try_analyze_file(&path, config);
     }
   }
-  Ok(())
+  Ok(total_violations)
 }
 
-fn __analyze_file(file_path: &Path, config: &AnalysisConfig) -> Result<()> {
+fn __analyze_file(file_path: &Path, config: &AnalysisConfig) -> Result<usize> {
   let extension = __get_file_extension(file_path)?;
   let language = __get_language_for_file(extension)?;
   let function_node_types = get_function_node_types(extension);
@@ -83,7 +92,7 @@ fn __analyze_file(file_path: &Path, config: &AnalysisConfig) -> Result<()> {
   let function_metrics = analyze_tree(&tree, &source_code, &function_node_types);
   let violations = __check_violations(&function_metrics, config, &ignore_directives);
   __print_violations(file_path, &violations);
-  Ok(())
+  Ok(violations.len())
 }
 
 fn __should_skip_directory(path: &Path) -> bool {
@@ -97,17 +106,21 @@ fn __should_skip_directory(path: &Path) -> bool {
   )
 }
 
-fn __try_analyze_file(path: &Path, config: &AnalysisConfig) {
+fn __try_analyze_file(path: &Path, config: &AnalysisConfig) -> usize {
   let Some(extension) = path.extension().and_then(|e| e.to_str()) else {
-    return;
+    return 0;
   };
 
   if !__is_supported_extension(extension) {
-    return;
+    return 0;
   }
 
-  if let Err(e) = __analyze_file(path, config) {
-    eprintln!("Warning: Failed to analyze {}: {}", path.display(), e);
+  match __analyze_file(path, config) {
+    Ok(violations) => violations,
+    Err(e) => {
+      eprintln!("Warning: Failed to analyze {}: {}", path.display(), e);
+      0
+    }
   }
 }
 
