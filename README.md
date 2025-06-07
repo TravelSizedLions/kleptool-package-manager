@@ -253,7 +253,7 @@ Disorganized, WIP: read, rank, and discard unrelated/out of scope research
  - Analysis of dynamic symmetries for SAT/SMT solvers: https://theses.hal.science/tel-03128926/
  - proposal of several dependency resolution approaches: https://dspace.library.uvic.ca/server/api/core/bitstreams/08e884a4-fccf-4fdd-88f3-121121ba0db4/content
  - Definitely Read & Cite this one: Literature Review of General-case dependency resolution (and why we lean towards SAT solvers): https://ieeexplore.ieee.org/abstract/document/9054837 (Feb, 2020)
- - 
+ - https://github.com/agroce/universalmutator - Very, very similar goals to the K-space translation we need to nail.
 
 ### The A* Algorithm
 
