@@ -235,14 +235,28 @@ impl WorkerPool {
         result
     }
 
-    pub async fn run_mutations(&self, mutations: Vec<crate::types::Mutation>, verbose: bool) -> Result<Vec<crate::types::MutationResult>> {
+    pub async fn run_mutations(&self, mutations: Vec<crate::types::Mutation>, _verbose: bool) -> Result<Vec<crate::types::MutationResult>> {
         use futures::stream::{FuturesUnordered, StreamExt};
+        use indicatif::{ProgressBar, ProgressStyle};
+        use std::sync::atomic::{AtomicUsize, Ordering};
         
         let total = mutations.len();
         println!("📊 Processing {} mutations across {} workers...", total, self.pool_size);
         
-        let futures: FuturesUnordered<_> = mutations.into_iter().enumerate().map(|(i, mutation)| {
+        // Create progress bar
+        let progress = ProgressBar::new(total as u64);
+        progress.set_style(
+            ProgressStyle::default_bar()
+                .template("  {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} mutations ({percent}%) | ETA: {eta}")?
+                .progress_chars("█▉▊▋▌▍▎▏ ")
+        );
+        
+        let completed = Arc::new(AtomicUsize::new(0));
+        
+        let futures: FuturesUnordered<_> = mutations.into_iter().map(|mutation| {
             let pool = self; // Already a reference
+            let progress = progress.clone();
+            let completed = completed.clone();
             async move {
                 let request = MutationRequest {
                     file_path: mutation.file.to_string_lossy().to_string(),
@@ -253,9 +267,9 @@ impl WorkerPool {
                 
                 let test_result = pool.execute_mutation(request).await?;
                 
-                if verbose && (i + 1) % 50 == 0 {
-                    println!("  ✓ Completed {}/{} mutations", i + 1, total);
-                }
+                // Update progress
+                let current = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                progress.set_position(current as u64);
                 
                 // Convert to MutationResult
                 let kill_type = if test_result.success {
@@ -279,6 +293,8 @@ impl WorkerPool {
         }).collect();
         
         let results: Vec<_> = futures.collect().await;
+        progress.finish_with_message("✓ All mutations completed!");
+        
         let mut mutation_results = Vec::new();
         
         for result in results {

@@ -45,5 +45,8 @@ memmap2 = "0.9"        # Memory-mapped file I/O
 ahash = "0.8"          # Fast non-crypto hashing
 lru = "0.12"           # LRU cache for compiled artifacts
 
+# Progress reporting
+indicatif = "0.17"     # Progress bars and spinners
+
 [dev-dependencies]
 tempfile = "3.8" 
