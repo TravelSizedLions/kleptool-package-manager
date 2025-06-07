@@ -272,78 +272,125 @@ async fn run_mutation_tests(
 
 /// Create an isolated temp workspace by copying necessary project files
 fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
+  let temp_workspace = __setup_temp_directory()?;
+  let (project_root, source_canonical, project_canonical) = __resolve_workspace_paths(config)?;
+  
+  __symlink_project_files(&project_root, &temp_workspace)?;
+  __setup_source_directory_for_mutation(config, &temp_workspace, &source_canonical, &project_canonical)?;
+  
+  Ok(temp_workspace)
+}
+
+fn __setup_temp_directory() -> Result<PathBuf> {
   use std::fs;
   use tempfile::tempdir;
 
-  // Create a temporary directory
   let temp_dir = tempdir()?;
   let temp_workspace = temp_dir.path().join("pathogen-workspace");
-
-  // Create the workspace directory
   fs::create_dir_all(&temp_workspace)?;
+  
+  // Keep the temp directory alive by forgetting the tempdir handle
+  std::mem::forget(temp_dir);
+  
+  Ok(temp_workspace)
+}
 
-  // Step 1: Symlink ALL files and directories from project root, except those containing our source
+fn __resolve_workspace_paths(config: &MutationConfig) -> Result<(PathBuf, PathBuf, PathBuf)> {
   let project_root = std::env::current_dir()?;
   let source_canonical = config.source_dir.canonicalize()?;
   let project_canonical = project_root.canonicalize()?;
+  Ok((project_root, source_canonical, project_canonical))
+}
 
-  for entry in fs::read_dir(&project_root)? {
+fn __symlink_project_files(project_root: &PathBuf, temp_workspace: &PathBuf) -> Result<()> {
+  use std::fs;
+
+  for entry in fs::read_dir(project_root)? {
     let entry = entry?;
     let src_path = entry.path();
     let file_name = src_path.file_name().unwrap();
 
-    // Skip temp directories, hidden files/dirs, and build artifacts
-    let name_str = file_name.to_string_lossy();
-    if name_str.starts_with('.')
-      || name_str == "target"
-      || name_str.starts_with("tmp")
-      || name_str == "node_modules/.cache"
-    {
+    if __should_skip_file(&file_name.to_string_lossy()) {
       continue;
     }
 
-    // We'll symlink everything including src, then selectively replace src/cli in Step 2
-
     let dst_path = temp_workspace.join(file_name);
-    if let Ok(src_canonical) = src_path.canonicalize() {
-      if std::os::unix::fs::symlink(&src_canonical, &dst_path).is_err() {
-        // Fallback to copy if symlink fails
-        if src_canonical.is_dir() {
-          copy_directory_recursively(&src_canonical, &dst_path)?;
-        } else {
-          fs::copy(&src_canonical, &dst_path)?;
-        }
+    __link_or_copy_file(&src_path, &dst_path)?;
+  }
+
+  Ok(())
+}
+
+fn __should_skip_file(name: &str) -> bool {
+  name.starts_with('.') 
+    || name == "target" 
+    || name.starts_with("tmp") 
+    || name == "node_modules/.cache"
+}
+
+fn __link_or_copy_file(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
+  use std::fs;
+
+  if let Ok(src_canonical) = src_path.canonicalize() {
+    if std::os::unix::fs::symlink(&src_canonical, dst_path).is_err() {
+      if src_canonical.is_dir() {
+        copy_directory_recursively(&src_canonical, dst_path)?;
+      } else {
+        fs::copy(&src_canonical, dst_path)?;
       }
     }
   }
 
-  // Step 2: Replace symlinked source directory with actual copies (for mutation)
-  let source_relative = source_canonical
-    .strip_prefix(&project_canonical)
+  Ok(())
+}
+
+fn __setup_source_directory_for_mutation(
+  config: &MutationConfig,
+  temp_workspace: &PathBuf,
+  source_canonical: &PathBuf,
+  project_canonical: &PathBuf,
+) -> Result<()> {
+  let source_relative = __get_source_relative_path(source_canonical, project_canonical)?;
+  let dst_source = temp_workspace.join(&source_relative);
+
+  __validate_destination_path(&dst_source, temp_workspace)?;
+  __recreate_source_structure(temp_workspace, &source_relative, project_canonical)?;
+  __copy_source_files_for_mutation(config, &dst_source)?;
+
+  Ok(())
+}
+
+fn __get_source_relative_path(source_canonical: &PathBuf, project_canonical: &PathBuf) -> Result<PathBuf> {
+  source_canonical
+    .strip_prefix(project_canonical)
+    .map(|p| p.to_path_buf())
     .map_err(|_| {
       std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
         "Source dir must be within project",
-      )
-    })?;
+      ).into()
+    })
+}
 
-  let dst_source = temp_workspace.join(source_relative);
-
-  // SAFETY: Only proceed if dst_source is clearly within temp_workspace
-  if !dst_source.starts_with(&temp_workspace) {
+fn __validate_destination_path(dst_path: &PathBuf, temp_workspace: &PathBuf) -> Result<()> {
+  if !dst_path.starts_with(temp_workspace) {
     return Err(
       std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
         "Safety check failed: destination path not in temp workspace",
-      )
-      .into(),
+      ).into(),
     );
   }
+  Ok(())
+}
 
-  // The issue: when we symlink 'src/', the subdirectory 'src/cli' appears as a regular directory
-  // Solution: Remove the parent symlink and rebuild the structure manually
+fn __recreate_source_structure(
+  temp_workspace: &PathBuf,
+  source_relative: &PathBuf,
+  project_canonical: &PathBuf,
+) -> Result<()> {
+  use std::fs;
 
-  // Find the top-level directory that was symlinked (e.g., 'src' if source is 'src/cli')
   let source_parts: Vec<_> = source_relative.components().collect();
   if source_parts.is_empty() {
     return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Empty source path").into());
@@ -352,44 +399,31 @@ fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
   let top_level_dir = source_parts[0].as_os_str();
   let src_symlink = temp_workspace.join(top_level_dir);
 
-  // SAFETY: Only proceed if src_symlink is clearly within temp_workspace
-  if !src_symlink.starts_with(&temp_workspace) {
-    return Err(
-      std::io::Error::new(
-        std::io::ErrorKind::InvalidInput,
-        "Safety check failed: source symlink not in temp workspace",
-      )
-      .into(),
-    );
-  }
+  __validate_destination_path(&src_symlink, temp_workspace)?;
 
-  // Remove the entire symlinked directory (e.g., the 'src' symlink)
   if src_symlink.exists() {
     fs::remove_dir_all(&src_symlink)?;
   }
 
-  // Recreate the directory structure by copying from original
   let original_top_level = project_canonical.join(top_level_dir);
   copy_directory_recursively(&original_top_level, &src_symlink)?;
 
-  // Now replace just the specific subdirectory with our source files
+  Ok(())
+}
+
+fn __copy_source_files_for_mutation(config: &MutationConfig, dst_source: &PathBuf) -> Result<()> {
+  use std::fs;
+
   if dst_source.exists() {
-    fs::remove_dir_all(&dst_source)?;
+    fs::remove_dir_all(dst_source)?;
   }
 
-  // Create parent directories if needed
   if let Some(parent) = dst_source.parent() {
     fs::create_dir_all(parent)?;
   }
 
-  // Copy the actual source files (these will be mutated)
-  copy_directory_recursively(&config.source_dir, &dst_source)?;
-
-  // Keep the temp directory alive by forgetting the tempdir handle
-  // This prevents automatic cleanup - we'll clean up manually later
-  std::mem::forget(temp_dir);
-
-  Ok(temp_workspace)
+  copy_directory_recursively(&config.source_dir, dst_source)?;
+  Ok(())
 }
 
 /// Recursively copy a directory and all its contents
@@ -581,34 +615,49 @@ fn find_original_file(
   source_dir: &PathBuf,
   language: &types::Language,
 ) -> Result<PathBuf> {
-  use std::fs;
-
   let target_filename = format!("{}.{}", base_filename, language.extension());
 
-  // Search recursively in the provided source directory
-  fn search_in_dir(dir: &PathBuf, target: &str) -> Option<PathBuf> {
-    if let Ok(entries) = fs::read_dir(dir) {
-      for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_file() && path.file_name().is_some_and(|name| name == target) {
-          return Some(path);
-        } else if path.is_dir() {
-          if let Some(found) = search_in_dir(&path, target) {
-            return Some(found);
-          }
-        }
-      }
-    }
-    None
-  }
-
-  search_in_dir(source_dir, &target_filename).ok_or_else(|| {
+  __recursive_file_search(source_dir, &target_filename).ok_or_else(|| {
     anyhow::anyhow!(
       "Could not find original file for: {} in {}",
       base_filename,
       source_dir.display()
     )
   })
+}
+
+fn __recursive_file_search(dir: &PathBuf, target: &str) -> Option<PathBuf> {
+  use std::fs;
+
+  let entries = fs::read_dir(dir).ok()?;
+  
+  for entry in entries.flatten() {
+    let path = entry.path();
+    
+    if let Some(found) = __check_entry_for_target(&path, target) {
+      return Some(found);
+    }
+  }
+  
+  None
+}
+
+fn __check_entry_for_target(path: &PathBuf, target: &str) -> Option<PathBuf> {
+  if path.is_file() {
+    return __check_if_target_file(path, target);
+  }
+  
+  if path.is_dir() {
+    return __recursive_file_search(path, target);
+  }
+  
+  None
+}
+
+fn __check_if_target_file(path: &PathBuf, target: &str) -> Option<PathBuf> {
+  path.file_name()
+    .filter(|name| *name == target)
+    .map(|_| path.clone())
 }
 
 /// Find the difference between original and mutant content
@@ -961,14 +1010,33 @@ fn print_final_assessment(stats: &SummaryStats, results: &[types::MutationResult
 fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult]) {
   println!("🔍 Pathogen Health Check:");
 
-  // Issue 1: Unrealistic 100% behavioral kill rate
+  let mut issues_detected = 0;
+
+  issues_detected += __check_unrealistic_kill_rate(stats);
+  issues_detected += __check_missing_test_files(results);
+  issues_detected += __check_empty_outputs(results);
+  issues_detected += __check_timeout_patterns(results, stats);
+  issues_detected += __check_execution_time_anomalies(results, stats);
+  issues_detected += __check_compile_error_ratio(stats);
+
+  if issues_detected == 0 {
+    println!("✅ All health checks passed - results appear reliable!");
+  }
+
+  println!();
+}
+
+fn __check_unrealistic_kill_rate(stats: &SummaryStats) -> u32 {
   if stats.behavioral_rate >= 99.5 && stats.total > 100 {
     println!("❌ SUSPICIOUS: 100% behavioral kill rate is unrealistic");
     println!("   • Likely issue: Missing test files or incorrect test detection");
     println!("   • Expected: 70-90% behavioral kills, 5-15% survivors, 5-15% compile errors");
+    return 1;
   }
+  0
+}
 
-  // Issue 2: Check for "had no matches" indicating missing test files
+fn __check_missing_test_files(results: &[types::MutationResult]) -> u32 {
   let no_matches_count = results
     .iter()
     .filter(|r| r.test_output.contains("had no matches"))
@@ -984,9 +1052,12 @@ fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult
       no_matches_count
     );
     println!("   • Consider creating missing test files or improving test selection");
+    return 1;
   }
+  0
+}
 
-  // Issue 3: Check for null/empty outputs
+fn __check_empty_outputs(results: &[types::MutationResult]) -> u32 {
   let empty_outputs = results
     .iter()
     .filter(|r| r.test_output.is_empty() || r.test_output == "null")
@@ -999,16 +1070,18 @@ fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult
     );
     println!("   • Tests may not be executing properly");
     println!("   • Check worker communication and test execution");
+    return 1;
   }
+  0
+}
 
-  // Issue 4: Check for timeout patterns
+fn __check_timeout_patterns(results: &[types::MutationResult], stats: &SummaryStats) -> u32 {
   let timeout_count = results
     .iter()
     .filter(|r| r.test_output.contains("timed out") || r.test_output.contains("timeout"))
     .count();
 
   if timeout_count > stats.total / 20 {
-    // More than 5% timeouts
     println!(
       "⚠️  WARNING: {} mutations timed out ({}%)",
       timeout_count,
@@ -1016,16 +1089,18 @@ fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult
     );
     println!("   • May indicate infinite loop mutations");
     println!("   • Consider adjusting timeout values or mutation operators");
+    return 1;
   }
+  0
+}
 
-  // Issue 5: Check execution time distribution for anomalies
+fn __check_execution_time_anomalies(results: &[types::MutationResult], stats: &SummaryStats) -> u32 {
   let very_fast_mutations = results
     .iter()
-    .filter(|r| r.execution_time_ms < 10) // Less than 10ms is suspiciously fast
+    .filter(|r| r.execution_time_ms < 10)
     .count();
 
   if very_fast_mutations > stats.total / 10 {
-    // More than 10% super fast
     println!(
       "⚠️  WARNING: {} mutations completed in <10ms ({}%)",
       very_fast_mutations,
@@ -1033,28 +1108,19 @@ fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult
     );
     println!("   • Tests may not be running properly");
     println!("   • Check if targeted test selection is working");
+    return 1;
   }
+  0
+}
 
-  // Issue 6: Reasonable baseline check
+fn __check_compile_error_ratio(stats: &SummaryStats) -> u32 {
   if stats.compile_errors > stats.behavioral_kills {
     println!("⚠️  WARNING: More compile errors than behavioral kills!");
     println!("   • Consider refining mutation operators");
     println!("   • May indicate syntax-heavy mutations that don't test logic");
+    return 1;
   }
-
-  // Positive feedback if everything looks good
-  let issues_detected = (stats.behavioral_rate >= 99.5) as u32
-    + (no_matches_count > 0) as u32
-    + (empty_outputs > 0) as u32
-    + (timeout_count > stats.total / 20) as u32
-    + (very_fast_mutations > stats.total / 10) as u32
-    + (stats.compile_errors > stats.behavioral_kills) as u32;
-
-  if issues_detected == 0 {
-    println!("✅ All health checks passed - results appear reliable!");
-  }
-
-  println!();
+  0
 }
 
 /// Get coverage grade based on behavioral rate
