@@ -149,7 +149,7 @@ program
   .option('-v, --verbose', 'Verbose output')
   .option('--sort', 'Sort tasks alphabetically')
   .action(
-    kerror.boundary(async (options: { verbose: boolean, sort: boolean }) => {
+    kerror.boundary(async (options: { verbose: boolean; sort: boolean }) => {
       let tasks = taskRunner.getTaskFile();
       if (options.sort) {
         tasks = Object.fromEntries(Object.entries(tasks).sort((a, b) => a[0].localeCompare(b[0])));
@@ -170,7 +170,11 @@ program
         );
       } else {
         console.log('Available tasks:');
-        console.log(Object.keys(tasks).map(task => `• ${task}`).join('\n'));
+        console.log(
+          Object.keys(tasks)
+            .map((task) => `• ${task}`)
+            .join('\n')
+        );
       }
     })
   );

@@ -1,6 +1,0 @@
-{
-  'test:simple': 'echo "Hello, World!"',
-  'test:fail': 'exit 1',
-  'test:args': 'echo "Args: $@"',
-  'test:multi': 'echo "First" && echo "Second"',
-}

@@ -27,22 +27,26 @@ async fn main() -> Result<()> {
 
   // Create isolated temp workspace
   let temp_workspace = create_temp_workspace(&config)?;
-  println!("🏗️  Created isolated workspace: {}", temp_workspace.display());
-  
+  println!(
+    "🏗️  Created isolated workspace: {}",
+    temp_workspace.display()
+  );
+
   // Calculate the relative path of the source directory within the project
   let project_root = std::env::current_dir()?;
   let source_canonical = config.source_dir.canonicalize()?;
   let project_canonical = project_root.canonicalize()?;
-  let source_relative = source_canonical.strip_prefix(&project_canonical)
+  let source_relative = source_canonical
+    .strip_prefix(&project_canonical)
     .map_err(|_| anyhow::anyhow!("Source dir must be within project"))?;
-  
+
   // Update config to use temp workspace
   let mut temp_config = config.clone();
   temp_config.source_dir = temp_workspace.join(source_relative);
-  
+
   // Print banner with the actual workspace being used
   print_startup_banner(&temp_config);
-  
+
   let mut components = initialize_components(&temp_config, &temp_workspace)?;
   let target_files = discover_and_validate_files(&temp_config)?;
 
@@ -50,14 +54,26 @@ async fn main() -> Result<()> {
     run_baseline_validation(&components.runner).await?;
   }
 
-  let mutations = generate_mutations(&mut components, &target_files, &config.source_dir, &temp_config, temp_config.verbose)?;
+  let mutations = generate_mutations(
+    &mut components,
+    &target_files,
+    &config.source_dir,
+    &temp_config,
+    temp_config.verbose,
+  )?;
 
   if temp_config.dry_run {
     handle_dry_run(&mutations, temp_config.verbose);
     return Ok(());
   }
 
-  let results = run_mutation_tests(&temp_workspace, mutations, temp_config.parallel_count, temp_config.verbose).await?;
+  let results = run_mutation_tests(
+    &temp_workspace,
+    mutations,
+    temp_config.parallel_count,
+    temp_config.verbose,
+  )
+  .await?;
   let duration = start_time.elapsed();
 
   generate_and_save_report(&results, &target_files, duration, &temp_config)?;
@@ -122,22 +138,28 @@ fn print_startup_banner(config: &MutationConfig) {
   let detected_cores = std::thread::available_parallelism()
     .map(|n| n.get())
     .unwrap_or(0);
-  
+
   println!("{}", "=".repeat(80));
-  println!("                             Pathogen v{}", env!("CARGO_PKG_VERSION"));
+  println!(
+    "                             Pathogen v{}",
+    env!("CARGO_PKG_VERSION")
+  );
   println!("{}", "=".repeat(80));
   println!("📂 Source directory: {}", config.source_dir.display());
-  
+
   if detected_cores > 0 && config.parallel_count == detected_cores {
-    println!("🧵 Auto-detected {} logical cores, using {} parallel runners", detected_cores, config.parallel_count);
+    println!(
+      "🧵 Auto-detected {} logical cores, using {} parallel runners",
+      detected_cores, config.parallel_count
+    );
   } else {
     println!("🔧 Parallel runners: {}", config.parallel_count);
   }
-  
+
   if config.dry_run {
     println!("🔍 DRY RUN MODE - No tests will be executed");
   }
-  
+
   if config.no_cache {
     println!("🚫 Cache disabled - All tests will run fresh");
   }
@@ -151,7 +173,10 @@ struct MutationComponents {
 }
 
 /// Initialize all components with safety-first design
-fn initialize_components(config: &MutationConfig, workspace_dir: &PathBuf) -> Result<MutationComponents> {
+fn initialize_components(
+  config: &MutationConfig,
+  workspace_dir: &PathBuf,
+) -> Result<MutationComponents> {
   let parser = TypeScriptParser::new()?;
   let file_manager = SafeFileManager::new()?;
   let engine = MutationEngine::new()?;
@@ -167,7 +192,8 @@ fn initialize_components(config: &MutationConfig, workspace_dir: &PathBuf) -> Re
 
 /// Discover and validate target files
 fn discover_and_validate_files(config: &MutationConfig) -> Result<Vec<PathBuf>> {
-  println!("\n🔍 Discovering {} files...", 
+  println!(
+    "\n🔍 Discovering {} files...",
     match config.language {
       types::Language::TypeScript => "TypeScript",
       types::Language::Rust => "Rust",
@@ -232,12 +258,15 @@ async fn run_mutation_tests(
   parallel_count: usize,
   verbose: bool,
 ) -> Result<Vec<types::MutationResult>> {
-  println!("\n🧪 Starting mutation testing with {} workers...", parallel_count);
-  
+  println!(
+    "\n🧪 Starting mutation testing with {} workers...",
+    parallel_count
+  );
+
   let worker_pool = WorkerPool::new(parallel_count, workspace_dir.clone()).await?;
   let results = worker_pool.run_mutations(mutations, verbose).await?;
   worker_pool.shutdown().await?;
-  
+
   Ok(results)
 }
 
@@ -245,38 +274,39 @@ async fn run_mutation_tests(
 fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
   use std::fs;
   use tempfile::tempdir;
-  
+
   // Create a temporary directory
   let temp_dir = tempdir()?;
   let temp_workspace = temp_dir.path().join("pathogen-workspace");
-  
+
   // Create the workspace directory
   fs::create_dir_all(&temp_workspace)?;
-  
+
   // Step 1: Symlink ALL files and directories from project root, except those containing our source
   let project_root = std::env::current_dir()?;
   let source_canonical = config.source_dir.canonicalize()?;
   let project_canonical = project_root.canonicalize()?;
-  
+
   for entry in fs::read_dir(&project_root)? {
     let entry = entry?;
     let src_path = entry.path();
     let file_name = src_path.file_name().unwrap();
-    
+
     // Skip temp directories, hidden files/dirs, and build artifacts
     let name_str = file_name.to_string_lossy();
-    if name_str.starts_with('.') || 
-       name_str == "target" ||
-       name_str.starts_with("tmp") ||
-       name_str == "node_modules/.cache" {
+    if name_str.starts_with('.')
+      || name_str == "target"
+      || name_str.starts_with("tmp")
+      || name_str == "node_modules/.cache"
+    {
       continue;
     }
-    
+
     // We'll symlink everything including src, then selectively replace src/cli in Step 2
-    
+
     let dst_path = temp_workspace.join(file_name);
     if let Ok(src_canonical) = src_path.canonicalize() {
-      if let Err(_) = std::os::unix::fs::symlink(&src_canonical, &dst_path) {
+      if std::os::unix::fs::symlink(&src_canonical, &dst_path).is_err() {
         // Fallback to copy if symlink fails
         if src_canonical.is_dir() {
           copy_directory_recursively(&src_canonical, &dst_path)?;
@@ -288,61 +318,77 @@ fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
   }
 
   // Step 2: Replace symlinked source directory with actual copies (for mutation)
-  let source_relative = source_canonical.strip_prefix(&project_canonical)
-    .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Source dir must be within project"))?;
-  
+  let source_relative = source_canonical
+    .strip_prefix(&project_canonical)
+    .map_err(|_| {
+      std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "Source dir must be within project",
+      )
+    })?;
+
   let dst_source = temp_workspace.join(source_relative);
-  
+
   // SAFETY: Only proceed if dst_source is clearly within temp_workspace
   if !dst_source.starts_with(&temp_workspace) {
-    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, 
-      "Safety check failed: destination path not in temp workspace").into());
+    return Err(
+      std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "Safety check failed: destination path not in temp workspace",
+      )
+      .into(),
+    );
   }
-  
+
   // The issue: when we symlink 'src/', the subdirectory 'src/cli' appears as a regular directory
   // Solution: Remove the parent symlink and rebuild the structure manually
-  
+
   // Find the top-level directory that was symlinked (e.g., 'src' if source is 'src/cli')
   let source_parts: Vec<_> = source_relative.components().collect();
   if source_parts.is_empty() {
     return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Empty source path").into());
   }
-  
+
   let top_level_dir = source_parts[0].as_os_str();
   let src_symlink = temp_workspace.join(top_level_dir);
-  
+
   // SAFETY: Only proceed if src_symlink is clearly within temp_workspace
   if !src_symlink.starts_with(&temp_workspace) {
-    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, 
-      "Safety check failed: source symlink not in temp workspace").into());
+    return Err(
+      std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "Safety check failed: source symlink not in temp workspace",
+      )
+      .into(),
+    );
   }
-  
+
   // Remove the entire symlinked directory (e.g., the 'src' symlink)
   if src_symlink.exists() {
     fs::remove_dir_all(&src_symlink)?;
   }
-  
+
   // Recreate the directory structure by copying from original
   let original_top_level = project_canonical.join(top_level_dir);
   copy_directory_recursively(&original_top_level, &src_symlink)?;
-  
+
   // Now replace just the specific subdirectory with our source files
   if dst_source.exists() {
     fs::remove_dir_all(&dst_source)?;
   }
-  
+
   // Create parent directories if needed
   if let Some(parent) = dst_source.parent() {
     fs::create_dir_all(parent)?;
   }
-  
+
   // Copy the actual source files (these will be mutated)
   copy_directory_recursively(&config.source_dir, &dst_source)?;
-  
+
   // Keep the temp directory alive by forgetting the tempdir handle
   // This prevents automatic cleanup - we'll clean up manually later
   std::mem::forget(temp_dir);
-  
+
   Ok(temp_workspace)
 }
 
@@ -350,16 +396,16 @@ fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
 fn copy_directory_recursively(src: &PathBuf, dst: &PathBuf) -> Result<()> {
   use std::fs;
   use walkdir::WalkDir;
-  
+
   // Create destination directory
   fs::create_dir_all(dst)?;
-  
+
   // Copy all files and subdirectories
   for entry in WalkDir::new(src).into_iter().filter_map(|e| e.ok()) {
     let src_path = entry.path();
     let relative_path = src_path.strip_prefix(src)?;
     let dst_path = dst.join(relative_path);
-    
+
     if src_path.is_dir() {
       fs::create_dir_all(&dst_path)?;
     } else {
@@ -369,7 +415,7 @@ fn copy_directory_recursively(src: &PathBuf, dst: &PathBuf) -> Result<()> {
       fs::copy(src_path, &dst_path)?;
     }
   }
-  
+
   Ok(())
 }
 
@@ -396,11 +442,17 @@ fn discover_target_files(config: &MutationConfig) -> Result<Vec<PathBuf>> {
   let (target_extension, exclude_patterns) = match config.language {
     types::Language::TypeScript => (
       "ts",
-      vec![".spec.ts", ".test.ts", "testing/moxxy/", "testing/utils/", "testing/setup/"]
+      vec![
+        ".spec.ts",
+        ".test.ts",
+        "testing/moxxy/",
+        "testing/utils/",
+        "testing/setup/",
+      ],
     ),
     types::Language::Rust => (
-      "rs", 
-      vec!["tests/", "target/", "examples/"] // Exclude test directories and build artifacts
+      "rs",
+      vec!["tests/", "target/", "examples/"], // Exclude test directories and build artifacts
     ),
   };
 
@@ -421,16 +473,23 @@ fn discover_target_files(config: &MutationConfig) -> Result<Vec<PathBuf>> {
 }
 
 /// Load mutations from universalmutator-generated files
-fn load_universalmutator_mutations(source_dir: &PathBuf, language: &types::Language, _verbose: bool) -> Result<Vec<types::Mutation>> {
+fn load_universalmutator_mutations(
+  source_dir: &PathBuf,
+  language: &types::Language,
+  _verbose: bool,
+) -> Result<Vec<types::Mutation>> {
   use std::fs;
-  
+
   let (mutations_dir, file_extension) = match language {
     types::Language::TypeScript => (PathBuf::from(".mutations/typescript"), "ts"),
     types::Language::Rust => (PathBuf::from(".mutations/rust"), "rs"),
   };
-  
+
   if !mutations_dir.exists() {
-    anyhow::bail!("❌ No mutations directory found at {}. Run pathogen:plan first!", mutations_dir.display());
+    anyhow::bail!(
+      "❌ No mutations directory found at {}. Run pathogen:plan first!",
+      mutations_dir.display()
+    );
   }
 
   let mut mutations = Vec::new();
@@ -440,8 +499,8 @@ fn load_universalmutator_mutations(source_dir: &PathBuf, language: &types::Langu
   for entry in fs::read_dir(&mutations_dir)? {
     let entry = entry?;
     let path = entry.path();
-    
-    if !path.extension().map_or(false, |ext| ext == file_extension) {
+
+    if path.extension().is_none_or(|ext| ext != file_extension) {
       continue;
     }
 
@@ -449,7 +508,9 @@ fn load_universalmutator_mutations(source_dir: &PathBuf, language: &types::Langu
 
     // Parse the mutation file info from filename
     // Format: originalfile.mutant.NUMBER.ext
-    if let Some(mutation) = parse_universalmutator_file(&path, source_dir, mutation_id_counter, language)? {
+    if let Some(mutation) =
+      parse_universalmutator_file(&path, source_dir, mutation_id_counter, language)?
+    {
       mutations.push(mutation);
       mutation_id_counter += 1;
     }
@@ -459,63 +520,77 @@ fn load_universalmutator_mutations(source_dir: &PathBuf, language: &types::Langu
 }
 
 /// Parse a single universalmutator file into a Mutation struct
-fn parse_universalmutator_file(mutant_path: &PathBuf, source_dir: &PathBuf, id_counter: usize, language: &types::Language) -> Result<Option<types::Mutation>> {
+fn parse_universalmutator_file(
+  mutant_path: &PathBuf,
+  source_dir: &PathBuf,
+  id_counter: usize,
+  language: &types::Language,
+) -> Result<Option<types::Mutation>> {
   use std::fs;
-  
+
   // Extract original file and mutation number from filename
-  let filename = mutant_path.file_stem()
+  let filename = mutant_path
+    .file_stem()
     .and_then(|f| f.to_str())
     .ok_or_else(|| anyhow::anyhow!("Invalid filename: {}", mutant_path.display()))?;
-  
+
   // Parse filename: originalfile.mutant.NUMBER
   let parts: Vec<&str> = filename.split('.').collect();
   if parts.len() < 3 || parts[parts.len() - 2] != "mutant" {
     return Ok(None); // Skip non-mutant files
   }
-  
+
   let original_filename = parts[0]; // Just the base filename
-  
+
   // Try to find the original file in the source tree
   let original_file = find_original_file(original_filename, source_dir, language)?;
-  
+
   // Read both original and mutant content
   let original_content = fs::read_to_string(&original_file)
     .with_context(|| format!("Failed to read original file: {}", original_file.display()))?;
   let mutant_content = fs::read_to_string(mutant_path)
     .with_context(|| format!("Failed to read mutant file: {}", mutant_path.display()))?;
-  
+
   // Find the first difference to identify the mutation for reporting
-  let (line, original_text, mutated_text) = find_mutation_difference(&original_content, &mutant_content)?;
-  
+  let (line, original_text, mutated_text) =
+    find_mutation_difference(&original_content, &mutant_content)?;
+
   let mutation = types::Mutation {
     id: format!("unimut_{}", id_counter),
     file: original_file,
     line,
-    column: 0, // universalmutator doesn't provide column info
-    span_start: 0, // Will be ignored - we use full content replacement
-    span_end: 0, // Will be ignored - we use full content replacement  
+    column: 0,                       // universalmutator doesn't provide column info
+    span_start: 0,                   // Will be ignored - we use full content replacement
+    span_end: 0,                     // Will be ignored - we use full content replacement
     original: original_text.clone(), // Store just the diff for reporting
-    mutated: mutant_content, // Store the FULL mutated file content
+    mutated: mutant_content,         // Store the FULL mutated file content
     mutation_type: types::MutationType::ArithmeticOperator, // Default for now
-    description: format!("universalmutator mutation: {} → {}", original_text, mutated_text),
-    language: language.clone(),
+    description: format!(
+      "universalmutator mutation: {} → {}",
+      original_text, mutated_text
+    ),
+    language: *language,
   };
-  
+
   Ok(Some(mutation))
 }
 
 /// Find the original source file for a given base filename
-fn find_original_file(base_filename: &str, source_dir: &PathBuf, language: &types::Language) -> Result<PathBuf> {
+fn find_original_file(
+  base_filename: &str,
+  source_dir: &PathBuf,
+  language: &types::Language,
+) -> Result<PathBuf> {
   use std::fs;
-  
+
   let target_filename = format!("{}.{}", base_filename, language.extension());
-  
+
   // Search recursively in the provided source directory
   fn search_in_dir(dir: &PathBuf, target: &str) -> Option<PathBuf> {
     if let Ok(entries) = fs::read_dir(dir) {
       for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_file() && path.file_name().map_or(false, |name| name == target) {
+        if path.is_file() && path.file_name().is_some_and(|name| name == target) {
           return Some(path);
         } else if path.is_dir() {
           if let Some(found) = search_in_dir(&path, target) {
@@ -526,28 +601,39 @@ fn find_original_file(base_filename: &str, source_dir: &PathBuf, language: &type
     }
     None
   }
-  
-  search_in_dir(source_dir, &target_filename)
-    .ok_or_else(|| anyhow::anyhow!("Could not find original file for: {} in {}", base_filename, source_dir.display()))
+
+  search_in_dir(source_dir, &target_filename).ok_or_else(|| {
+    anyhow::anyhow!(
+      "Could not find original file for: {} in {}",
+      base_filename,
+      source_dir.display()
+    )
+  })
 }
 
 /// Find the difference between original and mutant content
 fn find_mutation_difference(original: &str, mutant: &str) -> Result<(usize, String, String)> {
   let original_lines: Vec<&str> = original.lines().collect();
   let mutant_lines: Vec<&str> = mutant.lines().collect();
-  
-  for (line_num, (orig_line, mut_line)) in original_lines.iter().zip(mutant_lines.iter()).enumerate() {
+
+  for (line_num, (orig_line, mut_line)) in
+    original_lines.iter().zip(mutant_lines.iter()).enumerate()
+  {
     if orig_line != mut_line {
       // Found the difference - extract the changed part
       let orig_trimmed = orig_line.trim();
       let mut_trimmed = mut_line.trim();
-      
+
       if orig_trimmed != mut_trimmed {
-        return Ok((line_num + 1, orig_trimmed.to_string(), mut_trimmed.to_string()));
+        return Ok((
+          line_num + 1,
+          orig_trimmed.to_string(),
+          mut_trimmed.to_string(),
+        ));
       }
     }
   }
-  
+
   // Fallback if no difference found
   Ok((1, "unknown".to_string(), "unknown".to_string()))
 }
@@ -761,20 +847,24 @@ fn print_per_file_breakdown(per_file_stats: &[FileStats]) {
   println!();
   println!("📁 File Coverage Breakdown");
   println!("{}", "-".repeat(80));
-  println!("{:<41} {:>8} {:>8} {:>9} {:>9}", "File", "Total", "Killed", "Survived", "Coverage");
+  println!(
+    "{:<41} {:>8} {:>8} {:>9} {:>9}",
+    "File", "Total", "Killed", "Survived", "Coverage"
+  );
   println!("{}", "-".repeat(80));
-  
+
   for file_stat in per_file_stats {
     print_file_table_row(file_stat);
   }
-  
+
   println!("{}", "-".repeat(80));
-  
+
   // Show survivor details for files that have them
-  let files_with_survivors: Vec<_> = per_file_stats.iter()
+  let files_with_survivors: Vec<_> = per_file_stats
+    .iter()
     .filter(|fs| !fs.survived_mutations.is_empty())
     .collect();
-    
+
   if !files_with_survivors.is_empty() {
     println!();
     println!("Mutation Survivors:");
@@ -791,7 +881,8 @@ fn print_file_table_row(file_stat: &FileStats) {
   // Convert temp workspace path back to src/ relative path
   let display_path = if file_stat.file_path.contains("pathogen-workspace/") {
     // Extract the part after "pathogen-workspace/"
-    file_stat.file_path
+    file_stat
+      .file_path
       .split("pathogen-workspace/")
       .last()
       .unwrap_or(&file_stat.file_path)
@@ -799,15 +890,15 @@ fn print_file_table_row(file_stat: &FileStats) {
   } else {
     file_stat.file_path.clone()
   };
-  
+
   let status_icon = get_status_icon(file_stat.kill_rate);
-  
-  let truncated_path = if display_path.len() > 38 { 
-    display_path[..35].to_owned() + "..." 
-  } else { 
-    display_path 
+
+  let truncated_path = if display_path.len() > 38 {
+    display_path[..35].to_owned() + "..."
+  } else {
+    display_path
   };
-  
+
   println!(
     "{} {:<38} {:>8} {:>8} {:>9} {:>8.1}%",
     status_icon,
@@ -834,12 +925,19 @@ fn get_status_icon(kill_rate: f64) -> &'static str {
 fn print_survivors_info(file_stat: &FileStats) {
   let short_path = file_stat.file_path.replace("src/cli/", "");
   println!();
-  println!("📄 {} ({} survivors):", short_path, file_stat.survived_mutations.len());
-  
+  println!(
+    "📄 {} ({} survivors):",
+    short_path,
+    file_stat.survived_mutations.len()
+  );
+
   for (i, survivor) in file_stat.survived_mutations.iter().enumerate() {
-    if i >= 5 {  // Limit to first 5 for readability
-      println!("     ... and {} more (see JSON report for full list)", 
-               file_stat.survived_mutations.len() - 5);
+    if i >= 5 {
+      // Limit to first 5 for readability
+      println!(
+        "     ... and {} more (see JSON report for full list)",
+        file_stat.survived_mutations.len() - 5
+      );
       break;
     }
     println!(
@@ -855,88 +953,107 @@ fn print_final_assessment(stats: &SummaryStats, results: &[types::MutationResult
 
   // Detect common pathogen issues
   detect_and_warn_issues(stats, results);
-  
+
   println!("{}", grade);
 }
 
 /// Detect and warn about common pathogen configuration issues
 fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult]) {
   println!("🔍 Pathogen Health Check:");
-  
+
   // Issue 1: Unrealistic 100% behavioral kill rate
   if stats.behavioral_rate >= 99.5 && stats.total > 100 {
     println!("❌ SUSPICIOUS: 100% behavioral kill rate is unrealistic");
     println!("   • Likely issue: Missing test files or incorrect test detection");
     println!("   • Expected: 70-90% behavioral kills, 5-15% survivors, 5-15% compile errors");
   }
-  
-  // Issue 2: Check for "had no matches" indicating missing test files  
-  let no_matches_count = results.iter()
+
+  // Issue 2: Check for "had no matches" indicating missing test files
+  let no_matches_count = results
+    .iter()
     .filter(|r| r.test_output.contains("had no matches"))
     .count();
-  
+
   if no_matches_count > 0 {
-    println!("❌ DETECTED: {} mutations found no matching test files", no_matches_count);
-    println!("   • {} mutations fell back to full test suite", no_matches_count);
+    println!(
+      "❌ DETECTED: {} mutations found no matching test files",
+      no_matches_count
+    );
+    println!(
+      "   • {} mutations fell back to full test suite",
+      no_matches_count
+    );
     println!("   • Consider creating missing test files or improving test selection");
   }
-  
+
   // Issue 3: Check for null/empty outputs
-  let empty_outputs = results.iter()
+  let empty_outputs = results
+    .iter()
     .filter(|r| r.test_output.is_empty() || r.test_output == "null")
     .count();
-    
+
   if empty_outputs > 0 {
-    println!("❌ DETECTED: {} mutations have empty test outputs", empty_outputs);
+    println!(
+      "❌ DETECTED: {} mutations have empty test outputs",
+      empty_outputs
+    );
     println!("   • Tests may not be executing properly");
     println!("   • Check worker communication and test execution");
   }
-  
+
   // Issue 4: Check for timeout patterns
-  let timeout_count = results.iter()
+  let timeout_count = results
+    .iter()
     .filter(|r| r.test_output.contains("timed out") || r.test_output.contains("timeout"))
     .count();
-    
-  if timeout_count > stats.total / 20 { // More than 5% timeouts
-    println!("⚠️  WARNING: {} mutations timed out ({}%)", 
-             timeout_count, 
-             (timeout_count * 100) / stats.total);
+
+  if timeout_count > stats.total / 20 {
+    // More than 5% timeouts
+    println!(
+      "⚠️  WARNING: {} mutations timed out ({}%)",
+      timeout_count,
+      (timeout_count * 100) / stats.total
+    );
     println!("   • May indicate infinite loop mutations");
     println!("   • Consider adjusting timeout values or mutation operators");
   }
-  
+
   // Issue 5: Check execution time distribution for anomalies
-  let very_fast_mutations = results.iter()
+  let very_fast_mutations = results
+    .iter()
     .filter(|r| r.execution_time_ms < 10) // Less than 10ms is suspiciously fast
     .count();
-    
-  if very_fast_mutations > stats.total / 10 { // More than 10% super fast
-    println!("⚠️  WARNING: {} mutations completed in <10ms ({}%)",
-             very_fast_mutations,
-             (very_fast_mutations * 100) / stats.total);
+
+  if very_fast_mutations > stats.total / 10 {
+    // More than 10% super fast
+    println!(
+      "⚠️  WARNING: {} mutations completed in <10ms ({}%)",
+      very_fast_mutations,
+      (very_fast_mutations * 100) / stats.total
+    );
     println!("   • Tests may not be running properly");
     println!("   • Check if targeted test selection is working");
   }
-  
+
   // Issue 6: Reasonable baseline check
   if stats.compile_errors > stats.behavioral_kills {
     println!("⚠️  WARNING: More compile errors than behavioral kills!");
     println!("   • Consider refining mutation operators");
     println!("   • May indicate syntax-heavy mutations that don't test logic");
   }
-  
+
   // Positive feedback if everything looks good
-  let issues_detected = (stats.behavioral_rate >= 99.5) as u32 +
-                       (no_matches_count > 0) as u32 +
-                       (empty_outputs > 0) as u32 +
-                       (timeout_count > stats.total / 20) as u32 +
-                       (very_fast_mutations > stats.total / 10) as u32 +
-                       (stats.compile_errors > stats.behavioral_kills) as u32;
-                       
+  let issues_detected = (stats.behavioral_rate >= 99.5) as u32
+    + (no_matches_count > 0) as u32
+    + (empty_outputs > 0) as u32
+    + (timeout_count > stats.total / 20) as u32
+    + (very_fast_mutations > stats.total / 10) as u32
+    + (stats.compile_errors > stats.behavioral_kills) as u32;
+
   if issues_detected == 0 {
     println!("✅ All health checks passed - results appear reliable!");
   }
-  
+
   println!();
 }
 
@@ -968,4 +1085,3 @@ fn save_results_to_file(
   fs::write(output_path, serde_json::to_string_pretty(&output)?)?;
   Ok(())
 }
-

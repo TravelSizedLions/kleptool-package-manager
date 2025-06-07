@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Mutation testing
+.mutations/
+
+# Lock files
+*.lock
+yarn.lock
+package-lock.json
+bun.lock
+
+# Generated files
+*.tsbuildinfo 

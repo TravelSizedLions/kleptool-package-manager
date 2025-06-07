@@ -52,7 +52,7 @@ async function __do(alias: string, args: string[], options: TaskRunnerOptions = 
 }
 
 async function __getTasks() {
-  return Object.keys(__getTaskFile())
+  return Object.keys(__getTaskFile());
 }
 
 function __getTaskFile() {

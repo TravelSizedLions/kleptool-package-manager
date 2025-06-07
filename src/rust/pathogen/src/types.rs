@@ -1,9 +1,9 @@
 use crate::ast_parser::SimpleAst;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Configuration for mutation testing run
 #[derive(Debug, Clone)]
@@ -20,12 +20,13 @@ pub struct MutationConfig {
 impl MutationConfig {
   pub fn from_args(matches: &ArgMatches) -> Result<Self> {
     let source_dir = PathBuf::from(matches.get_one::<String>("source").unwrap());
-    
+
     // Auto-detect language from source directory
     let language = detect_language_from_directory(&source_dir)?;
-    
+
     let parallel_count = match matches.get_one::<String>("parallel") {
-      Some(p) => p.parse::<usize>()
+      Some(p) => p
+        .parse::<usize>()
         .map_err(|_| anyhow::anyhow!("Invalid parallel count: {}", p))?,
       None => std::thread::available_parallelism()
         .map(|n| n.get())
@@ -50,34 +51,34 @@ impl MutationConfig {
 }
 
 fn detect_language_from_directory(dir: &PathBuf) -> anyhow::Result<Language> {
-    // Count files by extension to determine primary language
-    let mut extension_counts: HashMap<String, usize> = HashMap::new();
-    
-    if dir.exists() && dir.is_dir() {
-        for entry in std::fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            
-            if path.is_file() {
-                if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                    *extension_counts.entry(extension.to_string()).or_insert(0) += 1;
-                }
-            }
+  // Count files by extension to determine primary language
+  let mut extension_counts: HashMap<String, usize> = HashMap::new();
+
+  if dir.exists() && dir.is_dir() {
+    for entry in std::fs::read_dir(dir)? {
+      let entry = entry?;
+      let path = entry.path();
+
+      if path.is_file() {
+        if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
+          *extension_counts.entry(extension.to_string()).or_insert(0) += 1;
         }
+      }
     }
-    
-    // Determine language based on file counts
-    let ts_count = extension_counts.get("ts").unwrap_or(&0);
-    let rs_count = extension_counts.get("rs").unwrap_or(&0);
-    
-    if rs_count > ts_count {
-        Ok(Language::Rust)
-    } else if ts_count > &0 {
-        Ok(Language::TypeScript)
-    } else {
-        // Default to TypeScript if no files found (backwards compatibility)
-        Ok(Language::TypeScript)
-    }
+  }
+
+  // Determine language based on file counts
+  let ts_count = extension_counts.get("ts").unwrap_or(&0);
+  let rs_count = extension_counts.get("rs").unwrap_or(&0);
+
+  if rs_count > ts_count {
+    Ok(Language::Rust)
+  } else if ts_count > &0 {
+    Ok(Language::TypeScript)
+  } else {
+    // Default to TypeScript if no files found (backwards compatibility)
+    Ok(Language::TypeScript)
+  }
 }
 
 /// A parsed TypeScript file with AST and metadata
@@ -272,11 +273,14 @@ impl<'a> MutationContext<'a> {
     column: usize,
   ) -> Mutation {
     // Detect language from file extension
-    let language = self.file.path.extension()
+    let language = self
+      .file
+      .path
+      .extension()
       .and_then(|ext| ext.to_str())
       .and_then(Language::detect_from_extension)
       .unwrap_or(Language::TypeScript); // Default to TypeScript for backwards compatibility
-    
+
     Mutation {
       id: self.generate_mutation_id(),
       file: self.file.path.clone(),
@@ -473,44 +477,44 @@ mod tests {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Language {
-    TypeScript,
-    Rust,
+  TypeScript,
+  Rust,
 }
 
 impl Language {
-    pub fn detect_from_extension(extension: &str) -> Option<Self> {
-        match extension {
-            "ts" => Some(Language::TypeScript),
-            "rs" => Some(Language::Rust),
-            _ => None,
-        }
+  pub fn detect_from_extension(extension: &str) -> Option<Self> {
+    match extension {
+      "ts" => Some(Language::TypeScript),
+      "rs" => Some(Language::Rust),
+      _ => None,
     }
-    
-    pub fn extension(&self) -> &'static str {
-        match self {
-            Language::TypeScript => "ts",
-            Language::Rust => "rs",
-        }
+  }
+
+  pub fn extension(&self) -> &'static str {
+    match self {
+      Language::TypeScript => "ts",
+      Language::Rust => "rs",
     }
-    
-    pub fn get_test_runner_command(&self) -> &'static str {
-        match self {
-            Language::TypeScript => "bun",
-            Language::Rust => "cargo",
-        }
+  }
+
+  pub fn get_test_runner_command(&self) -> &'static str {
+    match self {
+      Language::TypeScript => "bun",
+      Language::Rust => "cargo",
     }
-    
-    pub fn get_test_args(&self) -> Vec<&'static str> {
-        match self {
-            Language::TypeScript => vec!["test"],
-            Language::Rust => vec!["test"],
-        }
+  }
+
+  pub fn get_test_args(&self) -> Vec<&'static str> {
+    match self {
+      Language::TypeScript => vec!["test"],
+      Language::Rust => vec!["test"],
     }
-    
-    pub fn get_file_pattern(&self) -> &'static str {
-        match self {
-            Language::TypeScript => "*.ts",
-            Language::Rust => "*.rs",
-        }
+  }
+
+  pub fn get_file_pattern(&self) -> &'static str {
+    match self {
+      Language::TypeScript => "*.ts",
+      Language::Rust => "*.rs",
     }
+  }
 }

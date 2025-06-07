@@ -5,6 +5,17 @@ import prettierConfig from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
 
 export default [
+  // Global ignores - placed before any other configurations
+  {
+    ignores: [
+      'node_modules/**',
+      '.mutations/**',
+      'coverage/**',
+      'dist/**',
+      'build/**'
+    ]
+  },
+
   js.configs.recommended,
   
   {
