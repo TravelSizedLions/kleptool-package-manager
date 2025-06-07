@@ -38,11 +38,13 @@
   // Test without colors (for CI/CD)
   'test:no-colors': "NO_COLOR=1 klep ts:test && klep rust:test",
 
+    // Pathogen: Fast mutation testing (v2 architecture + universalmutator integration)
+  'pathogen:plan': 'mkdir -p .mutations/typescript && find src/cli -name "*.ts" -not -name "*.spec.ts" | xargs -I {} mutate {} --mutantDir .mutations/typescript --noCheck',
+  'pathogen:test': 'src/rust/target/release/pathogen --source src/cli --output pathogen-report.json',
+  pathogen: 'klep pathogen:plan && klep pathogen:test',
+
   // Generate behavioral coverage reports (mutation testing)
-  coverage: "klep ci:mutation",
-  
-  // Full mutation testing (TypeScript + Rust)
-  'mutation:full': 'klep ci:mutation && klep rust:mutation',
+  coverage: "klep pathogen",
 
   // Check code quality (never-nester principles)
   quality: "cd src/rust && cargo build --release -p code-quality-checker && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10 && ./target/release/code-quality-checker check ../../scripts --max-depth 3 --max-length 100 --max-complexity 10",
@@ -88,18 +90,10 @@
   'ts:test:win': 'KLEP_SIMULATE_WINDOWS=1 bun test',
   'rust:test': 'cd src/rust && cargo test --workspace',
 
-  // Legacy Mutation Testing (being phased out)
-  'mutation:legacy': 'cd src/rust && cargo build --release && cd ../.. && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(nproc) --verbose',
-  
-  // Universal Mutation Testing (research-backed, cross-language)
-  mutation: 'mutate src/cli --mutantDir .mutants --noCheck --parallel',
-  'mutation:rust': 'mutate src/rust --mutantDir .mutants-rust --noCheck --parallel',
-  'mutation:full': 'klep mutation && klep mutation:rust',
-
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'bun run --bun tsc --noEmit',
-  'ci:mutation': 'mutate src/cli --mutantDir .mutants --noCheck --output mutations-report.json',
+  'ci:mutation': 'klep pathogen',
 }

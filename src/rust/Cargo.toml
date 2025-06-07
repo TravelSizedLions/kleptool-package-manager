@@ -7,7 +7,7 @@ members = [
   "api/nn",
   "api/std",
   "code-quality-checker",
-  "klep-mutation-v2",
+  "pathogen",
 ]
 
 # Workspace-wide linting configuration

@@ -28,7 +28,7 @@ jobs:
       run: klep ci:build
 
     - name: Test and Generate Behavioral Coverage
-      run: klep mutation:v2:ci
+      run: klep ci:mutation
 
     - name: Compare Behavioral Coverage 
       uses: ./.github/actions/handle-coverage

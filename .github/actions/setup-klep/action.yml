@@ -18,6 +18,15 @@ runs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
 
+    - name: Setup Python for universalmutator
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install universalmutator
+      run: pip install universalmutator
+      shell: bash
+
     # Cache Bun dependencies and global cache
     - name: Cache Bun dependencies
       uses: actions/cache@v4

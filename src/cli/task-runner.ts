@@ -51,6 +51,17 @@ async function __do(alias: string, args: string[], options: TaskRunnerOptions = 
   return result.stdout;
 }
 
+async function __getTasks() {
+  return Object.keys(__getTaskFile())
+}
+
+function __getTaskFile() {
+  const tasksFilePath = './klep.tasks';
+  return resources.load<TasksFile>(tasksFilePath, klepTasksSchema);
+}
+
 export default {
   do: __do,
+  getTasks: __getTasks,
+  getTaskFile: __getTaskFile,
 };
