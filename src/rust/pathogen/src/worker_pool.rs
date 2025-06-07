@@ -299,7 +299,18 @@ impl WorkerPool {
                 let kill_type = if test_result.success {
                     crate::types::KillType::Survived
                 } else {
-                    if test_result.output.contains("compilation") || test_result.output.contains("syntax") {
+                    // Better classification based on error prefixes
+                    if test_result.output.starts_with("TIMEOUT:") ||
+                       test_result.output.starts_with("FILE_ERROR:") ||
+                       test_result.output.starts_with("EXECUTION_ERROR:") {
+                        // These are not behavioral kills - they're inconclusive/system errors
+                        // For now, treat them as compile errors to separate from behavioral kills
+                        crate::types::KillType::CompileError
+                    } else if test_result.output.contains("compilation") || 
+                              test_result.output.contains("syntax") ||
+                              test_result.output.contains("SyntaxError") ||
+                              test_result.output.contains("TypeError") ||
+                              test_result.output.contains("ReferenceError") {
                         crate::types::KillType::CompileError
                     } else {
                         crate::types::KillType::BehavioralKill

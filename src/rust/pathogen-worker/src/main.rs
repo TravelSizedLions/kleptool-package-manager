@@ -75,7 +75,7 @@ async fn execute_mutation(request: MutationRequest) -> TestResult {
         Err(e) => {
             return TestResult {
                 success: false,
-                output: format!("Failed to read original file: {}", e),
+                output: format!("FILE_ERROR: Failed to read original file: {}", e),
                 execution_time_ms: start_time.elapsed().as_millis() as u64,
                 mutation_id: request.mutation_id,
             };
@@ -87,7 +87,7 @@ async fn execute_mutation(request: MutationRequest) -> TestResult {
     if let Err(e) = write_result {
         return TestResult {
             success: false,
-            output: format!("Failed to write mutation: {}", e),
+            output: format!("FILE_ERROR: Failed to write mutation: {}", e),
             execution_time_ms: start_time.elapsed().as_millis() as u64,
             mutation_id: request.mutation_id,
         };
@@ -105,22 +105,62 @@ async fn execute_mutation(request: MutationRequest) -> TestResult {
     let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
     match test_output {
-        Ok(output) => TestResult {
-            // Check for test success:
-            // - "0 fail" = tests passed, mutation survived
-            // - "had no matches" = no tests found, should fall back to full suite (treat as error)
-            // - anything else = tests failed, mutation killed
-            success: output.contains("0 fail") && !output.contains("had no matches"),
-            output,
-            execution_time_ms,
-            mutation_id: request.mutation_id,
+        Ok(output) => {
+            // Tests completed successfully - check if mutation was killed or survived
+            let has_test_matches = !output.contains("had no matches");
+            let tests_passed = output.contains("0 fail");
+            
+            if !has_test_matches {
+                // No matching tests found - mutation SURVIVES because nothing caught it!
+                TestResult {
+                    success: true,  // This should be true - mutation survived!
+                    output: format!("NO_TESTS: {}", output),
+                    execution_time_ms,
+                    mutation_id: request.mutation_id,
+                }
+            } else if tests_passed {
+                // Tests passed - mutation survived (bad for test quality)
+                TestResult {
+                    success: true,
+                    output,
+                    execution_time_ms,
+                    mutation_id: request.mutation_id,
+                }
+            } else {
+                // Tests failed - mutation was killed (good for test quality)
+                TestResult {
+                    success: false,
+                    output,
+                    execution_time_ms,
+                    mutation_id: request.mutation_id,
+                }
+            }
         },
-        Err(error) => TestResult {
-            // Test execution failed = mutation was killed (success = false)
-            success: false,
-            output: error,
-            execution_time_ms,
-            mutation_id: request.mutation_id,
+        Err(error) => {
+            // Test execution failed - classify the type of failure
+            if error.contains("timed out") {
+                TestResult {
+                    success: false,
+                    output: format!("TIMEOUT: {}", error),
+                    execution_time_ms,
+                    mutation_id: request.mutation_id,
+                }
+            } else if error.contains("Failed to spawn") || error.contains("Failed to get test output") {
+                TestResult {
+                    success: false,
+                    output: format!("EXECUTION_ERROR: {}", error),
+                    execution_time_ms,
+                    mutation_id: request.mutation_id,
+                }
+            } else {
+                // Genuine test failure - mutation was killed
+                TestResult {
+                    success: false,
+                    output: error,
+                    execution_time_ms,
+                    mutation_id: request.mutation_id,
+                }
+            }
         },
     }
 }
@@ -129,14 +169,15 @@ async fn run_targeted_tests(workspace_dir: &PathBuf, mutated_file: &str) -> Resu
     // Implement targeted test selection for massive performance gains
     // Instead of running all 154 tests, only run tests relevant to the mutated file
     
-    let start = std::time::Instant::now();
+    let _start = std::time::Instant::now();
     
     // Determine the target test file based on the mutated file
     let test_file = if let Some(spec_file) = get_target_test_file(mutated_file) {
         spec_file
     } else {
-        // Fall back to full suite if we can't determine target test
-        return run_full_test_suite(workspace_dir).await;
+        // No specific test file found - this means no tests cover this file
+        // Return a "had no matches" result to indicate the mutation should survive
+        return Ok("had no matches - no test file found".to_string());
     };
     
     // Run the specific test file with timeout to prevent infinite loops
