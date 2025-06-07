@@ -24,6 +24,7 @@ addons.json
 research/
 README.html
 README.pdf
+.cursor/pr_cache.json
 
 # Build outputs
 dist/
