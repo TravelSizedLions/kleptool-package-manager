@@ -2,9 +2,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 use std::time::Instant;
-use tokio::process::Command;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct MutationRequest {
@@ -106,39 +105,22 @@ async fn execute_mutation(request: MutationRequest) -> TestResult {
     let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
     match test_output {
-        Ok(output) => {
+        Ok(output) => TestResult {
             // Check for test success:
             // - "0 fail" = tests passed, mutation survived
-            // - "had no matches" = no tests found, classify as error to prevent false positives
+            // - "had no matches" = no tests found, should fall back to full suite (treat as error)
             // - anything else = tests failed, mutation killed
-            let has_test_matches = !output.contains("had no matches");
-            let tests_passed = output.contains("0 fail");
-            let success = has_test_matches && tests_passed;
-            
-            TestResult {
-                success,
-                output,
-                execution_time_ms,
-                mutation_id: request.mutation_id,
-            }
+            success: output.contains("0 fail") && !output.contains("had no matches"),
+            output,
+            execution_time_ms,
+            mutation_id: request.mutation_id,
         },
-        Err(error) => {
-            // CRITICAL FIX: Timeouts should not be classified as behavioral kills!
-            // They should be treated as inconclusive/errors
-            let is_timeout = error.contains("timed out");
-            
-            TestResult {
-                // Timeouts are NOT behavioral kills - they're inconclusive
-                // Only non-timeout errors should be considered behavioral kills
-                success: false,
-                output: if is_timeout {
-                    format!("TIMEOUT: {}", error) // Mark timeouts clearly in output
-                } else {
-                    error
-                },
-                execution_time_ms,
-                mutation_id: request.mutation_id,
-            }
+        Err(error) => TestResult {
+            // Test execution failed = mutation was killed (success = false)
+            success: false,
+            output: error,
+            execution_time_ms,
+            mutation_id: request.mutation_id,
         },
     }
 }
@@ -164,39 +146,17 @@ async fn run_targeted_tests(workspace_dir: &PathBuf, mutated_file: &str) -> Resu
         .current_dir(workspace_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .process_group(0) // Create new process group for easier cleanup
         .spawn()
         .map_err(|e| format!("Failed to spawn targeted test command: {}", e))?;
     
     // Set a reasonable timeout (5 seconds for targeted tests)
     let timeout = std::time::Duration::from_secs(5);
-    let child_id = child.id();
-    
     let output = match tokio::time::timeout(timeout, async move {
-        child.wait_with_output().await
+        child.wait_with_output()
     }).await {
         Ok(Ok(output)) => output,
         Ok(Err(e)) => return Err(format!("Failed to get test output: {}", e)),
         Err(_) => {
-            // Timeout occurred - aggressively kill the entire process group
-            if let Some(pid) = child_id {
-                // Kill the entire process group (negative PID kills process group)
-                let _ = tokio::process::Command::new("kill")
-                    .arg("-TERM")
-                    .arg(format!("-{}", pid)) // Negative PID = kill process group
-                    .output()
-                    .await;
-                    
-                // Wait a moment for graceful termination
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    
-                // Force kill the entire process group if still running
-                let _ = tokio::process::Command::new("kill")
-                    .arg("-KILL")
-                    .arg(format!("-{}", pid)) // Negative PID = kill process group
-                    .output()
-                    .await;
-            }
             return Err(format!("Test timed out after {} seconds (likely infinite loop)", timeout.as_secs()));
         }
     };
@@ -219,39 +179,17 @@ async fn run_full_test_suite(workspace_dir: &PathBuf) -> Result<String, String> 
         .current_dir(workspace_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .process_group(0) // Create new process group for easier cleanup
         .spawn()
         .map_err(|e| format!("Failed to spawn full test command: {}", e))?;
     
     // Longer timeout for full test suite (30 seconds)
     let timeout = std::time::Duration::from_secs(30);
-    let child_id = child.id();
-    
     let output = match tokio::time::timeout(timeout, async move {
-        child.wait_with_output().await
+        child.wait_with_output()
     }).await {
         Ok(Ok(output)) => output,
         Ok(Err(e)) => return Err(format!("Failed to get test output: {}", e)),
         Err(_) => {
-            // Timeout occurred - aggressively kill the entire process group
-            if let Some(pid) = child_id {
-                // Kill the entire process group (negative PID kills process group)
-                let _ = tokio::process::Command::new("kill")
-                    .arg("-TERM")
-                    .arg(format!("-{}", pid)) // Negative PID = kill process group
-                    .output()
-                    .await;
-                    
-                // Wait a moment for graceful termination
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    
-                // Force kill the entire process group if still running
-                let _ = tokio::process::Command::new("kill")
-                    .arg("-KILL")
-                    .arg(format!("-{}", pid)) // Negative PID = kill process group
-                    .output()
-                    .await;
-            }
             return Err(format!("Full test suite timed out after {} seconds (likely infinite loop)", timeout.as_secs()));
         }
     };
