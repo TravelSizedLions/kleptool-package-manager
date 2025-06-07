@@ -181,12 +181,8 @@ impl Drop for RestorationToken {
         self.file_path.display(),
         e
       );
-    } else {
-      println!(
-        "🛡️  Auto-restored file during cleanup: {}",
-        self.file_path.display()
-      );
     }
+    // Auto-restore completed silently for clean output
   }
 }
 

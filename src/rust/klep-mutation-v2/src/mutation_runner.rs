@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::io::Write;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
@@ -134,10 +135,27 @@ impl MutationRunner {
             .run_single_mutation_safely(mutation, file_manager.as_ref())
             .await;
 
-          // Update progress
+          // Update progress with inline progress bar
           let completed = progress_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
           if verbose || completed % 50 == 0 || completed == total_mutations {
-            println!("   [{}/{}] Mutations tested", completed, total_mutations);
+            let percentage = (completed as f64 / total_mutations as f64) * 100.0;
+            let bar_width = 40;
+            let filled = ((completed as f64 / total_mutations as f64) * bar_width as f64) as usize;
+            let empty = bar_width - filled;
+            
+            print!("\r   🧬 [{}/{}] {}% [{}{}] Mutations tested", 
+              completed, 
+              total_mutations, 
+              percentage as u8,
+              "█".repeat(filled),
+              "░".repeat(empty)
+            );
+            std::io::stdout().flush().unwrap();
+            
+            // Add newline on completion
+            if completed == total_mutations {
+              println!();
+            }
           }
 
           result
@@ -315,31 +333,48 @@ impl MutationRunner {
   fn is_compile_error(&self, error_output: &str) -> bool {
     let error_lower = error_output.to_lowercase();
 
-    // TypeScript compilation errors
-    error_lower.contains("error ts") ||
+    self.is_typescript_error(&error_lower)
+      || self.is_javascript_syntax_error(&error_lower)
+      || self.is_module_error(&error_lower)
+      || self.is_type_error(&error_lower)
+      || self.is_runtime_parse_error(&error_lower)
+      || self.is_build_error(&error_lower)
+  }
 
-        // JavaScript syntax errors
-        error_lower.contains("syntaxerror") ||
-        error_lower.contains("unexpected token") ||
-        error_lower.contains("unexpected end of input") ||
+  /// Check for TypeScript compilation errors
+  fn is_typescript_error(&self, error_lower: &str) -> bool {
+    error_lower.contains("error ts")
+  }
 
-        // Import/module errors
-        error_lower.contains("cannot resolve") ||
-        error_lower.contains("module not found") ||
-        error_lower.contains("cannot find module") ||
+  /// Check for JavaScript syntax errors
+  fn is_javascript_syntax_error(&self, error_lower: &str) -> bool {
+    error_lower.contains("syntaxerror")
+      || error_lower.contains("unexpected token")
+      || error_lower.contains("unexpected end of input")
+  }
 
-        // Type errors
-        error_lower.contains("type error") ||
-        error_lower.contains("property does not exist") ||
-        error_lower.contains("cannot be used as an index type") ||
+  /// Check for import/module resolution errors
+  fn is_module_error(&self, error_lower: &str) -> bool {
+    error_lower.contains("cannot resolve")
+      || error_lower.contains("module not found")
+      || error_lower.contains("cannot find module")
+  }
 
-        // Bun/Node specific errors
-        error_lower.contains("failed to resolve") ||
-        error_lower.contains("parse error") ||
+  /// Check for type-related errors
+  fn is_type_error(&self, error_lower: &str) -> bool {
+    error_lower.contains("type error")
+      || error_lower.contains("property does not exist")
+      || error_lower.contains("cannot be used as an index type")
+  }
 
-        // Common compilation indicators
-        error_lower.contains("compilation failed") ||
-        error_lower.contains("build failed")
+  /// Check for runtime/parser errors
+  fn is_runtime_parse_error(&self, error_lower: &str) -> bool {
+    error_lower.contains("failed to resolve") || error_lower.contains("parse error")
+  }
+
+  /// Check for general build/compilation failure indicators
+  fn is_build_error(&self, error_lower: &str) -> bool {
+    error_lower.contains("compilation failed") || error_lower.contains("build failed")
   }
 
   pub fn parallel_count(&self) -> usize {

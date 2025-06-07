@@ -110,6 +110,7 @@ pub enum MutationType {
 }
 
 impl MutationType {
+  // quality-allow max-cyclomatic-complexity 20
   pub fn description(&self) -> &'static str {
     match self {
       MutationType::ArithmeticOperator => "Arithmetic operator mutation",
@@ -199,17 +200,34 @@ impl<'a> MutationContext<'a> {
     candidate: &crate::ast_parser::MutationCandidate,
     mutation_type: MutationType,
   ) -> Result<()> {
-    // Calculate line/column from byte position in the content
+    let (line, column) = self.calculate_position(candidate.start_byte);
+    let mutation = self.build_mutation(candidate, mutation_type, line, column);
+    self.add_mutation(mutation);
+    Ok(())
+  }
+
+  /// Calculate line and column from byte position
+  fn calculate_position(&self, start_byte: usize) -> (usize, usize) {
     let content_up_to_start =
-      &self.file.stripped_content[..candidate.start_byte.min(self.file.stripped_content.len())];
+      &self.file.stripped_content[..start_byte.min(self.file.stripped_content.len())];
     let line = content_up_to_start.lines().count();
     let column = content_up_to_start
       .lines()
       .last()
       .map_or(0, |last_line| last_line.len());
+    (line, column)
+  }
 
-    let mutation = Mutation {
-      id: format!("{}_{}", self.file.path.display(), self.mutation_counter),
+  /// Build a mutation object from components
+  fn build_mutation(
+    &self,
+    candidate: &crate::ast_parser::MutationCandidate,
+    mutation_type: MutationType,
+    line: usize,
+    column: usize,
+  ) -> Mutation {
+    Mutation {
+      id: self.generate_mutation_id(),
       file: self.file.path.clone(),
       line,
       column,
@@ -217,14 +235,30 @@ impl<'a> MutationContext<'a> {
       span_end: candidate.end_byte as u32,
       original: candidate.original.clone(),
       mutated: candidate.mutated.clone(),
-      description: format!("{} at {}:{}", mutation_type.description(), line, column),
+      description: self.generate_description(&mutation_type, line, column),
       mutation_type,
-    };
+    }
+  }
 
+  /// Generate a unique mutation ID
+  fn generate_mutation_id(&self) -> String {
+    format!("{}_{}", self.file.path.display(), self.mutation_counter)
+  }
+
+  /// Generate a description for the mutation
+  fn generate_description(
+    &self,
+    mutation_type: &MutationType,
+    line: usize,
+    column: usize,
+  ) -> String {
+    format!("{} at {}:{}", mutation_type.description(), line, column)
+  }
+
+  /// Add a mutation to the context
+  fn add_mutation(&mut self, mutation: Mutation) {
     self.mutations.push(mutation);
     self.mutation_counter += 1;
-
-    Ok(())
   }
 
   /// Get all mutations generated
@@ -250,6 +284,7 @@ impl MutationBuilder {
   }
 
   /// Create comparison operator mutations
+  // quality-allow max-cyclomatic-complexity 15
   pub fn comparison_mutations(original: &str) -> Vec<String> {
     match original {
       "===" => vec!["!==".to_string(), ">=".to_string(), "<=".to_string()],
@@ -286,29 +321,49 @@ impl MutationBuilder {
   /// Create number literal mutations
   pub fn number_mutations(original: &str) -> Vec<String> {
     if let Ok(num) = original.parse::<i64>() {
-      vec![
-        (num + 1).to_string(),
-        if num != 0 {
-          (num - 1).to_string()
-        } else {
-          "1".to_string()
-        },
-        "0".to_string(),
-        if num != 1 {
-          "1".to_string()
-        } else {
-          "2".to_string()
-        },
-      ]
+      Self::integer_mutations(num)
     } else if let Ok(num) = original.parse::<f64>() {
-      vec![
-        (num + 1.0).to_string(),
-        (num - 1.0).to_string(),
-        "0.0".to_string(),
-        "1.0".to_string(),
-      ]
+      Self::float_mutations(num)
     } else {
       vec![]
+    }
+  }
+
+  /// Create mutations for integer numbers
+  fn integer_mutations(num: i64) -> Vec<String> {
+    vec![
+      (num + 1).to_string(),
+      Self::integer_decrement_mutation(num),
+      "0".to_string(),
+      Self::integer_one_mutation(num),
+    ]
+  }
+
+  /// Create mutations for floating point numbers
+  fn float_mutations(num: f64) -> Vec<String> {
+    vec![
+      (num + 1.0).to_string(),
+      (num - 1.0).to_string(),
+      "0.0".to_string(),
+      "1.0".to_string(),
+    ]
+  }
+
+  /// Generate decrement mutation for integers
+  fn integer_decrement_mutation(num: i64) -> String {
+    if num != 0 {
+      (num - 1).to_string()
+    } else {
+      "1".to_string()
+    }
+  }
+
+  /// Generate "1" mutation for integers, avoiding duplicates
+  fn integer_one_mutation(num: i64) -> String {
+    if num != 1 {
+      "1".to_string()
+    } else {
+      "2".to_string()
     }
   }
 

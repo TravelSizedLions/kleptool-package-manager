@@ -81,49 +81,95 @@ impl TypeScriptParser {
     let mut escaped = false;
 
     while let Some(ch) = chars.next() {
-      match ch {
-        '"' | '\'' if !escaped && !in_string => {
-          in_string = true;
-          string_char = ch;
-          result.push(ch);
-        }
-        ch if ch == string_char && in_string && !escaped => {
-          in_string = false;
-          result.push(ch);
-        }
-        '\\' if in_string => {
-          escaped = !escaped;
-          result.push(ch);
-        }
-        '/' if !in_string && !escaped && chars.peek() == Some(&'/') => {
-          // Single-line comment - skip rest of line
-          break;
-        }
-        '/' if !in_string && !escaped && chars.peek() == Some(&'*') => {
-          // Multi-line comment start - skip until end
-          chars.next(); // consume '*'
-          let mut found_end = false;
-          while let Some(comment_char) = chars.next() {
-            if comment_char == '*' && chars.peek() == Some(&'/') {
-              chars.next(); // consume '/'
-              found_end = true;
-              result.push(' '); // Replace comment with space
-              break;
-            }
-          }
-          if !found_end {
-            // Unterminated comment - this is probably an error
-            result.push_str("/* */");
-          }
-        }
-        _ => {
-          escaped = false;
-          result.push(ch);
-        }
+      if self.handle_string_delimiter(ch, &mut in_string, &mut string_char, escaped) {
+        result.push(ch);
+        continue;
       }
+
+      if in_string {
+        escaped = self.handle_string_escape(ch, escaped);
+        result.push(ch);
+        continue;
+      }
+
+      if self.is_single_line_comment(ch, &mut chars) {
+        break;
+      }
+
+      if self.handle_multiline_comment(ch, &mut chars, &mut result) {
+        continue;
+      }
+
+      escaped = false;
+      result.push(ch);
     }
 
     result
+  }
+
+  fn handle_string_delimiter(
+    &self,
+    ch: char,
+    in_string: &mut bool,
+    string_char: &mut char,
+    escaped: bool,
+  ) -> bool {
+    if !escaped && !*in_string && (ch == '"' || ch == '\'') {
+      *in_string = true;
+      *string_char = ch;
+      return true;
+    }
+
+    if ch == *string_char && *in_string && !escaped {
+      *in_string = false;
+      return true;
+    }
+
+    false
+  }
+
+  fn handle_string_escape(&self, ch: char, escaped: bool) -> bool {
+    ch == '\\' && !escaped
+  }
+
+  fn is_single_line_comment(
+    &self,
+    ch: char,
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+  ) -> bool {
+    ch == '/' && chars.peek() == Some(&'/')
+  }
+
+  fn handle_multiline_comment(
+    &self,
+    ch: char,
+    chars: &mut std::iter::Peekable<std::str::Chars>,
+    result: &mut String,
+  ) -> bool {
+    if ch != '/' || chars.peek() != Some(&'*') {
+      return false;
+    }
+
+    chars.next(); // consume '*'
+    let found_end = self.consume_until_comment_end(chars);
+
+    if found_end {
+      result.push(' '); // Replace comment with space
+    } else {
+      result.push_str("/* */"); // Unterminated comment fallback
+    }
+
+    true
+  }
+
+  fn consume_until_comment_end(&self, chars: &mut std::iter::Peekable<std::str::Chars>) -> bool {
+    while let Some(comment_char) = chars.next() {
+      if comment_char == '*' && chars.peek() == Some(&'/') {
+        chars.next(); // consume '/'
+        return true;
+      }
+    }
+    false
   }
 
   /// Extract mutation opportunities using regex patterns
@@ -135,7 +181,21 @@ impl TypeScriptParser {
     let mut candidates = Vec::new();
     let content = &ast.content;
 
-    // Find binary operators
+    self.extract_binary_operator_mutations(content, &mut candidates);
+    self.extract_boolean_literal_mutations(content, &mut candidates);
+    self.extract_number_literal_mutations(content, &mut candidates);
+    self.extract_string_literal_mutations(content, &mut candidates);
+    self.extract_unary_operator_mutations(content, &mut candidates);
+    self.extract_assignment_operator_mutations(content, &mut candidates);
+
+    candidates
+  }
+
+  fn extract_binary_operator_mutations(
+    &self,
+    content: &str,
+    candidates: &mut Vec<MutationCandidate>,
+  ) {
     for mat in self.binary_op_regex.find_iter(content) {
       let original = mat.as_str().to_string();
       let mutations = self.get_binary_operator_mutations(&original);
@@ -150,8 +210,13 @@ impl TypeScriptParser {
         });
       }
     }
+  }
 
-    // Find boolean literals
+  fn extract_boolean_literal_mutations(
+    &self,
+    content: &str,
+    candidates: &mut Vec<MutationCandidate>,
+  ) {
     for cap in self.boolean_literal_regex.captures_iter(content) {
       if let Some(bool_match) = cap.name("bool") {
         let original = bool_match.as_str().to_string();
@@ -170,58 +235,89 @@ impl TypeScriptParser {
         });
       }
     }
+  }
 
-    // Find number literals
+  fn extract_number_literal_mutations(
+    &self,
+    content: &str,
+    candidates: &mut Vec<MutationCandidate>,
+  ) {
     for cap in self.number_literal_regex.captures_iter(content) {
-      if let Some(num_match) = cap.name("num") {
-        let original = num_match.as_str().to_string();
-        if let Ok(num) = original.parse::<i64>() {
-          let mutations = vec![
-            (num + 1).to_string(),
-            if num != 0 {
-              (num - 1).to_string()
-            } else {
-              "1".to_string()
-            },
-            "0".to_string(),
-          ];
+      let num_match = match cap.name("num") {
+        Some(m) => m,
+        None => continue,
+      };
 
-          for mutated in mutations {
-            if mutated != original {
-              candidates.push(MutationCandidate {
-                start_byte: num_match.start(),
-                end_byte: num_match.end(),
-                original: original.clone(),
-                mutated,
-                mutation_type: "number_literal".to_string(),
-              });
-            }
-          }
+      let original = num_match.as_str().to_string();
+      let num = match original.parse::<i64>() {
+        Ok(n) => n,
+        Err(_) => continue,
+      };
+
+      let mutations = self.generate_number_mutations(num);
+      for mutated in mutations {
+        if mutated == original {
+          continue;
         }
+
+        candidates.push(MutationCandidate {
+          start_byte: num_match.start(),
+          end_byte: num_match.end(),
+          original: original.clone(),
+          mutated,
+          mutation_type: "number_literal".to_string(),
+        });
       }
     }
+  }
 
-    // Find string literals
+  fn generate_number_mutations(&self, num: i64) -> Vec<String> {
+    vec![
+      (num + 1).to_string(),
+      if num != 0 {
+        (num - 1).to_string()
+      } else {
+        "1".to_string()
+      },
+      "0".to_string(),
+    ]
+  }
+
+  fn extract_string_literal_mutations(
+    &self,
+    content: &str,
+    candidates: &mut Vec<MutationCandidate>,
+  ) {
     for cap in self.string_literal_regex.captures_iter(content) {
-      if let Some(str_match) = cap.name("str") {
-        let original = str_match.as_str().to_string();
-        let mutations = vec!["\"\"".to_string(), "\"mutated\"".to_string()];
+      let str_match = match cap.name("str") {
+        Some(m) => m,
+        None => continue,
+      };
 
-        for mutated in mutations {
-          if mutated != original {
-            candidates.push(MutationCandidate {
-              start_byte: str_match.start(),
-              end_byte: str_match.end(),
-              original: original.clone(),
-              mutated,
-              mutation_type: "string_literal".to_string(),
-            });
-          }
+      let original = str_match.as_str().to_string();
+      let mutations = vec!["\"\"".to_string(), "\"mutated\"".to_string()];
+
+      for mutated in mutations {
+        if mutated == original {
+          continue;
         }
+
+        candidates.push(MutationCandidate {
+          start_byte: str_match.start(),
+          end_byte: str_match.end(),
+          original: original.clone(),
+          mutated,
+          mutation_type: "string_literal".to_string(),
+        });
       }
     }
+  }
 
-    // Find unary operators
+  fn extract_unary_operator_mutations(
+    &self,
+    content: &str,
+    candidates: &mut Vec<MutationCandidate>,
+  ) {
     for cap in self.unary_op_regex.captures_iter(content) {
       if let Some(op_match) = cap.name("op") {
         let original = op_match.as_str().to_string();
@@ -236,8 +332,13 @@ impl TypeScriptParser {
         }
       }
     }
+  }
 
-    // Find assignment operators
+  fn extract_assignment_operator_mutations(
+    &self,
+    content: &str,
+    candidates: &mut Vec<MutationCandidate>,
+  ) {
     for cap in self.assignment_op_regex.captures_iter(content) {
       if let Some(op_match) = cap.name("op") {
         let original = op_match.as_str().to_string();
@@ -258,10 +359,9 @@ impl TypeScriptParser {
         });
       }
     }
-
-    candidates
   }
 
+  // quality-allow max-cyclomatic-complexity 20
   /// Get mutations for binary operators
   fn get_binary_operator_mutations(&self, original: &str) -> Vec<String> {
     match original {

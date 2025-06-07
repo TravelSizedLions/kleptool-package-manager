@@ -39,14 +39,7 @@ impl MutationEngine {
   /// Classify the mutation type based on the candidate
   fn classify_mutation_type(&self, candidate: &MutationCandidate) -> MutationType {
     match candidate.mutation_type.as_str() {
-      "binary_operator" => {
-        match candidate.original.as_str() {
-          "+" | "-" | "*" | "/" | "%" => MutationType::ArithmeticOperator,
-          "===" | "!==" | ">" | "<" | ">=" | "<=" | "==" | "!=" => MutationType::ComparisonOperator,
-          "&&" | "||" => MutationType::LogicalOperator,
-          _ => MutationType::ArithmeticOperator, // Default fallback
-        }
-      }
+      "binary_operator" => self.classify_binary_operator(&candidate.original),
       "boolean_literal" => MutationType::BooleanLiteral,
       "number_literal" => MutationType::NumberLiteral,
       "string_literal" => MutationType::StringLiteral,
@@ -55,6 +48,34 @@ impl MutationEngine {
       "method_call" => MutationType::ArrayMethod,
       _ => MutationType::PropertyAccess, // Default fallback
     }
+  }
+
+  /// Classify binary operator mutations
+  fn classify_binary_operator(&self, original: &str) -> MutationType {
+    if self.is_arithmetic_operator(original) {
+      MutationType::ArithmeticOperator
+    } else if self.is_comparison_operator(original) {
+      MutationType::ComparisonOperator
+    } else if self.is_logical_operator(original) {
+      MutationType::LogicalOperator
+    } else {
+      MutationType::ArithmeticOperator // Default fallback
+    }
+  }
+
+  /// Check if operator is arithmetic
+  fn is_arithmetic_operator(&self, op: &str) -> bool {
+    matches!(op, "+" | "-" | "*" | "/" | "%")
+  }
+
+  /// Check if operator is comparison
+  fn is_comparison_operator(&self, op: &str) -> bool {
+    matches!(op, "===" | "!==" | ">" | "<" | ">=" | "<=" | "==" | "!=")
+  }
+
+  /// Check if operator is logical
+  fn is_logical_operator(&self, op: &str) -> bool {
+    matches!(op, "&&" | "||")
   }
 }
 
