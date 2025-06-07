@@ -15,8 +15,48 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source common utilities
 source "$SCRIPT_DIR/common.sh"
 
+# Main entry point
+main() {
+  __validate_required_env_vars
+  
+  log_step "Updating behavioral coverage badges..."
+  __display_rates
+  
+  local kill_badge behavioral_badge
+  kill_badge=$(__create_kill_rate_badge)
+  behavioral_badge=$(__create_behavioral_badge)
+  
+  __output_badge_results "$kill_badge" "$behavioral_badge"
+  echo "🎉 Behavioral coverage badges created successfully!"
+}
+
+# Validate all required environment variables
+__validate_required_env_vars() {
+  validate_env_vars "GITHUB_TOKEN" "KILL_RATE" "BEHAVIORAL_RATE"
+}
+
+# Display current mutation rates
+__display_rates() {
+  log_info "Total kill rate: ${KILL_RATE}%"
+  log_info "Behavioral kill rate: ${BEHAVIORAL_RATE}%"
+}
+
+# Create kill rate badge JSON
+__create_kill_rate_badge() {
+  local color
+  color=$(__get_mutation_badge_color "$KILL_RATE")
+  __create_badge_json "Mutation Kill Rate" "${KILL_RATE}%" "$color" "rust"
+}
+
+# Create behavioral coverage badge JSON
+__create_behavioral_badge() {
+  local color
+  color=$(__get_mutation_badge_color "$BEHAVIORAL_RATE")
+  __create_badge_json "Behavioral Coverage" "${BEHAVIORAL_RATE}%" "$color" "rust"
+}
+
 # Create badge JSON content
-create_badge_json() {
+__create_badge_json() {
   local label=$1
   local message=$2
   local color=$3
@@ -34,7 +74,7 @@ EOF
 }
 
 # Get badge color based on mutation testing percentage
-get_mutation_badge_color() {
+__get_mutation_badge_color() {
   local percentage=$1
   # Remove % if present
   percentage=${percentage%\%}
@@ -52,19 +92,16 @@ get_mutation_badge_color() {
   fi
 }
 
-# Validate required environment variables
-validate_env_vars "GITHUB_TOKEN" "KILL_RATE" "BEHAVIORAL_RATE"
+# Output badge results (could be extended for gist upload)
+__output_badge_results() {
+  local kill_badge=$1
+  local behavioral_badge=$2
+  
+  # For now, just create the JSON (could be extended to upload to gists)
+  # This is where gist upload logic would go if needed
+  log_info "Kill rate badge JSON created"
+  log_info "Behavioral coverage badge JSON created"
+}
 
-log_step "Updating behavioral coverage badges..."
-log_info "Total kill rate: ${KILL_RATE}%"
-log_info "Behavioral kill rate: ${BEHAVIORAL_RATE}%"
-
-# Create Kill Rate badge JSON
-KILL_COLOR=$(get_mutation_badge_color "$KILL_RATE")
-KILL_BADGE_JSON=$(create_badge_json "Mutation Kill Rate" "${KILL_RATE}%" "$KILL_COLOR" "rust")
-
-# Create Behavioral Rate badge JSON  
-BEHAVIORAL_COLOR=$(get_mutation_badge_color "$BEHAVIORAL_RATE")
-BEHAVIORAL_BADGE_JSON=$(create_badge_json "Behavioral Coverage" "${BEHAVIORAL_RATE}%" "$BEHAVIORAL_COLOR" "rust")
-
-echo "🎉 Behavioral coverage badges created successfully!" 
+# Run main function
+main "$@" 
