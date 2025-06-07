@@ -88,16 +88,18 @@
   'ts:test:win': 'KLEP_SIMULATE_WINDOWS=1 bun test',
   'rust:test': 'cd src/rust && cargo test --workspace',
 
-  // Mutation Testing
-  mutation: 'cd src/rust && cargo build --release && cd ../.. && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(nproc) --verbose',
+  // Legacy Mutation Testing (being phased out)
+  'mutation:legacy': 'cd src/rust && cargo build --release && cd ../.. && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(nproc) --verbose',
   
-  // Rust Mutation Testing with cargo-mutants
-  'rust:mutation': 'cd src/rust && cargo mutants --test-tool=nextest --workspace --exclude klep-mutation-v2',
+  // Universal Mutation Testing (research-backed, cross-language)
+  mutation: 'mutate src/cli --mutantDir .mutants --noCheck --parallel',
+  'mutation:rust': 'mutate src/rust --mutantDir .mutants-rust --noCheck --parallel',
+  'mutation:full': 'klep mutation && klep mutation:rust',
 
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'bun run --bun tsc --noEmit',
-  'ci:mutation': './src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(nproc) --output mutations-report.json',
+  'ci:mutation': 'mutate src/cli --mutantDir .mutants --noCheck --output mutations-report.json',
 }
