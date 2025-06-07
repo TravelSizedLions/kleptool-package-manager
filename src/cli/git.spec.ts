@@ -40,38 +40,6 @@ function __createProcessExecMock(
   }
 }
 
-describe('debug', () => {
-  it('should show what moxxy can see', () => {
-    console.log('Moxxy object:', Object.getOwnPropertyNames(moxxy));
-    console.log('Moxxy keys:', Object.keys(moxxy));
-
-    // Test if we can mock process at all
-    try {
-      moxxy.process.mock({
-        exec: () => Promise.resolve('test-output'),
-      });
-      console.log('Process mock set successfully');
-    } catch (e) {
-      console.log('Process mock failed:', e);
-    }
-
-    // Test if we can access simpleGit
-    try {
-      console.log('simpleGit in moxxy:', 'simpleGit' in moxxy);
-      if ('simpleGit' in moxxy) {
-        (moxxy as any).simpleGit.mock(() => ({
-          tags: () => ({ all: ['test'] }),
-        }));
-        console.log('simpleGit mock set successfully');
-      }
-    } catch (e) {
-      console.log('simpleGit mock failed:', e);
-    }
-
-    expect(true).toBe(true);
-  });
-});
-
 describe('isRemoteRepository', () => {
   it('should return true for valid remote repository', async () => {
     moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
@@ -79,16 +47,14 @@ describe('isRemoteRepository', () => {
       __createProcessExecMock({ shouldResolve: true, output: 'some-output' })
     );
 
-    const result = await git.isRemoteRepository('https://github.com/user/repo.git');
-    expect(result).toBe(true);
+    expect(await git.isRemoteRepository('https://github.com/user/repo.git')).toBe(true);
   });
 
   it('should return false for invalid remote repository', async () => {
     moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
     moxxy.process.exec.mock(__createProcessExecMock({ shouldResolve: false, error: 'Not found' }));
 
-    const result = await git.isRemoteRepository('invalid-url');
-    expect(result).toBe(false);
+    expect(await git.isRemoteRepository('invalid-url')).toBe(false);
   });
 });
 
@@ -100,9 +66,7 @@ describe('isLocalRepository', () => {
       log: () => ({ latest: { hash: 'abc123' } }),
     }));
 
-    const result = await git.isLocalRepository('/path/to/repo');
-
-    expect(result).toBe(true);
+    expect(await git.isLocalRepository('/path/to/repo')).toBe(true);
   });
 
   it('should return false for invalid local repository', async () => {
@@ -110,9 +74,7 @@ describe('isLocalRepository', () => {
       throw new Error('Not a git repository');
     });
 
-    const result = await git.isLocalRepository('/invalid/path');
-
-    expect(result).toBe(false);
+    expect(await git.isLocalRepository('/invalid/path')).toBe(false);
   });
 });
 
@@ -126,9 +88,7 @@ describe('repositoryStat', () => {
 
     moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    const result = await git.repositoryStat('/path/to/local/repo');
-
-    expect(result).toEqual({
+    expect(await git.repositoryStat('/path/to/local/repo')).toEqual({
       isLocal: true,
       isRemote: false,
       tags: ['v1.0.0', 'v1.1.0', 'v2.0.0'],
@@ -150,9 +110,7 @@ describe('repositoryStat', () => {
       )
     );
 
-    const result = await git.repositoryStat('https://github.com/user/repo.git');
-
-    expect(result).toEqual({
+    expect(await git.repositoryStat('https://github.com/user/repo.git')).toEqual({
       isLocal: false,
       isRemote: true,
       tags: ['v1.0.0', 'v1.1.0'],
@@ -181,9 +139,9 @@ describe('getLatestCommit', () => {
 
     moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    const result = await git.getLatestCommit('/path/to/local/repo');
-
-    expect(result).toBe('abcd1234567890abcdef1234567890abcdef1234');
+    expect(await git.getLatestCommit('/path/to/local/repo')).toBe(
+      'abcd1234567890abcdef1234567890abcdef1234'
+    );
   });
 
   it('should return latest commit for remote repository', async () => {
@@ -198,9 +156,9 @@ describe('getLatestCommit', () => {
       )
     );
 
-    const result = await git.getLatestCommit('https://github.com/user/repo.git');
-
-    expect(result).toBe('abcd1234567890abcdef1234567890abcdef1234');
+    expect(await git.getLatestCommit('https://github.com/user/repo.git')).toBe(
+      'abcd1234567890abcdef1234567890abcdef1234'
+    );
   });
 
   it('should throw error for empty local repository', async () => {
@@ -230,9 +188,7 @@ describe('getLatestCommit', () => {
 
 describe('getVersionType', () => {
   it('should return "hash" for "latest" version', async () => {
-    const result = await git.getVersionType('https://github.com/user/repo.git', 'latest');
-
-    expect(result).toBe('hash');
+    expect(await git.getVersionType('https://github.com/user/repo.git', 'latest')).toBe('hash');
   });
 
   it('should return "semver" for semantic version', async () => {
@@ -243,9 +199,7 @@ describe('getVersionType', () => {
 
     moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    const result = await git.getVersionType('/path/to/repo', '1.0.0');
-
-    expect(result).toBe('semver');
+    expect(await git.getVersionType('/path/to/repo', '1.0.0')).toBe('semver');
   });
 
   it('should return "branch" for branch name', async () => {
@@ -256,9 +210,7 @@ describe('getVersionType', () => {
 
     moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    const result = await git.getVersionType('/path/to/repo', 'main');
-
-    expect(result).toBe('branch');
+    expect(await git.getVersionType('/path/to/repo', 'main')).toBe('branch');
   });
 
   it('should return "tag" for tag name', async () => {
@@ -269,9 +221,7 @@ describe('getVersionType', () => {
 
     moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    const result = await git.getVersionType('/path/to/repo', 'release-tag');
-
-    expect(result).toBe('tag');
+    expect(await git.getVersionType('/path/to/repo', 'release-tag')).toBe('tag');
   });
 
   it('should return "hash" for valid commit hash', async () => {
@@ -282,10 +232,9 @@ describe('getVersionType', () => {
 
     moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    const validHash = 'abcd1234567890abcdef1234567890abcdef1234';
-    const result = await git.getVersionType('/path/to/repo', validHash);
-
-    expect(result).toBe('hash');
+    expect(
+      await git.getVersionType('/path/to/repo', 'abcd1234567890abcdef1234567890abcdef1234')
+    ).toBe('hash');
   });
 
   it('should throw error for invalid version', async () => {
@@ -307,8 +256,6 @@ describe('getVersionType', () => {
 
     moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    const result = await git.getVersionType('/path/to/repo', '^1.0.0');
-
-    expect(result).toBe('semver');
+    expect(await git.getVersionType('/path/to/repo', '^1.0.0')).toBe('semver');
   });
 });

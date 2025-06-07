@@ -2,52 +2,22 @@ import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 
 import kerror from './kerror.ts';
 
-function __setupErrorMocks() {
-  const consoleSpy = spyOn(console, 'error').mockImplementation(() => {});
-  const processExitSpy = spyOn(process, 'exit').mockImplementation(() => {
-    throw new Error('process.exit called');
-  });
-
-  return { consoleSpy, processExitSpy };
-}
-
-function __cleanupMocks(
-  consoleSpy: ReturnType<typeof spyOn>,
-  processExitSpy: ReturnType<typeof spyOn>
-) {
-  consoleSpy.mockRestore();
-  processExitSpy.mockRestore();
-}
-
-function __expectProcessExit(processExitSpy: ReturnType<typeof spyOn>, code = 1) {
-  expect(processExitSpy).toHaveBeenCalledWith(code);
-}
-
-function __createTestError(type = kerror.type.Unknown, id = 'test-id', options = {}) {
-  return kerror(type, id, options);
-}
-
-function __testBoundaryError(errorFactory: () => Error, processExitSpy: ReturnType<typeof spyOn>) {
-  const fn = kerror.boundary(() => {
-    throw errorFactory();
-  });
-
-  expect(async () => await fn()).toThrow('process.exit called');
-  __expectProcessExit(processExitSpy);
-}
-
 function __testBoundaryThrow(
-  throwValue: unknown,
+  throwValue: unknown | (() => Error),
   processExitSpy: ReturnType<typeof spyOn>,
   consoleSpy?: ReturnType<typeof spyOn>,
   expectedConsoleCall?: [string, unknown]
 ) {
   const fn = kerror.boundary(() => {
-    throw throwValue;
+    if (typeof throwValue === 'function') {
+      throw throwValue();
+    } else {
+      throw throwValue;
+    }
   });
 
   expect(async () => await fn()).toThrow('process.exit called');
-  __expectProcessExit(processExitSpy);
+  expect(processExitSpy).toHaveBeenCalledWith(1);
 
   if (consoleSpy && expectedConsoleCall) {
     expect(consoleSpy).toHaveBeenCalledWith(expectedConsoleCall[0], expectedConsoleCall[1]);
@@ -61,18 +31,20 @@ let consoleSpy: ReturnType<typeof spyOn>;
 let processExitSpy: ReturnType<typeof spyOn>;
 
 beforeEach(() => {
-  const mocks = __setupErrorMocks();
-  consoleSpy = mocks.consoleSpy;
-  processExitSpy = mocks.processExitSpy;
+  consoleSpy = spyOn(console, 'error').mockImplementation(() => {});
+  processExitSpy = spyOn(process, 'exit').mockImplementation(() => {
+    throw new Error('process.exit called');
+  });
 });
 
 afterEach(() => {
-  __cleanupMocks(consoleSpy, processExitSpy);
+  consoleSpy.mockRestore();
+  processExitSpy.mockRestore();
 });
 
 describe('KlepError construction', () => {
   it('should create error with minimal options', () => {
-    const error = __createTestError();
+    const error = kerror(kerror.type.Unknown, 'test-id', {});
 
     expect(error).toBeInstanceOf(kerror.KlepError);
     expect(error.type).toBe(kerror.type.Unknown);
@@ -140,11 +112,11 @@ describe('type guard', () => {
 
 describe('boundary function', () => {
   it('should catch and handle KlepError in sync function', async () => {
-    __testBoundaryError(() => kerror(kerror.type.Task, 'task-failed'), processExitSpy);
+    __testBoundaryThrow(() => kerror(kerror.type.Task, 'task-failed'), processExitSpy);
   });
 
   it('should catch and handle KlepError in async function', async () => {
-    __testBoundaryError(() => kerror(kerror.type.Parsing, 'async-parse-error'), processExitSpy);
+    __testBoundaryThrow(() => kerror(kerror.type.Parsing, 'async-parse-error'), processExitSpy);
   });
 
   it('should handle non-Error throws', async () => {

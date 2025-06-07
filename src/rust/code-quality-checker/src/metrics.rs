@@ -119,16 +119,18 @@ fn __traverse_for_nesting(node: &Node, current_depth: &mut usize, max_depth: &mu
 fn __node_increases_nesting_depth(node: &Node) -> bool {
   matches!(
     node.kind(),
-    "if_statement"
-      | "while_statement"
-      | "for_statement"
+    // Conditional statements
+    "if_statement" | "if_expression"
+
+      // Loops  
+      | "while_statement" | "while_expression"
+      | "for_statement" | "for_expression"
       | "loop_statement"
+
+      // Pattern matching and exception handling
       | "match_expression"
       | "try_statement"
-      | "with_statement"
-      | "if_expression"
-      | "while_expression"
-      | "for_expression" // Note: removed "block" and "compound_statement" to avoid double-counting
+      | "with_statement" // Note: removed "block" and "compound_statement" to avoid double-counting
                          // The control flow statements above already imply their blocks
   )
 }
@@ -168,15 +170,20 @@ fn __node_is_decision_point(node: &Node) -> bool {
     node.kind(),
     // Conditional statements
     "if_statement" | "if_expression" | "conditional_expression" | "ternary_expression"
+
         // Loops
         | "while_statement" | "while_expression" | "for_statement" | "for_expression" 
         | "loop_statement" | "do_statement"
+
         // Pattern matching/switch
         | "match_expression" | "match_arm" | "switch_statement" | "case_clause"
+
         // Exception handling
         | "try_statement" | "catch_clause" | "except_clause"
+
         // Logical operators (short-circuit evaluation creates new paths)
         | "binary_expression" | "logical_and" | "logical_or"
+
         // Function calls that can branch (sometimes)
         | "yield_expression" | "await_expression"
   )

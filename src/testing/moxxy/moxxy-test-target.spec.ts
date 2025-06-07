@@ -17,7 +17,7 @@ describe('Import Detection', () => {
     ];
 
     for (const importName of expectedImports) {
-      const detected = importName in moxxy!;
+      const detected = importName in moxxy;
       console.log(`${importName}: ${detected}`);
       expect(detected).toBe(true);
     }

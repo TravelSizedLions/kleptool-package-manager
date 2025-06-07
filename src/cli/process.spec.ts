@@ -5,6 +5,39 @@ import { describe, it, expect } from 'bun:test';
 import processModule from './process.ts';
 
 // Helper functions for common mocking patterns
+function __createStreamEventHandler(dataValue?: string, endDelay = 20) {
+  return (event: string, handler: (...args: unknown[]) => void) => {
+    if (event === 'data' && dataValue !== undefined) setTimeout(() => handler(dataValue), 10);
+    else if (event === 'end') setTimeout(() => handler(), endDelay);
+  };
+}
+
+function __createProcessEventHandler(exitCode = 0, errorOnEvent?: string) {
+  return (event: string, handler: (...args: unknown[]) => void) => {
+    if (event === 'close') setTimeout(() => handler(exitCode), 30);
+    else if (event === errorOnEvent && errorOnEvent)
+      setTimeout(() => handler(new Error('Process error')), 5);
+  };
+}
+
+function __createIPCEventHandler(ipcData?: string) {
+  return (event: string, handler: (...args: unknown[]) => void) => {
+    if (event === 'data') setTimeout(() => handler(ipcData), 10);
+    else if (event === 'end') setTimeout(() => handler(), 20);
+  };
+}
+
+function __createHangingEventHandler() {
+  return () => {}; // Never calls handlers - hangs forever
+}
+
+function __createSpawnMock(exitCode = 0) {
+  return () => ({
+    on: __createProcessEventHandler(exitCode),
+    kill: () => {},
+  });
+}
+
 function __createExecMock(
   options: {
     stdout?: string;
@@ -22,22 +55,14 @@ function __createExecMock(
 
     return {
       stdout: {
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'data') setTimeout(() => handler(stdout), 10);
-          else if (event === 'end') setTimeout(() => handler(), 20);
-        },
+        on: __createStreamEventHandler(stdout),
         pipe: () => {},
       },
       stderr: {
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'data') setTimeout(() => handler(stderr), 10);
-          else if (event === 'end') setTimeout(() => handler(), 20);
-        },
+        on: __createStreamEventHandler(stderr),
         pipe: () => {},
       },
-      on: (event: string, handler: (...args: unknown[]) => void) => {
-        if (event === 'close') setTimeout(() => handler(exitCode), 30);
-      },
+      on: __createProcessEventHandler(exitCode),
       stdin: { write: () => {}, end: () => {} },
       kill: () => {},
     };
@@ -60,17 +85,10 @@ function __createSpawnIPCMock(
       null, // stderr
       {
         // fd3 for IPC
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'data') setTimeout(() => handler(ipcData), 10);
-          else if (event === 'end') setTimeout(() => handler(), 20);
-        },
+        on: __createIPCEventHandler(ipcData),
       },
     ],
-    on: (event: string, handler: (...args: unknown[]) => void) => {
-      if (event === 'close') setTimeout(() => handler(exitCode), 30);
-      else if (event === errorOnEvent && errorOnEvent)
-        setTimeout(() => handler(new Error('Process error')), 5);
-    },
+    on: __createProcessEventHandler(exitCode, errorOnEvent),
     stdin: { write: () => {}, end: () => {} },
     kill: () => {},
   });
@@ -85,14 +103,14 @@ function __createHangingProcessMock(
 
   return () => ({
     stdout: {
-      on: () => {}, // Never calls handlers - hangs forever
+      on: __createHangingEventHandler(),
       pipe: () => {},
     },
     stderr: {
-      on: () => {},
+      on: __createHangingEventHandler(),
       pipe: () => {},
     },
-    on: () => {}, // Never calls close handler
+    on: __createHangingEventHandler(),
     stdin: { write: () => {}, end: () => {} },
     stdio: [
       null, // stdin
@@ -100,7 +118,7 @@ function __createHangingProcessMock(
       null, // stderr
       {
         // fd3 for IPC - also hangs forever
-        on: () => {},
+        on: __createHangingEventHandler(),
         pipe: () => {},
       },
     ],
@@ -128,25 +146,18 @@ function __createStreamingMock(
 
     const mock = {
       stdout: {
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'data') setTimeout(() => handler('test\n'), 10);
-          else if (event === 'end') setTimeout(() => handler(), 20);
-        },
+        on: __createStreamEventHandler('test\n'),
         pipe: () => {
           captureStreamingCalls?.(true, false);
         },
       },
       stderr: {
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'end') setTimeout(() => handler(), 20);
-        },
+        on: __createStreamEventHandler(),
         pipe: () => {
           captureStreamingCalls?.(false, true);
         },
       },
-      on: (event: string, handler: (...args: unknown[]) => void) => {
-        if (event === 'close') setTimeout(() => handler(exitCode), 30);
-      },
+      on: __createProcessEventHandler(exitCode),
       stdin: { write: () => {}, end: () => {} },
       kill: () => {},
     };
@@ -204,29 +215,41 @@ async function __testEnvironmentHandling(
   expect(capturedEnv).toEqual(expectedEnv);
 }
 
+async function __testIpcSuccess(mockOptions: Parameters<typeof __createSpawnIPCMock>[0]) {
+  moxxy.spawn.mock(() => __createSpawnIPCMock(mockOptions)());
+
+  const result = await processModule.ipc('test-command', {
+    data: 'input data',
+    args: ['arg1', 'arg2'],
+  });
+
+  expect(result).toBe(mockOptions?.ipcData || '');
+}
+
+async function __testIpcError(
+  mockOptions: Parameters<typeof __createSpawnIPCMock>[0],
+  expectedErrorProperties: { type: string; id: string }
+) {
+  moxxy.spawn.mock(() => __createSpawnIPCMock(mockOptions)());
+
+  try {
+    await processModule.ipc('test-command');
+    expect(true).toBe(false); // Should not reach here
+  } catch (error: any) {
+    expect(error.type).toBe(expectedErrorProperties.type);
+    expect(error.id).toBe(expectedErrorProperties.id);
+  }
+}
+
 async function __testIpcScenario(
   mockOptions: Parameters<typeof __createSpawnIPCMock>[0],
   shouldThrow = false,
   expectedErrorProperties?: { type: string; id: string }
 ) {
-  moxxy.spawn.mock(() => __createSpawnIPCMock(mockOptions)());
-
-  if (shouldThrow) {
-    try {
-      await processModule.ipc('test-command');
-      expect(true).toBe(false); // Should not reach here
-    } catch (error: any) {
-      if (expectedErrorProperties) {
-        expect(error.type).toBe(expectedErrorProperties.type);
-        expect(error.id).toBe(expectedErrorProperties.id);
-      }
-    }
+  if (shouldThrow && expectedErrorProperties) {
+    await __testIpcError(mockOptions, expectedErrorProperties);
   } else {
-    const result = await processModule.ipc('test-command', {
-      data: 'input data',
-      args: ['arg1', 'arg2'],
-    });
-    expect(result).toBe(mockOptions?.ipcData || '');
+    await __testIpcSuccess(mockOptions);
   }
 }
 
@@ -435,12 +458,7 @@ describe('execWithResult', () => {
     moxxy.spawn.mock((cmdName: string, cmdArgs: string[], options: any) => {
       spawnCalled = true;
       spawnOptions = options;
-      return {
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(0), 30);
-        },
-        kill: () => {},
-      };
+      return __createSpawnMock(0)();
     });
 
     const result = await processModule.execWithResult('echo test', {
@@ -592,8 +610,7 @@ describe('_exec backward compatibility', () => {
       })
     );
 
-    const result = await processModule.exec('echo test');
-    expect(result).toBe('success output');
+    expect(await processModule.exec('echo test')).toBe('success output');
   });
 
   it('should throw error on failure when throwOnError is true', async () => {
@@ -620,7 +637,8 @@ describe('_exec backward compatibility', () => {
       })
     );
 
-    const result = await processModule.exec('failing-command', { throwOnError: false });
-    expect(result).toBe('output before failure');
+    expect(await processModule.exec('failing-command', { throwOnError: false })).toBe(
+      'output before failure'
+    );
   });
 });

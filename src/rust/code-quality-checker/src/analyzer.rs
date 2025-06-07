@@ -57,7 +57,11 @@ fn __analyze_directory(dir: &Path, config: &AnalysisConfig) -> Result<()> {
     let entry = entry?;
     let path = entry.path();
 
-    if path.is_dir() && !__should_skip_directory(&path) {
+    if __should_skip_directory(&path) {
+      continue;
+    }
+
+    if path.is_dir() {
       __analyze_directory(&path, config)?;
       continue;
     }

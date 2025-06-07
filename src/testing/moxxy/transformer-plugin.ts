@@ -407,32 +407,36 @@ function __isMoxxySystemFile(normalizedPath: string, content: string): boolean {
 }
 
 function __isRunningTests(): boolean {
-  // Check if bun is running tests by looking for test-related indicators
-  const isTestCommand = process.argv.some(
-    (arg) =>
-      arg === 'test' || arg.includes('bun:test') || arg.includes('.spec.') || arg.includes('.test.')
-  );
+  // Primary check: Bun automatically sets NODE_ENV to "test" when running tests
+  // This is the most reliable indicator according to Bun documentation
+  if (process.env.NODE_ENV === 'test') {
+    return true;
+  }
 
-  // Check for test-related environment variables that bun sets
-  const isTestEnvironment =
-    process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test' || !!process.env.IS_BUN_TEST;
+  // Secondary check: Look for test globals that Bun injects during test runs
+  // These are automatically available in test files without importing
+  const hasTestGlobals =
+    typeof globalThis !== 'undefined' &&
+    ('test' in globalThis ||
+      'describe' in globalThis ||
+      'expect' in globalThis ||
+      'it' in globalThis);
 
-  // Check if we're in a bun test runner context
-  const isBunTestRunner =
-    typeof Bun !== 'undefined' && (globalThis as unknown as { test?: unknown }).test !== undefined;
+  // Tertiary check: Command line arguments (less reliable but still useful)
+  const isTestCommand = process.argv.some((arg) => arg === 'test');
 
-  return isTestCommand || isTestEnvironment || isBunTestRunner;
+  return hasTestGlobals || isTestCommand;
 }
 
 function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
+  // Skip transformation if we're not actually running tests
+  // This allows static analysis tools to analyze the original source code
+  if (!__isRunningTests()) return true;
+
   const normalizedPath = args.path.replace(/\\/g, '/');
 
   if (__isMoxxySystemFile(normalizedPath, content)) return true;
   if (__isMainEntryPoint(normalizedPath)) return true;
-
-  // Skip transformation if we're not actually running tests
-  // This allows static analysis tools to analyze the original source code
-  if (!__isRunningTests()) return true;
 
   const isTestFile = __isTestFile(normalizedPath);
   const isInTestingDirectory = __isInTestingDirectory(normalizedPath);

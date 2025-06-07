@@ -184,7 +184,7 @@ function __extractCommitHash(headLine: string, url: string): string {
 }
 
 async function __git(args: string[], timeout: number = 10000): Promise<string> {
-  return await process.exec('git', { args, timeout });
+  return process.exec('git', { args, timeout });
 }
 
 function __removeVersionConstraint(version: string): string {

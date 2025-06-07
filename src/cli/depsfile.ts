@@ -41,8 +41,7 @@ function __ensureDependencyProps(dev: boolean) {
 }
 
 function __getDependencyList(dev: boolean): Record<string, Dependency> {
-  const list = dev ? __deps.devDependencies : __deps.dependencies;
-  return list!; // We know it exists because __ensureDependencyProps was called
+  return (dev ? __deps.devDependencies : __deps.dependencies)!; // We know it exists because __ensureDependencyProps was called
 }
 
 function __cleanDependency(dep: Dependency): Dependency {

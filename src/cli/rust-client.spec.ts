@@ -423,7 +423,6 @@ describe('__addHelp()', () => {
   });
 });
 
-// quality-ignore max-cyclomatic-complexity
 describe('singleton', () => {
   describe('initialization', () => {
     it('constructs a backend if one does not already exist', async () => {
@@ -475,7 +474,6 @@ describe('singleton', () => {
       }
     });
 
-    // quality-ignore max-cyclomatic-complexity
     it('creates a KlepError from a generic Error if the backend is not found', async () => {
       const genericError = new Error('Some generic error');
       moxxy.existsSync.mock(() => {
