@@ -52,7 +52,7 @@
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
-  'tweak' : 'git add . && git commit -m "tweaks" && git push',
+  'tweak' : 'klep tidy && klep ci && git add . && git commit -m "tweaks" && git push',
 
   // ------------------------------------------------------------
   // Sub-tasks

@@ -102,10 +102,10 @@ impl WorkerProcess {
   }
 
   fn __find_worker_binary() -> Result<std::path::PathBuf> {
-    let current_exe = std::env::current_exe()
-      .context("Failed to get current executable path")?;
-    
-    let exe_dir = current_exe.parent()
+    let current_exe = std::env::current_exe().context("Failed to get current executable path")?;
+
+    let exe_dir = current_exe
+      .parent()
       .context("Failed to get binary directory")?;
 
     // Try different possible locations for the worker binary
@@ -113,13 +113,11 @@ impl WorkerProcess {
       // 1. Same directory as current executable (installed/release case)
       exe_dir.join("pathogen-worker"),
       exe_dir.join("pathogen-worker.exe"), // Windows
-      
       // 2. In target/release or target/debug during development
       exe_dir.join("../target/release/pathogen-worker"),
       exe_dir.join("../target/debug/pathogen-worker"),
       exe_dir.join("../target/release/pathogen-worker.exe"), // Windows
-      exe_dir.join("../target/debug/pathogen-worker.exe"), // Windows
-      
+      exe_dir.join("../target/debug/pathogen-worker.exe"),   // Windows
       // 3. In the same target directory (most likely for Cargo builds)
       exe_dir.join("pathogen-worker"),
       exe_dir.join("pathogen-worker.exe"), // Windows
