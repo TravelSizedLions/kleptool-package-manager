@@ -42,7 +42,6 @@ async fn main() -> Result<()> {
   let duration = start_time.elapsed();
 
   generate_and_save_report(&results, &target_files, duration, &config)?;
-  print_completion_summary(&results, duration);
 
   Ok(())
 }
@@ -94,8 +93,9 @@ fn build_cli_interface() -> ArgMatches {
 
 /// Print the startup banner with configuration info
 fn print_startup_banner(config: &MutationConfig) {
-  println!("🦀 Klep Mutation Tester v2 - AST Edition");
-  println!("🛡️  Safe, fast, behavioral coverage analysis");
+  println!("{}", "=".repeat(80));
+  println!("                             Pathogen v{}", env!("CARGO_PKG_VERSION"));
+  println!("{}", "=".repeat(80));
   println!("📂 Source directory: {}", config.source_dir.display());
   println!("🔧 Parallel runners: {}", config.parallel_count);
   if config.dry_run {
@@ -141,11 +141,9 @@ fn discover_and_validate_files(config: &MutationConfig) -> Result<Vec<PathBuf>> 
 
 /// Run baseline test validation
 async fn run_baseline_validation(runner: &MutationRunner) -> Result<()> {
-  println!("\n📊 Running baseline tests...");
   if !runner.run_baseline_tests().await? {
     anyhow::bail!("❌ Baseline tests are failing! Fix tests before running mutation testing.");
   }
-  println!("✅ Baseline tests pass");
   Ok(())
 }
 
@@ -190,7 +188,6 @@ async fn run_mutation_tests(
   mutations: Vec<types::Mutation>,
   verbose: bool,
 ) -> Result<Vec<types::MutationResult>> {
-  println!("\n⚡ Running parallel mutation tests with bulletproof file safety...");
   runner.run_mutations_safely(mutations, verbose).await
 }
 
@@ -201,7 +198,6 @@ fn generate_and_save_report(
   duration: std::time::Duration,
   config: &MutationConfig,
 ) -> Result<()> {
-  println!("\n🎯 Generating comprehensive report...");
   let stats = generate_report(results, target_files, duration);
 
   if let Some(output_path) = &config.output_file {
@@ -210,16 +206,6 @@ fn generate_and_save_report(
   }
 
   Ok(())
-}
-
-/// Print completion summary
-fn print_completion_summary(results: &[types::MutationResult], duration: std::time::Duration) {
-  println!("\n✨ Mutation testing complete!");
-  println!(
-    "⏱️  Total time: {:.2}s | 🚀 Rate: {:.1} mutations/sec",
-    duration.as_secs_f64(),
-    results.len() as f64 / duration.as_secs_f64()
-  );
 }
 
 fn discover_target_files(source_dir: &PathBuf) -> Result<Vec<PathBuf>> {
@@ -419,8 +405,10 @@ fn build_file_stats(file_path: String, file_mutations: Vec<&types::MutationResul
 
 /// Print the summary report header
 fn print_summary_report(stats: &SummaryStats, duration: std::time::Duration) {
-  println!("\n🎯 COMPREHENSIVE MUTATION TESTING RESULTS");
-  println!("{}", "=".repeat(60));
+  println!();
+  println!("{}", "=".repeat(80));
+  println!("                         Project Resiliency Results");
+  println!("{}", "=".repeat(80));
   println!("📊 Total mutations: {}", stats.total);
   println!(
     "🧬 Behavioral kills: {}/{} ({:.1}%)",
@@ -451,34 +439,56 @@ fn print_summary_report(stats: &SummaryStats, duration: std::time::Duration) {
   );
 }
 
-/// Print per-file breakdown
+/// Print per-file breakdown in table format
 fn print_per_file_breakdown(per_file_stats: &[FileStats]) {
-  println!("\n📁 PER-FILE COVERAGE BREAKDOWN");
-  println!("{}", "=".repeat(60));
+  println!();
+  println!("📁 File Coverage Breakdown");
+  println!("{}", "-".repeat(80));
+  println!("{:<41} {:>8} {:>8} {:>9} {:>9}", "File", "Total", "Killed", "Survived", "Coverage");
+  println!("{}", "-".repeat(80));
+  
   for file_stat in per_file_stats {
-    print_file_stats(file_stat);
+    print_file_table_row(file_stat);
+  }
+  
+  println!("{}", "-".repeat(80));
+  
+  // Show survivor details for files that have them
+  let files_with_survivors: Vec<_> = per_file_stats.iter()
+    .filter(|fs| !fs.survived_mutations.is_empty())
+    .collect();
+    
+  if !files_with_survivors.is_empty() {
+    println!();
+    println!("Mutation Survivors:");
+    println!("{}", "-".repeat(80));
+    for file_stat in files_with_survivors {
+      print_survivors_info(file_stat);
+    }
+    println!(); // Extra newline after survivors
   }
 }
 
-/// Print statistics for a single file
-fn print_file_stats(file_stat: &FileStats) {
+/// Print a single file's stats as a table row
+fn print_file_table_row(file_stat: &FileStats) {
+  let short_path = file_stat.file_path.replace("src/cli/", "");
   let status_icon = get_status_icon(file_stat.kill_rate);
-
+  
+  let display_path = if short_path.len() > 34 { 
+    short_path[..31].to_owned() + "..." 
+  } else { 
+    short_path 
+  };
+  
   println!(
-    "{} {} ({:.1}% kill rate)",
+    "{} {:<38} {:>8} {:>8} {:>9} {:>8.1}%",
     status_icon,
-    file_stat.file_path.replace("src/cli/", ""),
-    file_stat.kill_rate
-  );
-  println!(
-    "   {} mutations | {} kills | {} survived",
+    display_path,
     file_stat.total_mutations,
     file_stat.behavioral_kills + file_stat.compile_errors,
-    file_stat.survived
+    file_stat.survived,
+    file_stat.kill_rate
   );
-
-  print_survivors_info(file_stat);
-  println!();
 }
 
 /// Get status icon based on kill rate
@@ -492,20 +502,21 @@ fn get_status_icon(kill_rate: f64) -> &'static str {
   }
 }
 
-/// Print information about survived mutations
+/// Print information about survived mutations for a file
 fn print_survivors_info(file_stat: &FileStats) {
-  if !file_stat.survived_mutations.is_empty() && file_stat.survived_mutations.len() <= 3 {
-    println!("   Survivors:");
-    for survivor in &file_stat.survived_mutations {
-      println!(
-        "     • Line {}: {} → {}",
-        survivor.line, survivor.original, survivor.mutated
-      );
+  let short_path = file_stat.file_path.replace("src/cli/", "");
+  println!();
+  println!("📄 {} ({} survivors):", short_path, file_stat.survived_mutations.len());
+  
+  for (i, survivor) in file_stat.survived_mutations.iter().enumerate() {
+    if i >= 5 {  // Limit to first 5 for readability
+      println!("     ... and {} more (see JSON report for full list)", 
+               file_stat.survived_mutations.len() - 5);
+      break;
     }
-  } else if file_stat.survived_mutations.len() > 3 {
     println!(
-      "   {} survivors (see JSON report for details)",
-      file_stat.survived_mutations.len()
+      "     • Line {}: {} → {}",
+      survivor.line, survivor.original, survivor.mutated
     );
   }
 }

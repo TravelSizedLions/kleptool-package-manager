@@ -94,5 +94,5 @@
   // High-Performance AST-Based Rust Mutation Testing v2 🚀
   'mutation:v2:build': 'cd src/rust && cargo build --release',
   'mutation:v2': 'klep mutation:v2:build && ./src/rust/target/release/klep-mutation-v2 --source src/ --parallel $(nproc) --verbose',
-  'mutation:v2:ci': 'klep mutation:v2:build && THREADS=$(nproc) && echo "🚀 Using $THREADS threads for CI behavioral coverage" && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $THREADS --output mutations-report.json',
+  'mutation:v2:ci': 'klep mutation:v2:build && THREADS=$(nproc) && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $THREADS --output mutations-report.json',
 }

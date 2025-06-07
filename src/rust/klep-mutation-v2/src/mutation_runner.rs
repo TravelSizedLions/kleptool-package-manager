@@ -90,17 +90,14 @@ impl MutationRunner {
       }
     }
 
-    println!(
-      "🛡️  File safety initialized for {} files",
-      files_to_prepare.len()
-    );
+    // File safety initialized silently for clean output
 
     // Run mutations in parallel with safety guarantees
     let results = self
       .run_mutations_parallel(mutations, verbose, prepared_manager)
       .await?;
 
-    println!("✅ All mutations completed safely - all files restored to original state");
+    // All mutations completed safely - files restored to original state
 
     Ok(results)
   }
