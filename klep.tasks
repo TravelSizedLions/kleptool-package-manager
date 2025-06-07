@@ -4,13 +4,13 @@
   // ------------------------------------------------------------
 
   // Link the CLI to the user's path (cross-platform)
-  link: "bash scripts/link.sh",
+  link: "./scripts/link.sh",
 
   // Unlink the CLI from the user's path (cross-platform)
-  unlink: "bash scripts/unlink.sh",
+  unlink: "./scripts/unlink.sh",
 
   // Ensure the PATH is set up for the klep CLI
-  ensurepath: 'bash scripts/setup-path.sh',
+  ensurepath: './scripts/setup-path.sh',
 
   // Render the README as a PDF
   readme: "pandoc --pdf-engine=typst README.md -o README.pdf && if [ $? -eq 0 ]; then echo 'Finished rendering README.pdf'; else echo 'Failed to render README.pdf'; fi",
@@ -23,7 +23,7 @@
 
   // Lint & Format the project
   lint: "klep ts:lint && klep rust:lint",
-  format: "klep ts:format && klep rust:format && bash scripts/ensure-final-newlines.sh --fix",
+  format: "klep ts:format && klep rust:format && klep endlines:fix",
   tidy: 'klep lint && klep format',
 
   // Security Audit
@@ -62,12 +62,14 @@
   'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\" \".github/**/*.yml\"',
   'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
   'rust:format': 'cd src/rust && cargo fmt --all',
+  'endlines:fix': './scripts/ensure-final-newlines.sh --fix',
 
   // Lint & Format (Assert)
   'ts:lint:assert': 'bun run --bun eslint . ',
   'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\" \".github/**/*.yml\"',
   'rust:lint:assert': 'cd src/rust && RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --all-features',
   'rust:format:assert': 'cd src/rust && cargo fmt --all -- --check',
+  'endlines': './scripts/ensure-final-newlines.sh --check',
 
   // Build and/or clean the Rust code
   'rust:build': "cd src/rust && cargo build --release && cd ..",
@@ -89,15 +91,15 @@
   'rust:test': 'cd src/rust && cargo test --workspace',
 
   // CI/CD Tasks
-  'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert && bash scripts/ensure-final-newlines.sh --check',
+  'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert && ./scripts/ensure-final-newlines.sh --check',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'bun run --bun tsc --noEmit',
   'ci:mutation': 'klep pathogen',
 
   // Pathogen (Mutation Testing)
-  'pathogen:plan': 'mkdir -p .mutations/typescript && echo "Generating mutations..." && find src/cli -name "*.ts" -not -name "*.spec.ts" | xargs -I {} mutate {} --mutantDir .mutations/typescript --noCheck > /dev/null 2>&1 && echo "✓ Generated $(find .mutations/typescript -name "*.ts" | wc -l) mutations"',
+  'pathogen:plan': './scripts/pathogen-plan.sh',
   'pathogen:test': 'src/rust/target/release/pathogen --source src/cli --output pathogen-report.json --parallel $(( $(nproc) * 2 ))',
-  'pathogen:aggregate': 'bash scripts/pathogen-aggregate.sh',
+  'pathogen:aggregate': './scripts/pathogen-aggregate.sh',
   pathogen: 'klep pathogen:plan && klep pathogen:test && klep pathogen:aggregate',
 }

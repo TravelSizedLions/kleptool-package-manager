@@ -24,7 +24,9 @@ runs:
         python-version: '3.x'
 
     - name: Install universalmutator
-      run: pip install universalmutator
+      run: |
+        pip install --user universalmutator
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
       shell: bash
 
     # Cache Bun dependencies and global cache
