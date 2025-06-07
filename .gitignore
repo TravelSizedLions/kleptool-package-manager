@@ -65,5 +65,6 @@ coverage/
 *mutant*
 *mutation*
 pathogen-report.json
+pathogen-reports/
 
 blizz

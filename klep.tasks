@@ -39,9 +39,10 @@
   'test:no-colors': "NO_COLOR=1 klep ts:test && klep rust:test",
 
     // Pathogen: Fast mutation testing (v2 architecture + universalmutator integration)
-  'pathogen:plan': 'mkdir -p .mutations/typescript && find src/cli -name "*.ts" -not -name "*.spec.ts" | xargs -I {} mutate {} --mutantDir .mutations/typescript --noCheck',
+  'pathogen:plan': 'mkdir -p .mutations/typescript && echo "Generating mutations..." && find src/cli -name "*.ts" -not -name "*.spec.ts" | xargs -I {} mutate {} --mutantDir .mutations/typescript --noCheck > /dev/null 2>&1 && echo "✓ Generated $(find .mutations/typescript -name "*.ts" | wc -l) mutations"',
   'pathogen:test': 'src/rust/target/release/pathogen --source src/cli --output pathogen-report.json',
-  pathogen: 'klep pathogen:plan && klep pathogen:test',
+  'pathogen:aggregate': 'bash scripts/pathogen-aggregate.sh',
+  pathogen: 'klep pathogen:plan && klep pathogen:test && klep pathogen:aggregate',
 
   // Generate behavioral coverage reports (mutation testing)
   coverage: "klep pathogen",

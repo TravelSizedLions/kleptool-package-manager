@@ -12,19 +12,28 @@ pub struct MutationConfig {
   pub output_file: Option<PathBuf>,
   pub verbose: bool,
   pub dry_run: bool,
+  pub no_cache: bool,
 }
 
 impl MutationConfig {
   pub fn from_args(matches: &ArgMatches) -> Result<Self> {
     let source_dir = PathBuf::from(matches.get_one::<String>("source").unwrap());
+    
+    // Auto-detect optimal parallel count if not specified
     let parallel_count: usize = matches
       .get_one::<String>("parallel")
-      .unwrap()
-      .parse()
-      .context("Invalid parallel count")?;
+      .map(|s| s.parse().context("Invalid parallel count"))
+      .transpose()?
+      .unwrap_or_else(|| {
+        std::thread::available_parallelism()
+          .map(|n| n.get())
+          .unwrap_or(4) // Fallback to 4 if detection fails
+      });
+    
     let output_file = matches.get_one::<String>("output").map(PathBuf::from);
     let verbose = matches.get_flag("verbose");
     let dry_run = matches.get_flag("dry-run");
+    let no_cache = matches.get_flag("no-cache");
 
     Ok(MutationConfig {
       source_dir,
@@ -32,6 +41,7 @@ impl MutationConfig {
       output_file,
       verbose,
       dry_run,
+      no_cache,
     })
   }
 }

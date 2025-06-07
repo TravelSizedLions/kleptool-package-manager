@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Arg, ArgMatches, Command};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -21,27 +21,37 @@ async fn main() -> Result<()> {
   let matches = build_cli_interface();
   let config = MutationConfig::from_args(&matches)?;
 
-  print_startup_banner(&config);
   let start_time = Instant::now();
 
-  let mut components = initialize_components(&config)?;
-  let target_files = discover_and_validate_files(&config)?;
+  // Create isolated temp workspace
+  let temp_workspace = create_temp_workspace(&config)?;
+  println!("🏗️  Created isolated workspace: {}", temp_workspace.display());
+  
+  // Update config to use temp workspace
+  let mut temp_config = config.clone();
+  temp_config.source_dir = temp_workspace.clone();
+  
+  // Print banner with the actual workspace being used
+  print_startup_banner(&temp_config);
+  
+  let mut components = initialize_components(&temp_config)?;
+  let target_files = discover_and_validate_files(&temp_config)?;
 
-  if !config.dry_run {
+  if !temp_config.dry_run {
     run_baseline_validation(&components.runner).await?;
   }
 
-  let mutations = generate_mutations(&mut components, &target_files, config.verbose)?;
+  let mutations = generate_mutations(&mut components, &target_files, &temp_config.source_dir, temp_config.verbose)?;
 
-  if config.dry_run {
-    handle_dry_run(&mutations, config.verbose);
+  if temp_config.dry_run {
+    handle_dry_run(&mutations, temp_config.verbose);
     return Ok(());
   }
 
-  let results = run_mutation_tests(&components.runner, mutations, config.verbose).await?;
+  let results = run_mutation_tests(&components.runner, mutations, temp_config.verbose).await?;
   let duration = start_time.elapsed();
 
-  generate_and_save_report(&results, &target_files, duration, &config)?;
+  generate_and_save_report(&results, &target_files, duration, &temp_config)?;
 
   Ok(())
 }
@@ -64,8 +74,8 @@ fn build_cli_interface() -> ArgMatches {
         .short('p')
         .long("parallel")
         .value_name("N")
-        .help("Number of parallel test runners")
-        .default_value("4"),
+        .help("Number of parallel test runners (auto-detects logical cores if not specified)")
+        .required(false),
     )
     .arg(
       Arg::new("output")
@@ -88,18 +98,39 @@ fn build_cli_interface() -> ArgMatches {
         .help("Generate mutations but don't run tests (safety check)")
         .action(clap::ArgAction::SetTrue),
     )
+    .arg(
+      Arg::new("no-cache")
+        .long("no-cache")
+        .help("Disable caching to isolate race condition issues")
+        .action(clap::ArgAction::SetTrue),
+    )
     .get_matches()
 }
 
 /// Print the startup banner with configuration info
 fn print_startup_banner(config: &MutationConfig) {
+  // Auto-detect thread info for display
+  let detected_cores = std::thread::available_parallelism()
+    .map(|n| n.get())
+    .unwrap_or(0);
+  
   println!("{}", "=".repeat(80));
   println!("                             Pathogen v{}", env!("CARGO_PKG_VERSION"));
   println!("{}", "=".repeat(80));
   println!("📂 Source directory: {}", config.source_dir.display());
-  println!("🔧 Parallel runners: {}", config.parallel_count);
+  
+  if detected_cores > 0 && config.parallel_count == detected_cores {
+    println!("🧵 Auto-detected {} logical cores, using {} parallel runners", detected_cores, config.parallel_count);
+  } else {
+    println!("🔧 Parallel runners: {}", config.parallel_count);
+  }
+  
   if config.dry_run {
     println!("🔍 DRY RUN MODE - No tests will be executed");
+  }
+  
+  if config.no_cache {
+    println!("🚫 Cache disabled - All tests will run fresh");
   }
 }
 
@@ -115,7 +146,7 @@ fn initialize_components(config: &MutationConfig) -> Result<MutationComponents> 
   let parser = TypeScriptParser::new()?;
   let file_manager = SafeFileManager::new()?;
   let engine = MutationEngine::new()?;
-  let runner = MutationRunner::new(config.parallel_count, file_manager)?;
+  let runner = MutationRunner::new(config.parallel_count, file_manager, config.no_cache)?;
 
   Ok(MutationComponents {
     parser,
@@ -147,20 +178,16 @@ async fn run_baseline_validation(runner: &MutationRunner) -> Result<()> {
   Ok(())
 }
 
-/// Generate mutations from AST analysis
+/// Generate mutations from universalmutator files
 fn generate_mutations(
-  components: &mut MutationComponents,
-  target_files: &[PathBuf],
+  _components: &mut MutationComponents,
+  _target_files: &[PathBuf],
+  source_dir: &PathBuf,
   verbose: bool,
 ) -> Result<Vec<types::Mutation>> {
-  println!("\n🧬 Parsing ASTs and generating mutations...");
-  let mutations = generate_mutations_from_ast(
-    &mut components.parser,
-    &components.engine,
-    target_files,
-    verbose,
-  )?;
-  println!("🎭 Generated {} total mutations", mutations.len());
+  println!("\n🧬 Loading universalmutator mutations...");
+  let mutations = load_universalmutator_mutations(source_dir, verbose)?;
+  println!("🎭 Loaded {} total mutations", mutations.len());
   Ok(mutations)
 }
 
@@ -189,6 +216,52 @@ async fn run_mutation_tests(
   verbose: bool,
 ) -> Result<Vec<types::MutationResult>> {
   runner.run_mutations_safely(mutations, verbose).await
+}
+
+/// Create an isolated temp workspace by copying source files
+fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
+  use std::fs;
+  use tempfile::tempdir;
+  
+  // Create a temporary directory
+  let temp_dir = tempdir()?;
+  let temp_workspace = temp_dir.path().join("pathogen-workspace");
+  
+  // Copy source directory to temp workspace
+  copy_directory_recursively(&config.source_dir, &temp_workspace)?;
+  
+  // Keep the temp directory alive by forgetting the tempdir handle
+  // This prevents automatic cleanup - we'll clean up manually later
+  std::mem::forget(temp_dir);
+  
+  Ok(temp_workspace)
+}
+
+/// Recursively copy a directory and all its contents
+fn copy_directory_recursively(src: &PathBuf, dst: &PathBuf) -> Result<()> {
+  use std::fs;
+  use walkdir::WalkDir;
+  
+  // Create destination directory
+  fs::create_dir_all(dst)?;
+  
+  // Copy all files and subdirectories
+  for entry in WalkDir::new(src).into_iter().filter_map(|e| e.ok()) {
+    let src_path = entry.path();
+    let relative_path = src_path.strip_prefix(src)?;
+    let dst_path = dst.join(relative_path);
+    
+    if src_path.is_dir() {
+      fs::create_dir_all(&dst_path)?;
+    } else {
+      if let Some(parent) = dst_path.parent() {
+        fs::create_dir_all(parent)?;
+      }
+      fs::copy(src_path, &dst_path)?;
+    }
+  }
+  
+  Ok(())
 }
 
 /// Generate and save the final report
@@ -233,6 +306,139 @@ fn discover_target_files(source_dir: &PathBuf) -> Result<Vec<PathBuf>> {
     .collect();
 
   Ok(files)
+}
+
+/// Load mutations from universalmutator-generated files
+fn load_universalmutator_mutations(source_dir: &PathBuf, verbose: bool) -> Result<Vec<types::Mutation>> {
+  use std::fs;
+  
+  let mutations_dir = PathBuf::from(".mutations/typescript");
+  if !mutations_dir.exists() {
+    anyhow::bail!("❌ No mutations directory found at .mutations/typescript. Run pathogen:plan first!");
+  }
+
+  let mut mutations = Vec::new();
+  let mut mutation_id_counter = 1;
+
+  // Read all mutation files
+  for entry in fs::read_dir(&mutations_dir)? {
+    let entry = entry?;
+    let path = entry.path();
+    
+    if !path.extension().map_or(false, |ext| ext == "ts") {
+      continue;
+    }
+
+    let filename = path.file_name()
+      .and_then(|f| f.to_str())
+      .unwrap_or("unknown");
+
+    if verbose {
+      println!("   🔍 Loading: {}", filename);
+    }
+
+    // Parse the mutation file info from filename
+    // Format: originalfile.mutant.NUMBER.ts
+    if let Some(mutation) = parse_universalmutator_file(&path, source_dir, mutation_id_counter)? {
+      mutations.push(mutation);
+      mutation_id_counter += 1;
+    }
+  }
+
+  Ok(mutations)
+}
+
+/// Parse a single universalmutator file into a Mutation struct
+fn parse_universalmutator_file(mutant_path: &PathBuf, source_dir: &PathBuf, id_counter: usize) -> Result<Option<types::Mutation>> {
+  use std::fs;
+  
+  // Extract original file and mutation number from filename
+  let filename = mutant_path.file_stem()
+    .and_then(|f| f.to_str())
+    .ok_or_else(|| anyhow::anyhow!("Invalid filename: {}", mutant_path.display()))?;
+  
+  // Parse filename: originalfile.mutant.NUMBER
+  let parts: Vec<&str> = filename.split('.').collect();
+  if parts.len() < 3 || parts[parts.len() - 2] != "mutant" {
+    return Ok(None); // Skip non-mutant files
+  }
+  
+  let original_filename = parts[0]; // Just the base filename
+  
+  // Try to find the original file in the source tree
+  let original_file = find_original_file(original_filename, source_dir)?;
+  
+  // Read both original and mutant content
+  let original_content = fs::read_to_string(&original_file)
+    .with_context(|| format!("Failed to read original file: {}", original_file.display()))?;
+  let mutant_content = fs::read_to_string(mutant_path)
+    .with_context(|| format!("Failed to read mutant file: {}", mutant_path.display()))?;
+  
+  // Find the first difference to identify the mutation for reporting
+  let (line, original_text, mutated_text) = find_mutation_difference(&original_content, &mutant_content)?;
+  
+  let mutation = types::Mutation {
+    id: format!("unimut_{}", id_counter),
+    file: original_file,
+    line,
+    column: 0, // universalmutator doesn't provide column info
+    span_start: 0, // Will be ignored - we use full content replacement
+    span_end: 0, // Will be ignored - we use full content replacement  
+    original: original_text.clone(), // Store just the diff for reporting
+    mutated: mutated_text.clone(), // Store just the diff for reporting
+    mutation_type: types::MutationType::ArithmeticOperator, // Default for now
+    description: format!("universalmutator mutation: {} → {}", original_text, mutated_text),
+  };
+  
+  Ok(Some(mutation))
+}
+
+/// Find the original source file for a given base filename
+fn find_original_file(base_filename: &str, source_dir: &PathBuf) -> Result<PathBuf> {
+  use std::fs;
+  
+  let target_filename = format!("{}.ts", base_filename);
+  
+  // Search recursively in the provided source directory
+  fn search_in_dir(dir: &PathBuf, target: &str) -> Option<PathBuf> {
+    if let Ok(entries) = fs::read_dir(dir) {
+      for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() && path.file_name().map_or(false, |name| name == target) {
+          return Some(path);
+        } else if path.is_dir() {
+          if let Some(found) = search_in_dir(&path, target) {
+            return Some(found);
+          }
+        }
+      }
+    }
+    None
+  }
+  
+  search_in_dir(source_dir, &target_filename)
+    .ok_or_else(|| anyhow::anyhow!("Could not find original file for: {} in {}", base_filename, source_dir.display()))
+}
+
+/// Find the difference between original and mutant content
+fn find_mutation_difference(original: &str, mutant: &str) -> Result<(usize, String, String)> {
+  let original_lines: Vec<&str> = original.lines().collect();
+  let mutant_lines: Vec<&str> = mutant.lines().collect();
+  
+  for (line_num, (orig_line, mut_line)) in original_lines.iter().zip(mutant_lines.iter()).enumerate() {
+    if orig_line != mut_line {
+      // Found the difference - extract the changed part
+      let orig_trimmed = orig_line.trim();
+      let mut_trimmed = mut_line.trim();
+      
+      if orig_trimmed != mut_trimmed {
+        return Ok((line_num + 1, orig_trimmed.to_string(), mut_trimmed.to_string()));
+      }
+    }
+  }
+  
+  // Fallback if no difference found
+  Ok((1, "unknown".to_string(), "unknown".to_string()))
 }
 
 fn generate_mutations_from_ast(
