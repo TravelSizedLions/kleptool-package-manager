@@ -48,6 +48,9 @@ export default [
       prettier: prettierPlugin,
     },
     rules: {
+      // File formatting rules
+      'eol-last': ['error', 'always'],
+      
       // Prettier integration
       'prettier/prettier': 'error',
       
@@ -113,6 +116,9 @@ export default [
       prettier: prettierPlugin,
     },
     rules: {
+      // File formatting rules
+      'eol-last': ['error', 'always'],
+      
       // Prettier integration
       'prettier/prettier': 'error',
       

@@ -84,4 +84,4 @@ runs:
     - name: Add klep to PATH (Windows)
       if: runner.os == 'Windows'
       run: echo "${{ github.workspace }}" >> $env:GITHUB_PATH
-      shell: pwsh 
+      shell: pwsh

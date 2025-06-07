@@ -23,7 +23,7 @@
 
   // Lint & Format the project
   lint: "klep ts:lint && klep rust:lint",
-  format: "klep ts:format && klep rust:format",
+  format: "klep ts:format && klep rust:format && bash scripts/ensure-final-newlines.sh --fix",
   tidy: 'klep lint && klep format',
 
   // Security Audit
@@ -63,13 +63,13 @@
   // ------------------------------------------------------------
   // Lint & Format (Fix)
   'ts:lint': 'bun run --bun eslint . --fix',
-  'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\"',
+  'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\" \".github/**/*.yml\" \"*.yml\" \"*.yaml\"',
   'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
   'rust:format': 'cd src/rust && cargo fmt --all',
 
   // Lint & Format (Assert)
   'ts:lint:assert': 'bun run --bun eslint . ',
-  'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\"',
+  'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\" \".github/**/*.yml\" \"*.yml\" \"*.yaml\"',
   'rust:lint:assert': 'cd src/rust && cargo clippy --workspace --all-targets --all-features',
   'rust:format:assert': 'cd src/rust && cargo fmt --all -- --check',
 
@@ -93,7 +93,7 @@
   'rust:test': 'cd src/rust && cargo test --workspace',
 
   // CI/CD Tasks
-  'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
+  'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert && bash scripts/ensure-final-newlines.sh --check',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'bun run --bun tsc --noEmit',
