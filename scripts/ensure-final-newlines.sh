@@ -79,6 +79,7 @@ main() {
         -not -path "./temp/*" \
         -not -path "./.cache/*" \
         -not -path "./pathogen-report.json" \
+        -not -path "./pathogen-reports/*" \
         -not -name "*.lock" \
         -not -name "*.log" \
         -not -name "bun.lockb" \

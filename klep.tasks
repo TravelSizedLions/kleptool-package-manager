@@ -51,8 +51,11 @@
   // Check code quality (never-nester principles)
   quality: "cd src/rust && cargo build --release -p code-quality-checker && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10 && ./target/release/code-quality-checker check ../../scripts --max-depth 3 --max-length 100 --max-complexity 10",
 
-  // Simulate a CI pipeline  
-  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win && klep coverage',
+  // Fast CI pipeline (essential checks that can cause workflow failures)
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win',
+
+  // Thorough CI pipeline (complete local CI/CD simulation including mutation testing)
+  'ci:thorough': 'klep ci && klep coverage',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
