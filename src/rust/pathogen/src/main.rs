@@ -277,13 +277,36 @@ fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
       "Safety check failed: destination path not in temp workspace").into());
   }
   
-  // Remove the symlinked source directory and replace with actual copies
+  // The issue: when we symlink 'src/', the subdirectory 'src/cli' appears as a regular directory
+  // Solution: Remove the parent symlink and rebuild the structure manually
+  
+  // Find the top-level directory that was symlinked (e.g., 'src' if source is 'src/cli')
+  let mut source_parts: Vec<_> = source_relative.components().collect();
+  if source_parts.is_empty() {
+    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Empty source path").into());
+  }
+  
+  let top_level_dir = source_parts[0].as_os_str();
+  let src_symlink = temp_workspace.join(top_level_dir);
+  
+  // SAFETY: Only proceed if src_symlink is clearly within temp_workspace
+  if !src_symlink.starts_with(&temp_workspace) {
+    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, 
+      "Safety check failed: source symlink not in temp workspace").into());
+  }
+  
+  // Remove the entire symlinked directory (e.g., the 'src' symlink)
+  if src_symlink.exists() {
+    fs::remove_dir_all(&src_symlink)?;
+  }
+  
+  // Recreate the directory structure by copying from original
+  let original_top_level = project_canonical.join(top_level_dir);
+  copy_directory_recursively(&original_top_level, &src_symlink)?;
+  
+  // Now replace just the specific subdirectory with our source files
   if dst_source.exists() {
-    if dst_source.is_dir() {
-      fs::remove_dir_all(&dst_source)?;
-    } else {
-      fs::remove_file(&dst_source)?;
-    }
+    fs::remove_dir_all(&dst_source)?;
   }
   
   // Create parent directories if needed
