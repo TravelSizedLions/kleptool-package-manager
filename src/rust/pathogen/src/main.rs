@@ -29,12 +29,12 @@ async fn main() -> Result<()> {
   
   // Update config to use temp workspace
   let mut temp_config = config.clone();
-  temp_config.source_dir = temp_workspace.clone();
+  temp_config.source_dir = temp_workspace.join("src/cli");
   
   // Print banner with the actual workspace being used
   print_startup_banner(&temp_config);
   
-  let mut components = initialize_components(&temp_config)?;
+  let mut components = initialize_components(&temp_config, &temp_workspace)?;
   let target_files = discover_and_validate_files(&temp_config)?;
 
   if !temp_config.dry_run {
@@ -142,11 +142,12 @@ struct MutationComponents {
 }
 
 /// Initialize all components with safety-first design
-fn initialize_components(config: &MutationConfig) -> Result<MutationComponents> {
+fn initialize_components(config: &MutationConfig, workspace_dir: &PathBuf) -> Result<MutationComponents> {
   let parser = TypeScriptParser::new()?;
   let file_manager = SafeFileManager::new()?;
   let engine = MutationEngine::new()?;
-  let runner = MutationRunner::new(config.parallel_count, file_manager, config.no_cache)?;
+  let runner = MutationRunner::new(config.parallel_count, file_manager, config.no_cache)?
+    .with_workspace_dir(workspace_dir.clone());
 
   Ok(MutationComponents {
     parser,
@@ -218,7 +219,7 @@ async fn run_mutation_tests(
   runner.run_mutations_safely(mutations, verbose).await
 }
 
-/// Create an isolated temp workspace by copying source files
+/// Create an isolated temp workspace by copying necessary project files
 fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
   use std::fs;
   use tempfile::tempdir;
@@ -227,8 +228,65 @@ fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
   let temp_dir = tempdir()?;
   let temp_workspace = temp_dir.path().join("pathogen-workspace");
   
-  // Copy source directory to temp workspace
-  copy_directory_recursively(&config.source_dir, &temp_workspace)?;
+  // Create the workspace directory
+  fs::create_dir_all(&temp_workspace)?;
+  
+  // Step 1: Symlink ALL files and directories from project root, except those containing our source
+  let project_root = std::env::current_dir()?;
+  let source_canonical = config.source_dir.canonicalize()?;
+  let project_canonical = project_root.canonicalize()?;
+  
+  for entry in fs::read_dir(&project_root)? {
+    let entry = entry?;
+    let src_path = entry.path();
+    let file_name = src_path.file_name().unwrap();
+    
+    // Skip temp directories, hidden files/dirs, and build artifacts
+    let name_str = file_name.to_string_lossy();
+    if name_str.starts_with('.') || 
+       name_str == "target" ||
+       name_str.starts_with("tmp") ||
+       name_str == "node_modules/.cache" {
+      continue;
+    }
+    
+    // We'll symlink everything including src, then selectively replace src/cli in Step 2
+    
+    let dst_path = temp_workspace.join(file_name);
+    if let Ok(src_canonical) = src_path.canonicalize() {
+      if let Err(_) = std::os::unix::fs::symlink(&src_canonical, &dst_path) {
+        // Fallback to copy if symlink fails
+        if src_canonical.is_dir() {
+          copy_directory_recursively(&src_canonical, &dst_path)?;
+        } else {
+          fs::copy(&src_canonical, &dst_path)?;
+        }
+      }
+    }
+  }
+
+  // Step 2: Replace the symlinked source directory with actual copies (for mutation)
+  let source_relative = source_canonical.strip_prefix(&project_canonical)
+    .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Source dir must be within project"))?;
+  
+  let dst_source = temp_workspace.join(source_relative);
+  
+  // Remove the symlinked subdirectory if it exists
+  if dst_source.exists() {
+    if dst_source.is_dir() {
+      fs::remove_dir_all(&dst_source)?;
+    } else {
+      fs::remove_file(&dst_source)?;
+    }
+  }
+  
+  // Create parent directories if needed
+  if let Some(parent) = dst_source.parent() {
+    fs::create_dir_all(parent)?;
+  }
+  
+  // Copy the actual source files (these will be mutated)
+  copy_directory_recursively(&config.source_dir, &dst_source)?;
   
   // Keep the temp directory alive by forgetting the tempdir handle
   // This prevents automatic cleanup - we'll clean up manually later
@@ -766,3 +824,4 @@ fn save_results_to_file(
   fs::write(output_path, serde_json::to_string_pretty(&output)?)?;
   Ok(())
 }
+
