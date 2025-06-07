@@ -27,6 +27,9 @@ serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 futures = "0.3"
 
+# System calls
+libc = "0.2"
+
 # Simple regex-based parsing (more reliable than tree-sitter native compilation)
 regex = "1.10"
 

@@ -7,11 +7,12 @@ use std::time::Instant;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-  // Send ready signal via fd3
+  // Send ready signal via stdout
   send_response(WorkerResponse::Ready)?;
 
   // Listen for mutation requests via stdin
   let stdin = io::stdin();
+
   for line in stdin.lock().lines() {
     let line = line?;
 
@@ -199,10 +200,32 @@ fn __add_language_specific_args(child: &mut Command, language: &Language, test_f
 
 async fn __execute_test_with_timeout(child: Child, timeout_secs: u64) -> Result<String, String> {
   let timeout = std::time::Duration::from_secs(timeout_secs);
-  let output = match tokio::time::timeout(timeout, async move { child.wait_with_output() }).await {
-    Ok(Ok(output)) => output,
-    Ok(Err(e)) => return Err(format!("Failed to get test output: {}", e)),
+
+  // Get the child ID before moving it
+  let child_id = child.id();
+
+  let output = match tokio::time::timeout(timeout, async move {
+    tokio::task::spawn_blocking(move || child.wait_with_output()).await
+  })
+  .await
+  {
+    Ok(Ok(Ok(output))) => output,
+    Ok(Ok(Err(e))) => return Err(format!("Failed to get test output: {}", e)),
+    Ok(Err(e)) => return Err(format!("Task join error: {}", e)),
     Err(_) => {
+      // Timeout occurred - try to kill the process by PID
+      #[cfg(unix)]
+      {
+        unsafe {
+          libc::kill(child_id as i32, libc::SIGKILL);
+        }
+      }
+      #[cfg(windows)]
+      {
+        // On Windows, we'd need to use TerminateProcess, but for now just log
+        eprintln!("Warning: Cannot kill process {} on Windows", child_id);
+      }
+
       return Err(format!(
         "Test timed out after {} seconds (likely infinite loop)",
         timeout.as_secs()
