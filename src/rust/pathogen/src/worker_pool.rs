@@ -57,7 +57,17 @@ impl WorkerProcess {
       .context("Failed to get binary directory")?
       .join("pathogen-worker");
 
-    let mut child = Command::new(worker_binary)
+    // Verify the worker binary exists before attempting to spawn
+    if !worker_binary.exists() {
+      anyhow::bail!(
+        "Worker binary not found at: {}\nCurrent exe: {:?}\nBinary dir: {:?}",
+        worker_binary.display(),
+        std::env::current_exe()?,
+        std::env::current_exe()?.parent()
+      );
+    }
+
+    let mut child = Command::new(&worker_binary)
       .current_dir(workspace_dir)
       .stdin(std::process::Stdio::piped())
       .stdout(std::process::Stdio::piped())
