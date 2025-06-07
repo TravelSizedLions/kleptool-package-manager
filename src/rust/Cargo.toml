@@ -6,6 +6,7 @@ members = [
   "api/common",
   "api/nn",
   "api/std",
+  "code-quality-checker",
 ]
 
 # Workspace-wide linting configuration

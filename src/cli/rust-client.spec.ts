@@ -1,20 +1,135 @@
+// quality-allow max-cyclomatic-complexity 15 file
+
 import { describe, it, expect, beforeEach } from 'bun:test';
 import rustClient from './rust-client.ts';
 import kerror from './kerror.ts';
 import { normalizeCommand } from '../testing/utils/xplat-helpers.ts';
 
-// Create a consistent cross-platform path mock for all tests
-const createPathMock = () => ({
-  resolve: (p: string) => {
-    // For test paths that start with '/', keep them as-is to avoid Windows drive letter issues
-    if (p.startsWith('/')) {
-      return p;
+function __createPathMock() {
+  return {
+    resolve: (p: string) => {
+      // For test paths that start with '/', keep them as-is to avoid Windows drive letter issues
+      if (p.startsWith('/')) {
+        return p;
+      }
+      return normalizeCommand(p);
+    },
+    dirname: () => '/mock/dir',
+    join: (...args: string[]) => args.join('/'),
+  };
+}
+
+function __createProcessMock(ipcResult: string | undefined) {
+  let capturedCommand = '';
+  let capturedOptions = {};
+
+  return {
+    mock: {
+      ipc: (command: string, options: any) => {
+        capturedCommand = normalizeCommand(command);
+        capturedOptions = options;
+        return Promise.resolve(ipcResult);
+      },
+    },
+    getCapturedCommand: () => capturedCommand,
+    getCapturedOptions: () => capturedOptions,
+  };
+}
+
+function __createMocks(
+  ipcResult?: string | undefined,
+  globbyResult = [{ name: 'bin-test--api', path: '/test/path' }]
+) {
+  // Use arguments.length to detect if first parameter was explicitly passed
+  const actualIpcResult = arguments.length === 0 ? '{"result": "success"}' : ipcResult;
+  const processMock = __createProcessMock(actualIpcResult);
+
+  moxxy.process.mock(processMock.mock);
+  moxxy.path.mock(__createPathMock());
+  moxxy.existsSync.mock(() => true);
+  moxxy.globby.mock(() => Promise.resolve(globbyResult));
+  moxxy.globalThis = {
+    process: { argv: ['/mock/dir/executable'] },
+  };
+
+  return processMock;
+}
+
+function __setupTest(ipcResult?: string | undefined) {
+  // Pass arguments directly to preserve argument presence
+  const mocks = arguments.length === 0 ? __createMocks() : __createMocks(ipcResult);
+  return {
+    getClient: () => rustClient(),
+    getCapturedCommand: mocks.getCapturedCommand,
+    getCapturedOptions: mocks.getCapturedOptions,
+  };
+}
+
+function __testProcessOutput(ipcResult: string | undefined, expectedResult: any, testData?: any) {
+  return async () => {
+    const { getClient, getCapturedCommand, getCapturedOptions } = __setupTest(ipcResult);
+
+    const client = await getClient();
+    const result = testData ? await client.test.api(testData) : await client.test.api();
+
+    expect(getCapturedCommand()).toBe('/test/path');
+    expect(getCapturedOptions()).toEqual({
+      data: testData ? JSON.stringify(testData) : '',
+    });
+
+    if (expectedResult !== undefined) {
+      expect(result).toEqual(expectedResult);
     }
-    return normalizeCommand(p);
-  },
-  dirname: () => '/mock/dir',
-  join: (...args: string[]) => args.join('/'),
-});
+  };
+}
+
+function __testErrorScenario(ipcResult: string, expectedErrorId: string) {
+  return async () => {
+    const { getClient } = __setupTest(ipcResult);
+
+    const client = await getClient();
+
+    try {
+      await client.test.api();
+      expect(true).toBe(false); // Should not reach here
+    } catch (error: any) {
+      expect(kerror.isKlepError(error)).toBe(true);
+      expect(error.id).toBe(expectedErrorId);
+    }
+  };
+}
+
+function __setupBinarySearchMocks(existsPaths: string[], globbyMappings: Record<string, any[]>) {
+  moxxy.existsSync.mock((pathStr: string) => {
+    return existsPaths.some((path) => pathStr === path || pathStr.endsWith(path));
+  });
+
+  moxxy.globby.mock((pattern: string) => {
+    for (const [patternKey, result] of Object.entries(globbyMappings)) {
+      if (pattern.includes(patternKey) || pattern === patternKey) {
+        return Promise.resolve(result);
+      }
+    }
+    return Promise.resolve([]);
+  });
+
+  moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
+  moxxy.path.mock(__createPathMock());
+  moxxy.globalThis = { process: { argv: ['/mock/dir/executable'] } };
+}
+
+function __setupModuleTest(binaries: { name: string; path: string }[]) {
+  moxxy.existsSync.mock(() => true);
+  moxxy.globby.mock(() => Promise.resolve(binaries));
+  moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
+  moxxy.path.mock(__createPathMock());
+  moxxy.globalThis = { process: { argv: ['/mock/dir/executable'] } };
+}
+
+async function __testClientWithBinaries(binaries: { name: string; path: string }[]) {
+  __setupModuleTest(binaries);
+  return await rustClient();
+}
 
 beforeEach(() => {
   moxxy.reset();
@@ -24,95 +139,43 @@ beforeEach(() => {
 describe('__createDispatcher()', () => {
   describe('process output', () => {
     it('handles defined blobs', async () => {
-      let capturedCommand = '';
-      let capturedOptions = {};
-
-      moxxy.process.ipc.mock((command: string, options: any) => {
-        capturedCommand = normalizeCommand(command);
-        capturedOptions = options;
-        return Promise.resolve('{"result": "success"}');
-      });
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-
-      const client = await rustClient();
       const testData = { test: 'data' };
-      await client.test.api(testData);
-
-      expect(capturedCommand).toBe('/test/path');
-      expect(capturedOptions).toEqual({
-        data: JSON.stringify(testData),
-      });
+      await __testProcessOutput('{"result": "success"}', testData, testData);
     });
 
     it('handles undefined blobs', async () => {
-      let capturedCommand = '';
-      let capturedOptions = {};
+      const { getClient, getCapturedCommand, getCapturedOptions } =
+        __setupTest('{"result": "success"}');
 
-      moxxy.process.mock({
-        ipc: (command: string, options: any) => {
-          capturedCommand = normalizeCommand(command);
-          capturedOptions = options;
-          return Promise.resolve('{"result": "success"}');
-        },
-      });
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
-
-      const client = await rustClient();
+      const client = await getClient();
       await client.test.api();
 
-      expect(capturedCommand).toBe('/test/path');
-      expect(capturedOptions).toEqual({
-        data: '',
-      });
+      expect(getCapturedCommand()).toBe('/test/path');
+      expect(getCapturedOptions()).toEqual({ data: '' });
     });
 
     it('handles undefined process output', async () => {
-      moxxy.process.mock({ ipc: () => Promise.resolve(undefined) });
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      const { getClient } = __setupTest(undefined);
 
-      const client = await rustClient();
+      const client = await getClient();
       const result = await client.test.api();
 
       expect(result).toBeUndefined();
     });
 
     it('handles empty string process output', async () => {
-      moxxy.process.mock({ ipc: () => Promise.resolve('') });
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      const { getClient } = __setupTest('');
 
-      const client = await rustClient();
+      const client = await getClient();
       const result = await client.test.api();
 
       expect(result).toBeUndefined();
     });
 
     it('handles whitespace process output', async () => {
-      moxxy.process.mock({ ipc: () => Promise.resolve('   \n\t  ') });
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      const { getClient } = __setupTest('   \n\t  ');
 
-      const client = await rustClient();
+      const client = await getClient();
       const result = await client.test.api();
 
       expect(result).toBeUndefined();
@@ -120,71 +183,22 @@ describe('__createDispatcher()', () => {
 
     it('handles actual content from process output', async () => {
       const expectedData = { status: 'success', data: [1, 2, 3] };
-      moxxy.process.mock({ ipc: () => Promise.resolve(JSON.stringify(expectedData)) });
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
-
-      const client = await rustClient();
-      const result = await client.test.api<undefined, typeof expectedData>();
-
-      expect(result).toEqual(expectedData);
+      await __testProcessOutput(JSON.stringify(expectedData), expectedData);
     });
   });
 
   describe('output unmarshalling', () => {
     it('throws rust-client-json-parse-error when output is not valid JSON', async () => {
-      moxxy.process.ipc.mock(() => Promise.resolve('invalid json'));
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
-
-      const client = await rustClient();
-
-      try {
-        await client.test.api();
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(kerror.isKlepError(error)).toBe(true);
-        expect(error.id).toBe('rust-client-json-parse-error');
-      }
+      await __testErrorScenario('invalid json', 'rust-client-json-parse-error');
     });
 
     it('returns valid JSON', async () => {
       const testObject = { complex: { nested: 'object' }, array: [1, 2, 3] };
-      moxxy.process.ipc.mock(() => Promise.resolve(JSON.stringify(testObject)));
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
-
-      const client = await rustClient();
-      const result = await client.test.api<undefined, typeof testObject>();
-
-      expect(result).toEqual(testObject);
+      await __testProcessOutput(JSON.stringify(testObject), testObject);
     });
 
     it('returns valid primitives', async () => {
-      moxxy.process.ipc.mock(() => Promise.resolve('"hello world"'));
-      moxxy.path.mock(createPathMock);
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
-
-      const client = await rustClient();
-      const result = await client.test.api<undefined, string>();
-
-      expect(result).toBe('hello world');
+      await __testProcessOutput('"hello world"', 'hello world');
     });
   });
 });
@@ -192,40 +206,18 @@ describe('__createDispatcher()', () => {
 describe('__getBinarySearchPaths()', () => {
   describe('development binaries', () => {
     it('includes development binaries if they exist', async () => {
-      moxxy.existsSync.mock((pathStr: string) => {
-        return pathStr === 'src/rust/target/release';
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }],
       });
-      moxxy.globby.mock((pattern: string) => {
-        if (pattern === 'src/rust/target/release/**/bin-*--*') {
-          return Promise.resolve([{ name: 'bin-test--api', path: '/dev/path' }]);
-        }
-        return Promise.resolve([]);
-      });
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
 
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
 
     it('does not include development binaries if they do not exist', async () => {
-      moxxy.existsSync.mock((pathStr: string) => {
-        return pathStr === 'dist/rust-binaries';
+      __setupBinarySearchMocks(['dist/rust-binaries'], {
+        'dist/rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/bundled/path' }],
       });
-      moxxy.globby.mock((pattern: string) => {
-        if (pattern === 'dist/rust-binaries/bin-*--*') {
-          return Promise.resolve([{ name: 'bin-test--api', path: '/bundled/path' }]);
-        }
-        return Promise.resolve([]);
-      });
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
 
       const client = await rustClient();
       expect(client.test).toBeDefined();
@@ -234,40 +226,18 @@ describe('__getBinarySearchPaths()', () => {
 
   describe('release binaries', () => {
     it('include release binaries if they exist', async () => {
-      moxxy.existsSync.mock((pathStr: string) => {
-        return pathStr === 'dist/rust-binaries';
+      __setupBinarySearchMocks(['dist/rust-binaries'], {
+        'dist/rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/release/path' }],
       });
-      moxxy.globby.mock((pattern: string) => {
-        if (pattern === 'dist/rust-binaries/bin-*--*') {
-          return Promise.resolve([{ name: 'bin-test--api', path: '/release/path' }]);
-        }
-        return Promise.resolve([]);
-      });
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
 
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
 
     it('does not include release binaries if they do not exist', async () => {
-      moxxy.existsSync.mock((pathStr: string) => {
-        return pathStr === 'src/rust/target/release';
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }],
       });
-      moxxy.globby.mock((pattern: string) => {
-        if (pattern === 'src/rust/target/release/**/bin-*--*') {
-          return Promise.resolve([{ name: 'bin-test--api', path: '/dev/path' }]);
-        }
-        return Promise.resolve([]);
-      });
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
 
       const client = await rustClient();
       expect(client.test).toBeDefined();
@@ -276,43 +246,18 @@ describe('__getBinarySearchPaths()', () => {
 
   describe('standalone', () => {
     it('includes bundled binaries if they exist', async () => {
-      moxxy.existsSync.mock((pathStr: string) => {
-        // Return true for any path that ends with 'rust-binaries' to handle the actual path
-        const result = pathStr.endsWith('rust-binaries');
-        return result;
+      __setupBinarySearchMocks(['rust-binaries'], {
+        'rust-binaries/bin-*--*': [{ name: 'bin-test--api', path: '/standalone/path' }],
       });
-      moxxy.globby.mock((pattern: string) => {
-        // Return binaries for any pattern that includes 'rust-binaries'
-        if (pattern.includes('rust-binaries/bin-*--*')) {
-          return Promise.resolve([{ name: 'bin-test--api', path: '/standalone/path' }]);
-        }
-        return Promise.resolve([]);
-      });
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
 
       const client = await rustClient();
       expect(client.test).toBeDefined();
     });
 
     it('does not include bundled binaries if they do not exist', async () => {
-      moxxy.existsSync.mock((pathStr: string) => {
-        return pathStr === 'src/rust/target/release';
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/dev/path' }],
       });
-      moxxy.globby.mock((pattern: string) => {
-        if (pattern === 'src/rust/target/release/**/bin-*--*') {
-          return Promise.resolve([{ name: 'bin-test--api', path: '/dev/path' }]);
-        }
-        return Promise.resolve([]);
-      });
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
 
       const client = await rustClient();
       expect(client.test).toBeDefined();
@@ -321,13 +266,7 @@ describe('__getBinarySearchPaths()', () => {
 
   describe('error handling', () => {
     it('throws a rust-no-folders-found error if no directories are included', async () => {
-      moxxy.existsSync.mock(() => false);
-      moxxy.globby.mock(() => Promise.resolve([]));
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      __setupBinarySearchMocks([], {});
 
       try {
         await rustClient();
@@ -339,13 +278,9 @@ describe('__getBinarySearchPaths()', () => {
     });
 
     it('does not throw if one or more search pathes are added', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/test/path' }]));
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      __setupBinarySearchMocks(['src/rust/target/release'], {
+        'src/rust/target/release/**/bin-*--*': [{ name: 'bin-test--api', path: '/test/path' }],
+      });
 
       await expect(rustClient()).resolves.toBeDefined();
     });
@@ -354,32 +289,17 @@ describe('__getBinarySearchPaths()', () => {
 
 describe('__getRustBinaries()', () => {
   it('handles binaries when they are found', async () => {
-    moxxy.existsSync.mock(() => true);
-    moxxy.globby.mock(() =>
-      Promise.resolve([
-        { name: 'bin-module1--api1', path: '/path/to/bin1' },
-        { name: 'bin-module2--api2', path: '/path/to/bin2' },
-      ])
-    );
-    moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-    moxxy.path.mock(createPathMock);
-    moxxy.globalThis = {
-      process: { argv: ['/mock/dir/executable'] },
-    };
+    const client = await __testClientWithBinaries([
+      { name: 'bin-module1--api1', path: '/path/to/bin1' },
+      { name: 'bin-module2--api2', path: '/path/to/bin2' },
+    ]);
 
-    const client = await rustClient();
     expect(client.module1.api1).toBeDefined();
     expect(client.module2.api2).toBeDefined();
   });
 
   it('throws no-rust-binaries-found error when no binaries are found', async () => {
-    moxxy.existsSync.mock(() => true);
-    moxxy.globby.mock(() => Promise.resolve([]));
-    moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-    moxxy.path.mock(createPathMock);
-    moxxy.globalThis = {
-      process: { argv: ['/mock/dir/executable'] },
-    };
+    __setupModuleTest([]);
 
     try {
       await rustClient();
@@ -394,117 +314,68 @@ describe('__getRustBinaries()', () => {
 describe('__createModules()', () => {
   describe('filtering', () => {
     it('filters out files ending in .d', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() =>
-        Promise.resolve([
-          { name: 'bin-test--api', path: '/path/to/bin' },
-          { name: 'bin-test--api.d', path: '/path/to/bin.d' },
-        ])
-      );
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
+      const client = await __testClientWithBinaries([
+        { name: 'bin-test--api', path: '/path/to/bin' },
+        { name: 'bin-test--api.d', path: '/path/to/bin.d' },
+      ]);
 
-      const client = await rustClient();
       expect(client.test.api).toBeDefined();
       expect(Object.keys(client.test)).toHaveLength(1);
     });
 
     it('filters out files ending in .pdb', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() =>
-        Promise.resolve([
-          { name: 'bin-test--api', path: '/path/to/bin' },
-          { name: 'bin-test--api.pdb', path: '/path/to/bin.pdb' },
-        ])
-      );
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
+      const client = await __testClientWithBinaries([
+        { name: 'bin-test--api', path: '/path/to/bin' },
+        { name: 'bin-test--api.pdb', path: '/path/to/bin.pdb' },
+      ]);
 
-      const client = await rustClient();
       expect(client.test.api).toBeDefined();
       expect(Object.keys(client.test)).toHaveLength(1);
     });
 
     it('does not filter files if they are not debugging files', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() =>
-        Promise.resolve([
-          { name: 'bin-test--api1', path: '/path/to/bin1' },
-          { name: 'bin-test--api2', path: '/path/to/bin2' },
-          { name: 'bin-test--api3.exe', path: '/path/to/bin3.exe' },
-        ])
-      );
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      const client = await __testClientWithBinaries([
+        { name: 'bin-test--api1', path: '/path/to/bin1' },
+        { name: 'bin-test--api2', path: '/path/to/bin2' },
+        { name: 'bin-test--api3.exe', path: '/path/to/bin3.exe' },
+      ]);
 
-      const client = await rustClient();
       expect(Object.keys(client.test)).toHaveLength(3);
     });
   });
 
   describe('module creation', () => {
     it('gracefully handles .exe extensions', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() =>
-        Promise.resolve([{ name: 'bin-test--api.exe', path: '/path/to/bin.exe' }])
-      );
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
+      const client = await __testClientWithBinaries([
+        { name: 'bin-test--api.exe', path: '/path/to/bin.exe' },
+      ]);
 
-      const client = await rustClient();
       expect(client.test.api).toBeDefined();
     });
 
     it('properly discovers the module from the binary name pattern', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() =>
-        Promise.resolve([{ name: 'bin-mymodule--someapi', path: '/path/to/bin' }])
-      );
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      const client = await __testClientWithBinaries([
+        { name: 'bin-mymodule--someapi', path: '/path/to/bin' },
+      ]);
 
-      const client = await rustClient();
       expect(client.mymodule).toBeDefined();
     });
 
     it('properly discovers the apiName from the binary name pattern', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() =>
-        Promise.resolve([{ name: 'bin-testmodule--customapi', path: '/path/to/bin' }])
-      );
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
-
-      const client = await rustClient();
+      const client = await __testClientWithBinaries([
+        { name: 'bin-testmodule--customapi', path: '/path/to/bin' },
+      ]);
       expect(client.testmodule.customapi).toBeDefined();
     });
 
     it('creates a full set of modules when handed various binaries', async () => {
-      moxxy.existsSync.mock(() => true);
-      moxxy.globby.mock(() =>
-        Promise.resolve([
-          { name: 'bin-mod1--api1', path: '/path/to/bin1' },
-          { name: 'bin-mod1--api2', path: '/path/to/bin2' },
-          { name: 'bin-mod2--api1', path: '/path/to/bin3' },
-          { name: 'bin-mod3--special', path: '/path/to/bin4' },
-        ])
-      );
-      moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
-      moxxy.globalThis = {
-        process: { argv: ['/mock/dir/executable'] },
-      };
+      const client = await __testClientWithBinaries([
+        { name: 'bin-mod1--api1', path: '/path/to/bin1' },
+        { name: 'bin-mod1--api2', path: '/path/to/bin2' },
+        { name: 'bin-mod2--api1', path: '/path/to/bin3' },
+        { name: 'bin-mod3--special', path: '/path/to/bin4' },
+      ]);
 
-      const client = await rustClient();
       expect(client.mod1.api1).toBeDefined();
       expect(client.mod1.api2).toBeDefined();
       expect(client.mod2.api1).toBeDefined();
@@ -518,7 +389,7 @@ describe('__addHelp()', () => {
     moxxy.existsSync.mock(() => true);
     moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/path/to/bin' }]));
     moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-    moxxy.path.mock(createPathMock);
+    moxxy.path.mock(__createPathMock());
     moxxy.globalThis = {
       process: { argv: ['/mock/dir/executable'] },
     };
@@ -537,7 +408,7 @@ describe('__addHelp()', () => {
       ])
     );
     moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-    moxxy.path.mock(createPathMock);
+    moxxy.path.mock(__createPathMock());
     moxxy.globalThis = {
       process: { argv: ['/mock/dir/executable'] },
     };
@@ -558,7 +429,7 @@ describe('singleton', () => {
       moxxy.existsSync.mock(() => true);
       moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/path/to/bin' }]));
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
+      moxxy.path.mock(__createPathMock());
       moxxy.globalThis = {
         process: { argv: ['/mock/dir/executable'] },
       };
@@ -572,7 +443,7 @@ describe('singleton', () => {
       moxxy.existsSync.mock(() => true);
       moxxy.globby.mock(() => Promise.resolve([{ name: 'bin-test--api', path: '/path/to/bin' }]));
       moxxy.process.mock(() => ({ ipc: () => Promise.resolve('{}') }));
-      moxxy.path.mock(createPathMock);
+      moxxy.path.mock(__createPathMock());
       moxxy.globalThis = {
         process: { argv: ['/mock/dir/executable'] },
       };
@@ -590,7 +461,7 @@ describe('singleton', () => {
       moxxy.existsSync.mock(() => {
         throw mockKlepError;
       });
-      moxxy.path.mock(createPathMock);
+      moxxy.path.mock(__createPathMock());
       moxxy.globalThis = {
         process: { argv: ['/mock/dir/executable'] },
       };
@@ -608,7 +479,7 @@ describe('singleton', () => {
       moxxy.existsSync.mock(() => {
         throw genericError;
       });
-      moxxy.path.mock(createPathMock);
+      moxxy.path.mock(__createPathMock());
       moxxy.globalThis = {
         process: { argv: ['/mock/dir/executable'] },
       };
@@ -627,7 +498,7 @@ describe('singleton', () => {
       moxxy.existsSync.mock(() => {
         throw 'string exception';
       });
-      moxxy.path.mock(createPathMock);
+      moxxy.path.mock(__createPathMock());
       moxxy.globalThis = {
         process: { argv: ['/mock/dir/executable'] },
       };

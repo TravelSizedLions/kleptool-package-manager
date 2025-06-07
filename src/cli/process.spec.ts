@@ -1,7 +1,43 @@
+// quality-allow max-function-length 150 file
+// quality-allow max-cyclomatic-complexity 12 file
+
 import { describe, it, expect } from 'bun:test';
 import processModule from './process.ts';
 
 // Helper functions for common mocking patterns
+function __createStreamEventHandler(dataValue?: string, endDelay = 20) {
+  return (event: string, handler: (...args: unknown[]) => void) => {
+    if (event === 'data' && dataValue !== undefined) setTimeout(() => handler(dataValue), 10);
+    else if (event === 'end') setTimeout(() => handler(), endDelay);
+  };
+}
+
+function __createProcessEventHandler(exitCode = 0, errorOnEvent?: string) {
+  return (event: string, handler: (...args: unknown[]) => void) => {
+    if (event === 'close') setTimeout(() => handler(exitCode), 30);
+    else if (event === errorOnEvent && errorOnEvent)
+      setTimeout(() => handler(new Error('Process error')), 5);
+  };
+}
+
+function __createIPCEventHandler(ipcData?: string) {
+  return (event: string, handler: (...args: unknown[]) => void) => {
+    if (event === 'data') setTimeout(() => handler(ipcData), 10);
+    else if (event === 'end') setTimeout(() => handler(), 20);
+  };
+}
+
+function __createHangingEventHandler() {
+  return () => {}; // Never calls handlers - hangs forever
+}
+
+function __createSpawnMock(exitCode = 0) {
+  return () => ({
+    on: __createProcessEventHandler(exitCode),
+    kill: () => {},
+  });
+}
+
 function __createExecMock(
   options: {
     stdout?: string;
@@ -13,34 +49,20 @@ function __createExecMock(
 ) {
   const { stdout = '', stderr = '', exitCode = 0, captureCommand, captureOptions } = options;
 
-  return (command: string, execOptions?: any) => {
-    if (captureCommand) captureCommand(command);
-    if (captureOptions && execOptions) captureOptions(execOptions);
+  return (command: string, opts: any) => {
+    captureCommand?.(command);
+    captureOptions?.(opts);
 
     return {
       stdout: {
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'data' && stdout) {
-            setTimeout(() => handler(stdout), 10);
-          } else if (event === 'end') {
-            setTimeout(() => handler(), 20);
-          }
-        },
+        on: __createStreamEventHandler(stdout),
         pipe: () => {},
       },
       stderr: {
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'data' && stderr) {
-            setTimeout(() => handler(stderr), 10);
-          } else if (event === 'end') {
-            setTimeout(() => handler(), 20);
-          }
-        },
+        on: __createStreamEventHandler(stderr),
         pipe: () => {},
       },
-      on: (event: string, handler: (...args: unknown[]) => void) => {
-        if (event === 'close') setTimeout(() => handler(exitCode), 30);
-      },
+      on: __createProcessEventHandler(exitCode),
       stdin: { write: () => {}, end: () => {} },
       kill: () => {},
     };
@@ -56,62 +78,52 @@ function __createSpawnIPCMock(
 ) {
   const { ipcData = '', exitCode = 0, errorOnEvent } = options;
 
-  return {
+  return () => ({
     stdio: [
-      { write: () => {}, end: () => {} }, // stdin
-      null, // stdout (inherit)
-      null, // stderr (inherit)
+      null, // stdin
+      null, // stdout
+      null, // stderr
       {
         // fd3 for IPC
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'data' && ipcData) {
-            setTimeout(() => handler(ipcData), 10);
-          } else if (event === 'end') {
-            setTimeout(() => handler(), 20);
-          }
-        },
+        on: __createIPCEventHandler(ipcData),
       },
     ],
+    on: __createProcessEventHandler(exitCode, errorOnEvent),
     stdin: { write: () => {}, end: () => {} },
-    on: (event: string, handler: (...args: unknown[]) => void) => {
-      if (event === 'close') {
-        setTimeout(() => handler(exitCode), 30);
-      } else if (event === errorOnEvent) {
-        setTimeout(() => handler(new Error('Process spawn failed')), 10);
-      }
-    },
     kill: () => {},
-  };
+  });
 }
 
 function __createHangingProcessMock(
-  type: 'exec' | 'spawn' = 'exec',
   options: {
     onKill?: () => void;
   } = {}
 ) {
   const { onKill } = options;
 
-  const hangingMock = {
-    stdout: { on: () => {}, pipe: () => {} },
-    stderr: { on: () => {}, pipe: () => {} },
-    on: () => {
-      // Never call close - simulate hanging process
+  return () => ({
+    stdout: {
+      on: __createHangingEventHandler(),
+      pipe: () => {},
     },
+    stderr: {
+      on: __createHangingEventHandler(),
+      pipe: () => {},
+    },
+    on: __createHangingEventHandler(),
     stdin: { write: () => {}, end: () => {} },
-    kill: () => {
-      if (onKill) onKill();
-    },
-  };
-
-  if (type === 'spawn') {
-    return {
-      ...hangingMock,
-      stdio: [{ write: () => {}, end: () => {} }, null, null, { on: () => {} }],
-    };
-  }
-
-  return hangingMock;
+    stdio: [
+      null, // stdin
+      null, // stdout
+      null, // stderr
+      {
+        // fd3 for IPC - also hangs forever
+        on: __createHangingEventHandler(),
+        pipe: () => {},
+      },
+    ],
+    kill: () => onKill?.(),
+  });
 }
 
 function __createErrorMock(errorMessage: string) {
@@ -120,643 +132,513 @@ function __createErrorMock(errorMessage: string) {
   };
 }
 
-describe('process', () => {
-  describe('exec', () => {
-    it('should execute a command', async () => {
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'Hello, world!\n',
-        })
-      );
+function __createStreamingMock(
+  options: {
+    captureEnv?: (env: any) => void;
+    captureStreamingCalls?: (stdout: boolean, stderr: boolean) => void;
+    exitCode?: number;
+  } = {}
+) {
+  const { captureEnv, captureStreamingCalls, exitCode = 0 } = options;
 
-      const result = await processModule.exec('echo "Hello, world!"');
-      expect(result).toBe('Hello, world!\n');
+  return (command: string, opts: any) => {
+    captureEnv?.(opts.env);
+
+    const mock = {
+      stdout: {
+        on: __createStreamEventHandler('test\n'),
+        pipe: () => {
+          captureStreamingCalls?.(true, false);
+        },
+      },
+      stderr: {
+        on: __createStreamEventHandler(),
+        pipe: () => {
+          captureStreamingCalls?.(false, true);
+        },
+      },
+      on: __createProcessEventHandler(exitCode),
+      stdin: { write: () => {}, end: () => {} },
+      kill: () => {},
+    };
+
+    return mock;
+  };
+}
+
+async function __testColorPreservation(options: {
+  preserveColors?: boolean;
+  streamOutput?: boolean;
+  inputEnv: Record<string, string>;
+  expectedEnv: Record<string, string>;
+}) {
+  let capturedEnv = {};
+
+  moxxy.exec.mock(
+    __createExecMock({
+      stdout: 'test\n',
+      captureOptions: (opts) => {
+        capturedEnv = opts.env;
+      },
+    })
+  );
+
+  await processModule.execWithResult('echo test', {
+    preserveColors: options.preserveColors,
+    streamOutput: options.streamOutput,
+    env: options.inputEnv,
+  });
+
+  expect(capturedEnv).toEqual(options.expectedEnv);
+}
+
+async function __testEnvironmentHandling(
+  inputEnv: Record<string, string>,
+  expectedEnv: Record<string, string>,
+  preserveColors = true
+) {
+  let capturedEnv = {};
+
+  moxxy.exec.mock(
+    __createStreamingMock({
+      captureEnv: (env) => {
+        capturedEnv = env;
+      },
+    })
+  );
+
+  await processModule.execWithResult('echo test', {
+    preserveColors,
+    env: inputEnv,
+  });
+
+  expect(capturedEnv).toEqual(expectedEnv);
+}
+
+async function __testIpcSuccess(mockOptions: Parameters<typeof __createSpawnIPCMock>[0]) {
+  moxxy.spawn.mock(() => __createSpawnIPCMock(mockOptions)());
+
+  const result = await processModule.ipc('test-command', {
+    data: 'input data',
+    args: ['arg1', 'arg2'],
+  });
+
+  expect(result).toBe(mockOptions?.ipcData || '');
+}
+
+async function __testIpcError(
+  mockOptions: Parameters<typeof __createSpawnIPCMock>[0],
+  expectedErrorProperties: { type: string; id: string }
+) {
+  moxxy.spawn.mock(() => __createSpawnIPCMock(mockOptions)());
+
+  try {
+    await processModule.ipc('test-command');
+    expect(true).toBe(false); // Should not reach here
+  } catch (error: any) {
+    expect(error.type).toBe(expectedErrorProperties.type);
+    expect(error.id).toBe(expectedErrorProperties.id);
+  }
+}
+
+async function __testIpcScenario(
+  mockOptions: Parameters<typeof __createSpawnIPCMock>[0],
+  shouldThrow = false,
+  expectedErrorProperties?: { type: string; id: string }
+) {
+  if (shouldThrow && expectedErrorProperties) {
+    await __testIpcError(mockOptions, expectedErrorProperties);
+  } else {
+    await __testIpcSuccess(mockOptions);
+  }
+}
+
+async function __testExecResultScenario(
+  command: string,
+  options: {
+    mockOptions: Parameters<typeof __createExecMock>[0];
+    execOptions?: any;
+    expectedResult: {
+      success?: boolean;
+      exitCode?: number;
+      stdout?: string;
+      stderr?: string;
+    };
+  }
+) {
+  const { mockOptions, execOptions = {}, expectedResult } = options;
+
+  moxxy.exec.mock(__createExecMock(mockOptions));
+  const result = await processModule.execWithResult(command, execOptions);
+
+  if (expectedResult.success !== undefined) expect(result.success).toBe(expectedResult.success);
+  if (expectedResult.exitCode !== undefined) expect(result.exitCode).toBe(expectedResult.exitCode);
+  if (expectedResult.stdout !== undefined) expect(result.stdout).toBe(expectedResult.stdout);
+  if (expectedResult.stderr !== undefined) expect(result.stderr).toBe(expectedResult.stderr);
+}
+
+describe('exec', () => {
+  it('should execute a command', async () => {
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'Hello, world!\n',
+      })
+    );
+
+    const result = await processModule.exec('echo "Hello, world!"');
+    expect(result).toBe('Hello, world!\n');
+  });
+
+  it('should substitute $@ with arguments cross-platform', async () => {
+    let capturedCommand = '';
+
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'Args: hello world\n',
+        captureCommand: (cmd) => {
+          capturedCommand = cmd;
+        },
+      })
+    );
+
+    const result = await processModule.execWithResult('echo "Args: $@"', {
+      args: ['hello', 'world'],
+      throwOnError: false,
     });
 
-    it('should substitute $@ with arguments cross-platform', async () => {
-      let capturedCommand = '';
+    expect(result.success).toBe(true);
+    expect(capturedCommand).toBe('echo "Args: hello world"');
+    expect(result.stdout).toBe('Args: hello world\n');
+  });
+});
 
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'Args: hello world\n',
-          captureCommand: (cmd) => {
-            capturedCommand = cmd;
-          },
-        })
-      );
-
-      const result = await processModule.execWithResult('echo "Args: $@"', {
-        args: ['hello', 'world'],
-        throwOnError: false,
-      });
-
-      expect(result.success).toBe(true);
-      expect(capturedCommand).toBe('echo "Args: hello world"');
-      expect(result.stdout).toBe('Args: hello world\n');
+describe('color preservation', () => {
+  it('should preserve original environment when colors are disabled', async () => {
+    await __testColorPreservation({
+      preserveColors: false,
+      inputEnv: { ORIGINAL: 'value' },
+      expectedEnv: { ORIGINAL: 'value' },
     });
   });
 
-  describe('color preservation', () => {
-    it('should preserve original environment when colors are disabled', async () => {
-      let capturedEnv = {};
-
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'test\n',
-          captureOptions: (options) => {
-            capturedEnv = options.env;
-          },
-        })
-      );
-
-      await processModule.execWithResult('echo test', {
-        preserveColors: false,
-        env: { ORIGINAL: 'value' },
-      });
-
-      expect(capturedEnv).toEqual({ ORIGINAL: 'value' });
-    });
-
-    it('should add color environment variables when colors are enabled', async () => {
-      let capturedEnv = {};
-
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'test\n',
-          captureOptions: (options) => {
-            capturedEnv = options.env;
-          },
-        })
-      );
-
-      await processModule.execWithResult('echo test', {
-        preserveColors: true,
-        env: { ORIGINAL: 'value' },
-      });
-
-      expect(capturedEnv).toEqual({
+  it('should add color environment variables when colors are enabled', async () => {
+    await __testColorPreservation({
+      preserveColors: true,
+      inputEnv: { ORIGINAL: 'value' },
+      expectedEnv: {
         ORIGINAL: 'value',
         FORCE_COLOR: '1',
         TERM: 'xterm-256color',
-      });
+      },
     });
+  });
 
-    it('should preserve existing TERM variable when colors are enabled', async () => {
-      let capturedEnv = {};
-
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'test\n',
-          captureOptions: (options) => {
-            capturedEnv = options.env;
-          },
-        })
-      );
-
-      await processModule.execWithResult('echo test', {
-        preserveColors: true,
-        env: { TERM: 'screen-256color' },
-      });
-
-      expect(capturedEnv).toEqual({
+  it('should preserve existing TERM variable when colors are enabled', async () => {
+    await __testColorPreservation({
+      preserveColors: true,
+      inputEnv: { TERM: 'screen-256color' },
+      expectedEnv: {
         TERM: 'screen-256color',
         FORCE_COLOR: '1',
-      });
+      },
     });
+  });
 
-    it('should enable colors for streamOutput even when preserveColors is false', async () => {
-      let capturedEnv = {};
-
-      moxxy.exec.mock((command: string, options: any) => {
-        capturedEnv = options.env;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') setTimeout(() => handler('test\n'), 10);
-              else if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
-
-      await processModule.execWithResult('echo test', {
-        preserveColors: false,
-        streamOutput: true,
-        env: { ORIGINAL: 'value' },
-      });
-
-      expect(capturedEnv).toEqual({
+  it('should enable colors for streamOutput even when preserveColors is false', async () => {
+    await __testColorPreservation({
+      preserveColors: false,
+      streamOutput: true,
+      inputEnv: { ORIGINAL: 'value' },
+      expectedEnv: {
         ORIGINAL: 'value',
         FORCE_COLOR: '1',
         TERM: 'xterm-256color',
-      });
-    });
-
-    it('should respect NO_COLOR environment variable in subprocess env', async () => {
-      let capturedEnv = {};
-
-      moxxy.exec.mock((command: string, options: any) => {
-        capturedEnv = options.env;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') setTimeout(() => handler('test\n'), 10);
-              else if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
-
-      await processModule.execWithResult('echo test', {
-        preserveColors: true,
-        env: { NO_COLOR: '1', ORIGINAL: 'value' },
-      });
-
-      expect(capturedEnv).toEqual({
-        NO_COLOR: '1',
-        ORIGINAL: 'value',
-      });
-    });
-
-    it('should respect CI environment variable in subprocess env', async () => {
-      let capturedEnv = {};
-
-      moxxy.exec.mock((command: string, options: any) => {
-        capturedEnv = options.env;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'data') setTimeout(() => handler('test\n'), 10);
-              else if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
-
-      await processModule.execWithResult('echo test', {
-        preserveColors: true,
-        env: { CI: 'true', ORIGINAL: 'value' },
-      });
-
-      expect(capturedEnv).toEqual({
-        CI: 'true',
-        ORIGINAL: 'value',
-      });
+      },
     });
   });
 
-  describe('ipc', () => {
-    it('should handle basic IPC communication', async () => {
-      moxxy.spawn.mock(() =>
-        __createSpawnIPCMock({
-          ipcData: 'IPC response data',
-        })
-      );
+  it('should respect NO_COLOR environment variable in subprocess env', async () => {
+    await __testEnvironmentHandling(
+      { NO_COLOR: '1', ORIGINAL: 'value' },
+      { NO_COLOR: '1', ORIGINAL: 'value' }
+    );
+  });
 
-      const result = await processModule.ipc('test-command', {
-        data: 'input data',
-        args: ['arg1', 'arg2'],
-      });
+  it('should respect CI environment variable in subprocess env', async () => {
+    await __testEnvironmentHandling(
+      { CI: 'true', ORIGINAL: 'value' },
+      { CI: 'true', ORIGINAL: 'value' }
+    );
+  });
+});
 
-      expect(result).toBe('IPC response data');
-    });
+describe('ipc', () => {
+  it('should handle basic IPC communication', async () => {
+    await __testIpcScenario({ ipcData: 'IPC response data' });
+  });
 
-    it('should handle IPC command failure', async () => {
-      moxxy.spawn.mock(() =>
-        __createSpawnIPCMock({
-          exitCode: 1, // Non-zero exit
-        })
-      );
+  it('should handle IPC command failure', async () => {
+    await __testIpcScenario({ exitCode: 1 }, true, { type: 'Unknown', id: 'ipc-error-unknown' });
+  });
 
-      try {
-        await processModule.ipc('failing-command');
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('ipc-error-unknown');
-      }
-    });
+  it('should handle IPC with timeout', async () => {
+    let killCalled = false;
 
-    it('should handle IPC with timeout', async () => {
-      let killCalled = false;
+    moxxy.spawn.mock(() =>
+      __createHangingProcessMock({
+        onKill: () => {
+          killCalled = true;
+        },
+      })()
+    );
 
-      moxxy.spawn.mock(() =>
-        __createHangingProcessMock('spawn', {
-          onKill: () => {
-            killCalled = true;
-          },
-        })
-      );
+    try {
+      await processModule.ipc('hanging-command', { timeout: 100 });
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('ipc-error-unknown');
+      expect(killCalled).toBe(true);
+    }
+  });
 
-      try {
-        await processModule.ipc('hanging-command', { timeout: 100 });
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('ipc-error-unknown');
-        expect(killCalled).toBe(true);
-      }
-    });
-
-    it('should handle IPC process errors', async () => {
-      moxxy.spawn.mock(() =>
-        __createSpawnIPCMock({
-          errorOnEvent: 'error',
-        })
-      );
-
-      try {
-        await processModule.ipc('invalid-command');
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('ipc-error-unknown');
-      }
-    });
-
-    it('should handle IPC with unknown errors', async () => {
-      moxxy.spawn.mock(__createErrorMock('Spawn failed completely'));
-
-      try {
-        await processModule.ipc('command');
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('ipc-error-unknown');
-      }
+  it('should handle IPC process errors', async () => {
+    await __testIpcScenario({ errorOnEvent: 'error' }, true, {
+      type: 'Unknown',
+      id: 'ipc-error-unknown',
     });
   });
 
-  describe('execWithResult', () => {
-    it('should handle exec failure with throwOnError disabled', async () => {
-      moxxy.exec.mock(
-        __createExecMock({
-          stdout: 'output',
-          stderr: 'error output',
-          exitCode: 1,
-        })
-      );
+  it('should handle IPC with unknown errors', async () => {
+    moxxy.spawn.mock(__createErrorMock('Spawn failed completely'));
 
-      const result = await processModule.execWithResult('failing-command', {
-        throwOnError: false,
-      });
+    try {
+      await processModule.ipc('command');
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('ipc-error-unknown');
+    }
+  });
+});
 
-      expect(result.success).toBe(false);
-      expect(result.exitCode).toBe(1);
-      expect(result.stdout).toBe('output');
-      expect(result.stderr).toBe('error output');
-    });
-
-    it('should handle exec failure with throwOnError enabled', async () => {
-      moxxy.exec.mock(
-        __createExecMock({
-          exitCode: 1,
-        })
-      );
-
-      const result = await processModule.execWithResult('failing-command', { throwOnError: true });
-      expect(result.success).toBe(false);
-      expect(result.exitCode).toBe(1);
-    });
-
-    it('should handle streamOutput with colors', async () => {
-      let spawnCalled = false;
-      let spawnOptions: any = {};
-
-      moxxy.spawn.mock((cmdName: string, cmdArgs: string[], options: any) => {
-        spawnCalled = true;
-        spawnOptions = options;
-        return {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          kill: () => {},
-        };
-      });
-
-      const result = await processModule.execWithResult('echo test', {
-        streamOutput: true,
-        preserveColors: true,
-      });
-
-      expect(spawnCalled).toBe(true);
-      expect(spawnOptions.stdio).toBe('inherit');
-      expect(result.stdout).toBe('[streamed to console with colors]');
-      expect(result.stderr).toBe('[streamed to console with colors]');
-      expect(result.success).toBe(true);
-    });
-
-    it('should handle process timeout', async () => {
-      let killCalled = false;
-
-      moxxy.exec.mock(() =>
-        __createHangingProcessMock('exec', {
-          onKill: () => {
-            killCalled = true;
-          },
-        })
-      );
-
-      try {
-        await processModule.execWithResult('hanging-command', {
-          timeout: 100,
-          throwOnError: true,
-        });
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('exec-error-unknown');
-        expect(killCalled).toBe(true);
-      }
-    });
-
-    it('should handle unknown exec errors gracefully', async () => {
-      moxxy.exec.mock(__createErrorMock('Exec failed completely'));
-
-      const result = await processModule.execWithResult('command', {
-        throwOnError: false,
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.exitCode).toBe(null);
-      expect(result.stderr).toContain('Exec failed completely');
-    });
-
-    it('should throw unknown exec errors when throwOnError is true', async () => {
-      moxxy.exec.mock(() => {
-        throw new Error('Exec failed completely');
-      });
-
-      try {
-        await processModule.execWithResult('command', { throwOnError: true });
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('exec-error-unknown');
-      }
+describe('execWithResult', () => {
+  it('should handle exec failure with throwOnError disabled', async () => {
+    await __testExecResultScenario('failing-command', {
+      mockOptions: {
+        stdout: 'output',
+        stderr: 'error output',
+        exitCode: 1,
+      },
+      execOptions: { throwOnError: false },
+      expectedResult: {
+        success: false,
+        exitCode: 1,
+        stdout: 'output',
+        stderr: 'error output',
+      },
     });
   });
 
-  describe('cross-platform argument handling', () => {
-    it('should handle commands without $@ placeholder', async () => {
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(0), 30);
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {},
-      }));
-
-      await processModule.execWithResult('simple-command', {
-        args: ['arg1', 'arg2'],
-        throwOnError: false,
-      });
-
-      // Should work without errors (command constructed as "simple-command arg1 arg2")
-    });
-
-    it('should handle arguments with spaces and quotes', async () => {
-      let capturedCommand = '';
-
-      moxxy.exec.mock((command: string) => {
-        capturedCommand = command;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
-
-      await processModule.execWithResult('echo $@', {
-        args: ['hello world', 'arg with "quotes"', "arg with 'single quotes'"],
-        throwOnError: false,
-      });
-
-      expect(capturedCommand).toBe(
-        'echo "hello world" "arg with \\"quotes\\"" "arg with \'single quotes\'"'
-      );
-    });
-
-    it('should handle empty args array', async () => {
-      let capturedCommand = '';
-
-      moxxy.exec.mock((command: string) => {
-        capturedCommand = command;
-        return {
-          stdout: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          stderr: {
-            on: (event: string, handler: (...args: unknown[]) => void) => {
-              if (event === 'end') setTimeout(() => handler(), 20);
-            },
-            pipe: () => {},
-          },
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'close') setTimeout(() => handler(0), 30);
-          },
-          stdin: { write: () => {}, end: () => {} },
-          kill: () => {},
-        };
-      });
-
-      await processModule.execWithResult('echo $@', {
-        args: [],
-        throwOnError: false,
-      });
-
-      expect(capturedCommand).toBe('echo ');
+  it('should handle exec failure with throwOnError enabled', async () => {
+    await __testExecResultScenario('failing-command', {
+      mockOptions: { exitCode: 1 },
+      execOptions: { throwOnError: true },
+      expectedResult: {
+        success: false,
+        exitCode: 1,
+      },
     });
   });
 
-  describe('stream output modes', () => {
-    it('should pipe stdout and stderr when streamOutput is enabled', async () => {
-      let stdoutPipeCalled = false;
-      let stderrPipeCalled = false;
+  it('should handle streamOutput with colors', async () => {
+    let spawnCalled = false;
+    let spawnOptions: any = {};
 
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-
-          pipe: () => {
-            // Can't easily test piping to process.stdout, so just mark it as called
-            stdoutPipeCalled = true;
-          },
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {
-            stderrPipeCalled = true;
-          },
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(0), 30);
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {},
-      }));
-
-      await processModule.execWithResult('echo test', {
-        streamOutput: true,
-        preserveColors: false,
-        throwOnError: false,
-      });
-
-      expect(stdoutPipeCalled).toBe(true);
-      expect(stderrPipeCalled).toBe(true);
+    moxxy.spawn.mock((cmdName: string, cmdArgs: string[], options: any) => {
+      spawnCalled = true;
+      spawnOptions = options;
+      return __createSpawnMock(0)();
     });
+
+    const result = await processModule.execWithResult('echo test', {
+      streamOutput: true,
+      preserveColors: true,
+    });
+
+    expect(spawnCalled).toBe(true);
+    expect(spawnOptions.stdio).toBe('inherit');
+    expect(result.stdout).toBe('[streamed to console with colors]');
+    expect(result.stderr).toBe('[streamed to console with colors]');
+    expect(result.success).toBe(true);
   });
 
-  describe('_exec backward compatibility', () => {
-    it('should return stdout on success', async () => {
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'data') setTimeout(() => handler('success output'), 10);
-            else if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(0), 30);
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {},
-      }));
+  it('should handle process timeout', async () => {
+    let killCalled = false;
 
-      const result = await processModule.exec('echo test');
-      expect(result).toBe('success output');
+    moxxy.exec.mock(() =>
+      __createHangingProcessMock({
+        onKill: () => {
+          killCalled = true;
+        },
+      })()
+    );
+
+    try {
+      await processModule.execWithResult('hanging-command', {
+        timeout: 100,
+        throwOnError: true,
+      });
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('exec-error-unknown');
+      expect(killCalled).toBe(true);
+    }
+  });
+
+  it('should handle unknown exec errors gracefully', async () => {
+    moxxy.exec.mock(__createErrorMock('Exec failed completely'));
+
+    const result = await processModule.execWithResult('command', {
+      throwOnError: false,
     });
 
-    it('should throw error on failure when throwOnError is true', async () => {
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(1), 30);
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {},
-      }));
+    expect(result.success).toBe(false);
+    expect(result.exitCode).toBe(null);
+    expect(result.stderr).toContain('Exec failed completely');
+  });
 
-      try {
-        await processModule.exec('failing-command', { throwOnError: true });
-        expect(true).toBe(false); // Should not reach here
-      } catch (error: any) {
-        expect(error.type).toBe('Unknown');
-        expect(error.id).toBe('process-error-code');
-      }
+  it('should throw unknown exec errors when throwOnError is true', async () => {
+    moxxy.exec.mock(() => {
+      throw new Error('Exec failed completely');
     });
 
-    it('should return stdout even on failure when throwOnError is false', async () => {
-      moxxy.exec.mock(() => ({
-        stdout: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'data') setTimeout(() => handler('output before failure'), 10);
-            else if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        stderr: {
-          on: (event: string, handler: (...args: unknown[]) => void) => {
-            if (event === 'end') setTimeout(() => handler(), 20);
-          },
-          pipe: () => {},
-        },
-        on: (event: string, handler: (...args: unknown[]) => void) => {
-          if (event === 'close') setTimeout(() => handler(1), 30);
-        },
-        stdin: { write: () => {}, end: () => {} },
-        kill: () => {},
-      }));
+    try {
+      await processModule.execWithResult('command', { throwOnError: true });
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('exec-error-unknown');
+    }
+  });
+});
 
-      const result = await processModule.exec('failing-command', { throwOnError: false });
-      expect(result).toBe('output before failure');
+describe('cross-platform argument handling', () => {
+  it('should handle commands without $@ placeholder', async () => {
+    moxxy.exec.mock(__createExecMock({}));
+
+    await processModule.execWithResult('simple-command', {
+      args: ['arg1', 'arg2'],
+      throwOnError: false,
     });
+
+    // Should work without errors (command constructed as "simple-command arg1 arg2")
+  });
+
+  it('should handle arguments with spaces and quotes', async () => {
+    let capturedCommand = '';
+
+    moxxy.exec.mock(
+      __createExecMock({
+        captureCommand: (cmd) => {
+          capturedCommand = cmd;
+        },
+      })
+    );
+
+    await processModule.execWithResult('echo $@', {
+      args: ['hello world', 'arg with "quotes"', "arg with 'single quotes'"],
+      throwOnError: false,
+    });
+
+    expect(capturedCommand).toBe(
+      'echo "hello world" "arg with \\"quotes\\"" "arg with \'single quotes\'"'
+    );
+  });
+
+  it('should handle empty args array', async () => {
+    let capturedCommand = '';
+
+    moxxy.exec.mock(
+      __createExecMock({
+        captureCommand: (cmd) => {
+          capturedCommand = cmd;
+        },
+      })
+    );
+
+    await processModule.execWithResult('echo $@', {
+      args: [],
+      throwOnError: false,
+    });
+
+    expect(capturedCommand).toBe('echo ');
+  });
+});
+
+describe('stream output modes', () => {
+  it('should pipe stdout and stderr when streamOutput is enabled', async () => {
+    let stdoutPipeCalled = false;
+    let stderrPipeCalled = false;
+
+    moxxy.exec.mock(
+      __createStreamingMock({
+        captureStreamingCalls: (stdout, stderr) => {
+          if (stdout) stdoutPipeCalled = true;
+          if (stderr) stderrPipeCalled = true;
+        },
+      })
+    );
+
+    await processModule.execWithResult('echo test', {
+      streamOutput: true,
+      preserveColors: false,
+      throwOnError: false,
+    });
+
+    expect(stdoutPipeCalled).toBe(true);
+    expect(stderrPipeCalled).toBe(true);
+  });
+});
+
+describe('_exec backward compatibility', () => {
+  it('should return stdout on success', async () => {
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'success output',
+      })
+    );
+
+    expect(await processModule.exec('echo test')).toBe('success output');
+  });
+
+  it('should throw error on failure when throwOnError is true', async () => {
+    moxxy.exec.mock(
+      __createExecMock({
+        exitCode: 1,
+      })
+    );
+
+    try {
+      await processModule.exec('failing-command', { throwOnError: true });
+      expect(true).toBe(false);
+    } catch (error: any) {
+      expect(error.type).toBe('Unknown');
+      expect(error.id).toBe('process-error-code');
+    }
+  });
+
+  it('should return stdout even on failure when throwOnError is false', async () => {
+    moxxy.exec.mock(
+      __createExecMock({
+        stdout: 'output before failure',
+        exitCode: 1,
+      })
+    );
+
+    expect(await processModule.exec('failing-command', { throwOnError: false })).toBe(
+      'output before failure'
+    );
   });
 });

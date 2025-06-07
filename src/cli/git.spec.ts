@@ -1,275 +1,261 @@
 import { describe, it, expect } from 'bun:test';
 import git from './git.ts';
 
-describe('Git Module', () => {
-  describe('debug', () => {
-    it('should show what moxxy can see', () => {
-      console.log('Moxxy object:', Object.getOwnPropertyNames(moxxy));
-      console.log('Moxxy keys:', Object.keys(moxxy));
+function __createSimpleGitMock(
+  options: {
+    tags?: string[];
+    branches?: string[];
+    latestCommit?: string;
+    shouldThrow?: boolean;
+  } = {}
+) {
+  const { tags = [], branches = [], latestCommit, shouldThrow = false } = options;
 
-      // Test if we can mock process at all
-      try {
-        moxxy.process.mock({
-          exec: () => Promise.resolve('test-output'),
-        });
-        console.log('Process mock set successfully');
-      } catch (e) {
-        console.log('Process mock failed:', e);
-      }
+  if (shouldThrow) {
+    return () => {
+      throw new Error('Not a git repository');
+    };
+  }
 
-      // Test if we can access simpleGit
-      try {
-        console.log('simpleGit in moxxy:', 'simpleGit' in moxxy);
-        if ('simpleGit' in moxxy) {
-          (moxxy as any).simpleGit.mock(() => ({
-            tags: () => ({ all: ['test'] }),
-          }));
-          console.log('simpleGit mock set successfully');
-        }
-      } catch (e) {
-        console.log('simpleGit mock failed:', e);
-      }
+  return () => ({
+    tags: () => ({ all: tags }),
+    branch: () => ({ all: branches }),
+    log: () => ({ latest: latestCommit ? { hash: latestCommit } : null }),
+  });
+}
 
-      expect(true).toBe(true);
+function __createProcessExecMock(
+  options: {
+    shouldResolve?: boolean;
+    output?: string;
+    error?: string;
+  } = {}
+) {
+  const { shouldResolve = true, output = '', error = 'Command failed' } = options;
+
+  if (shouldResolve) {
+    return () => Promise.resolve(output);
+  } else {
+    return () => Promise.reject(new Error(error));
+  }
+}
+
+describe('isRemoteRepository', () => {
+  it('should return true for valid remote repository', async () => {
+    moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
+    moxxy.process.exec.mock(
+      __createProcessExecMock({ shouldResolve: true, output: 'some-output' })
+    );
+
+    expect(await git.isRemoteRepository('https://github.com/user/repo.git')).toBe(true);
+  });
+
+  it('should return false for invalid remote repository', async () => {
+    moxxy.simpleGit.mock(__createSimpleGitMock({ shouldThrow: true }));
+    moxxy.process.exec.mock(__createProcessExecMock({ shouldResolve: false, error: 'Not found' }));
+
+    expect(await git.isRemoteRepository('invalid-url')).toBe(false);
+  });
+});
+
+describe('isLocalRepository', () => {
+  it('should return true for valid local repository', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: ['v1.0.0'] }),
+      branch: () => ({ all: ['main'] }),
+      log: () => ({ latest: { hash: 'abc123' } }),
+    }));
+
+    expect(await git.isLocalRepository('/path/to/repo')).toBe(true);
+  });
+
+  it('should return false for invalid local repository', async () => {
+    moxxy.simpleGit.mock(() => {
+      throw new Error('Not a git repository');
+    });
+
+    expect(await git.isLocalRepository('/invalid/path')).toBe(false);
+  });
+});
+
+describe('repositoryStat', () => {
+  it('should return repository stats for local repository', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: ['v1.0.0', 'v1.1.0', 'v2.0.0'] }),
+      branch: () => ({ all: ['main', 'develop', 'feature/test'] }),
+      log: () => ({ latest: { hash: 'abcd1234567890abcdef1234567890abcdef1234' } }),
+    }));
+
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
+
+    expect(await git.repositoryStat('/path/to/local/repo')).toEqual({
+      isLocal: true,
+      isRemote: false,
+      tags: ['v1.0.0', 'v1.1.0', 'v2.0.0'],
+      branches: ['main', 'develop', 'feature/test'],
     });
   });
 
-  describe('isRemoteRepository', () => {
-    it('should return true for valid remote repository', async () => {
-      moxxy.process.exec.mock(() => Promise.resolve('some-output'));
-
-      const result = await git.isRemoteRepository('https://github.com/user/repo.git');
-
-      expect(result).toBe(true);
+  it('should return repository stats for remote repository', async () => {
+    moxxy.simpleGit.mock(() => {
+      throw new Error('Not local');
     });
 
-    it('should return false for invalid remote repository', async () => {
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Not found')));
+    moxxy.process.exec.mock(() =>
+      Promise.resolve(
+        'abcd1234567890abcdef1234567890abcdef1234\trefs/tags/v1.0.0\n' +
+          '1234567890abcdef1234567890abcdef12345678\trefs/tags/v1.1.0\n' +
+          '5678901234567890abcdef1234567890abcdef12\trefs/heads/main\n' +
+          '9012345678901234567890abcdef1234567890ab\trefs/heads/develop'
+      )
+    );
 
-      const result = await git.isRemoteRepository('invalid-url');
-
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('isLocalRepository', () => {
-    it('should return true for valid local repository', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: ['v1.0.0'] }),
-        branch: () => ({ all: ['main'] }),
-        log: () => ({ latest: { hash: 'abc123' } }),
-      }));
-
-      const result = await git.isLocalRepository('/path/to/repo');
-
-      expect(result).toBe(true);
-    });
-
-    it('should return false for invalid local repository', async () => {
-      moxxy.simpleGit.mock(() => {
-        throw new Error('Not a git repository');
-      });
-
-      const result = await git.isLocalRepository('/invalid/path');
-
-      expect(result).toBe(false);
+    expect(await git.repositoryStat('https://github.com/user/repo.git')).toEqual({
+      isLocal: false,
+      isRemote: true,
+      tags: ['v1.0.0', 'v1.1.0'],
+      branches: ['main', 'develop'],
     });
   });
 
-  describe('repositoryStat', () => {
-    it('should return repository stats for local repository', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: ['v1.0.0', 'v1.1.0', 'v2.0.0'] }),
-        branch: () => ({ all: ['main', 'develop', 'feature/test'] }),
-        log: () => ({ latest: { hash: 'abcd1234567890abcdef1234567890abcdef1234' } }),
-      }));
-
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
-
-      const result = await git.repositoryStat('/path/to/local/repo');
-
-      expect(result).toEqual({
-        isLocal: true,
-        isRemote: false,
-        tags: ['v1.0.0', 'v1.1.0', 'v2.0.0'],
-        branches: ['main', 'develop', 'feature/test'],
-      });
+  it('should throw error for invalid repository', async () => {
+    moxxy.simpleGit.mock(() => {
+      throw new Error('Not local');
     });
 
-    it('should return repository stats for remote repository', async () => {
-      moxxy.simpleGit.mock(() => {
-        throw new Error('Not local');
-      });
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Not remote')));
 
-      moxxy.process.exec.mock(() =>
-        Promise.resolve(
-          'abcd1234567890abcdef1234567890abcdef1234\trefs/tags/v1.0.0\n' +
-            '1234567890abcdef1234567890abcdef12345678\trefs/tags/v1.1.0\n' +
-            '5678901234567890abcdef1234567890abcdef12\trefs/heads/main\n' +
-            '9012345678901234567890abcdef1234567890ab\trefs/heads/develop'
-        )
-      );
+    await expect(() => git.repositoryStat('invalid-repo')).toThrow();
+  });
+});
 
-      const result = await git.repositoryStat('https://github.com/user/repo.git');
+describe('getLatestCommit', () => {
+  it('should return latest commit for local repository', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: ['v1.0.0'] }),
+      branch: () => ({ all: ['main'] }),
+      log: () => ({ latest: { hash: 'abcd1234567890abcdef1234567890abcdef1234' } }),
+    }));
 
-      expect(result).toEqual({
-        isLocal: false,
-        isRemote: true,
-        tags: ['v1.0.0', 'v1.1.0'],
-        branches: ['main', 'develop'],
-      });
-    });
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    it('should throw error for invalid repository', async () => {
-      moxxy.simpleGit.mock(() => {
-        throw new Error('Not local');
-      });
-
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Not remote')));
-
-      await expect(() => git.repositoryStat('invalid-repo')).toThrow();
-    });
+    expect(await git.getLatestCommit('/path/to/local/repo')).toBe(
+      'abcd1234567890abcdef1234567890abcdef1234'
+    );
   });
 
-  describe('getLatestCommit', () => {
-    it('should return latest commit for local repository', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: ['v1.0.0'] }),
-        branch: () => ({ all: ['main'] }),
-        log: () => ({ latest: { hash: 'abcd1234567890abcdef1234567890abcdef1234' } }),
-      }));
-
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
-
-      const result = await git.getLatestCommit('/path/to/local/repo');
-
-      expect(result).toBe('abcd1234567890abcdef1234567890abcdef1234');
+  it('should return latest commit for remote repository', async () => {
+    moxxy.simpleGit.mock(() => {
+      throw new Error('Not local');
     });
 
-    it('should return latest commit for remote repository', async () => {
-      moxxy.simpleGit.mock(() => {
-        throw new Error('Not local');
-      });
+    moxxy.process.exec.mock(() =>
+      Promise.resolve(
+        'abcd1234567890abcdef1234567890abcdef1234\tHEAD\n' +
+          '1234567890abcdef1234567890abcdef12345678\trefs/heads/main'
+      )
+    );
 
-      moxxy.process.exec.mock(() =>
-        Promise.resolve(
-          'abcd1234567890abcdef1234567890abcdef1234\tHEAD\n' +
-            '1234567890abcdef1234567890abcdef12345678\trefs/heads/main'
-        )
-      );
-
-      const result = await git.getLatestCommit('https://github.com/user/repo.git');
-
-      expect(result).toBe('abcd1234567890abcdef1234567890abcdef1234');
-    });
-
-    it('should throw error for empty local repository', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: [] }),
-        branch: () => ({ all: [] }),
-        log: () => ({ latest: null }),
-      }));
-
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
-
-      await expect(() => git.getLatestCommit('/path/to/empty/repo')).toThrow();
-    });
-
-    it('should throw error when no HEAD reference found', async () => {
-      moxxy.simpleGit.mock(() => {
-        throw new Error('Not local');
-      });
-
-      moxxy.process.exec.mock(() =>
-        Promise.resolve('1234567890abcdef1234567890abcdef12345678\trefs/heads/main')
-      );
-
-      await expect(() => git.getLatestCommit('https://github.com/user/repo.git')).toThrow();
-    });
+    expect(await git.getLatestCommit('https://github.com/user/repo.git')).toBe(
+      'abcd1234567890abcdef1234567890abcdef1234'
+    );
   });
 
-  describe('getVersionType', () => {
-    it('should return "hash" for "latest" version', async () => {
-      const result = await git.getVersionType('https://github.com/user/repo.git', 'latest');
+  it('should throw error for empty local repository', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: [] }),
+      branch: () => ({ all: [] }),
+      log: () => ({ latest: null }),
+    }));
 
-      expect(result).toBe('hash');
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
+
+    await expect(() => git.getLatestCommit('/path/to/empty/repo')).toThrow();
+  });
+
+  it('should throw error when no HEAD reference found', async () => {
+    moxxy.simpleGit.mock(() => {
+      throw new Error('Not local');
     });
 
-    it('should return "semver" for semantic version', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: ['v1.0.0', 'v1.1.0', 'v2.0.0'] }),
-        branch: () => ({ all: ['main', 'develop'] }),
-      }));
+    moxxy.process.exec.mock(() =>
+      Promise.resolve('1234567890abcdef1234567890abcdef12345678\trefs/heads/main')
+    );
 
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
+    await expect(() => git.getLatestCommit('https://github.com/user/repo.git')).toThrow();
+  });
+});
 
-      const result = await git.getVersionType('/path/to/repo', '1.0.0');
+describe('getVersionType', () => {
+  it('should return "hash" for "latest" version', async () => {
+    expect(await git.getVersionType('https://github.com/user/repo.git', 'latest')).toBe('hash');
+  });
 
-      expect(result).toBe('semver');
-    });
+  it('should return "semver" for semantic version', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: ['v1.0.0', 'v1.1.0', 'v2.0.0'] }),
+      branch: () => ({ all: ['main', 'develop'] }),
+    }));
 
-    it('should return "branch" for branch name', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: ['v1.0.0'] }),
-        branch: () => ({ all: ['main', 'develop', 'feature/test'] }),
-      }));
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
+    expect(await git.getVersionType('/path/to/repo', '1.0.0')).toBe('semver');
+  });
 
-      const result = await git.getVersionType('/path/to/repo', 'main');
+  it('should return "branch" for branch name', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: ['v1.0.0'] }),
+      branch: () => ({ all: ['main', 'develop', 'feature/test'] }),
+    }));
 
-      expect(result).toBe('branch');
-    });
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-    it('should return "tag" for tag name', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: ['v1.0.0', 'release-tag'] }),
-        branch: () => ({ all: ['main'] }),
-      }));
+    expect(await git.getVersionType('/path/to/repo', 'main')).toBe('branch');
+  });
 
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
+  it('should return "tag" for tag name', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: ['v1.0.0', 'release-tag'] }),
+      branch: () => ({ all: ['main'] }),
+    }));
 
-      const result = await git.getVersionType('/path/to/repo', 'release-tag');
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-      expect(result).toBe('tag');
-    });
+    expect(await git.getVersionType('/path/to/repo', 'release-tag')).toBe('tag');
+  });
 
-    it('should return "hash" for valid commit hash', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: [] }),
-        branch: () => ({ all: [] }),
-      }));
+  it('should return "hash" for valid commit hash', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: [] }),
+      branch: () => ({ all: [] }),
+    }));
 
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-      const validHash = 'abcd1234567890abcdef1234567890abcdef1234';
-      const result = await git.getVersionType('/path/to/repo', validHash);
+    expect(
+      await git.getVersionType('/path/to/repo', 'abcd1234567890abcdef1234567890abcdef1234')
+    ).toBe('hash');
+  });
 
-      expect(result).toBe('hash');
-    });
+  it('should throw error for invalid version', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: [] }),
+      branch: () => ({ all: [] }),
+    }));
 
-    it('should throw error for invalid version', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: [] }),
-        branch: () => ({ all: [] }),
-      }));
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
+    await expect(() => git.getVersionType('/path/to/repo', 'invalid-version')).toThrow();
+  });
 
-      await expect(() => git.getVersionType('/path/to/repo', 'invalid-version')).toThrow();
-    });
+  it('should handle version constraints', async () => {
+    moxxy.simpleGit.mock(() => ({
+      tags: () => ({ all: ['v1.0.0', 'v1.1.0'] }),
+      branch: () => ({ all: ['main'] }),
+    }));
 
-    it('should handle version constraints', async () => {
-      moxxy.simpleGit.mock(() => ({
-        tags: () => ({ all: ['v1.0.0', 'v1.1.0'] }),
-        branch: () => ({ all: ['main'] }),
-      }));
+    moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
 
-      moxxy.process.exec.mock(() => Promise.reject(new Error('Remote not accessible')));
-
-      const result = await git.getVersionType('/path/to/repo', '^1.0.0');
-
-      expect(result).toBe('semver');
-    });
+    expect(await git.getVersionType('/path/to/repo', '^1.0.0')).toBe('semver');
   });
 });

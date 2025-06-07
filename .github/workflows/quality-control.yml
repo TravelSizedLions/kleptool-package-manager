@@ -1,4 +1,4 @@
-name: Quality Control
+name: Code Quality
 
 on:
   push:
@@ -12,8 +12,8 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  quality-control:
-    name: Lint and Format Check
+  code-quality:
+    name: Run Functional Complexity Analysis
     runs-on: ubuntu-latest
     
     steps:
@@ -30,6 +30,9 @@ jobs:
 
     - name: Run TypeScript Type Check
       run: klep ci:typecheck
+      
+    - name: Run Functional Complexity Analysis
+      run: klep quality
 
   security-audit:
     name: Security Audit

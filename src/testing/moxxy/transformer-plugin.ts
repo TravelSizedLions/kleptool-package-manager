@@ -406,7 +406,33 @@ function __isMoxxySystemFile(normalizedPath: string, content: string): boolean {
   );
 }
 
+function __isRunningTests(): boolean {
+  // Primary check: Bun automatically sets NODE_ENV to "test" when running tests
+  // This is the most reliable indicator according to Bun documentation
+  if (process.env.NODE_ENV === 'test') {
+    return true;
+  }
+
+  // Secondary check: Look for test globals that Bun injects during test runs
+  // These are automatically available in test files without importing
+  const hasTestGlobals =
+    typeof globalThis !== 'undefined' &&
+    ('test' in globalThis ||
+      'describe' in globalThis ||
+      'expect' in globalThis ||
+      'it' in globalThis);
+
+  // Tertiary check: Command line arguments (less reliable but still useful)
+  const isTestCommand = process.argv.some((arg) => arg === 'test');
+
+  return hasTestGlobals || isTestCommand;
+}
+
 function __shouldSkipTransformation(args: { path: string }, content: string): boolean {
+  // Skip transformation if we're not actually running tests
+  // This allows static analysis tools to analyze the original source code
+  if (!__isRunningTests()) return true;
+
   const normalizedPath = args.path.replace(/\\/g, '/');
 
   if (__isMoxxySystemFile(normalizedPath, content)) return true;
@@ -715,19 +741,24 @@ function __replaceRuntimeUsage(content: string, moduleNamesMap: Map<string, stri
 // ============================================================================
 
 function __shouldSkipLine(line: string): boolean {
-  return (
-    line.includes('__moxxy__') ||
-    line.includes(MOXXY_COMMENT) ||
-    line.includes(TYPE_COLON) ||
-    line.includes(ANGLE_OPEN) ||
-    line.includes(ANGLE_CLOSE) ||
-    line.includes(INTERFACE_KEYWORD) ||
-    line.includes(TYPE_KEYWORD) ||
-    line.includes(PROMISE_TYPE) ||
-    line.includes(ARRAY_TYPE) ||
-    line.trim().startsWith(COMMENT_ASTERISK) ||
-    line.trim().startsWith(COMMENT_DOUBLE_SLASH)
-  );
+  const skipPatterns = [
+    '__moxxy__',
+    MOXXY_COMMENT,
+    TYPE_COLON,
+    ANGLE_OPEN,
+    ANGLE_CLOSE,
+    INTERFACE_KEYWORD,
+    TYPE_KEYWORD,
+    PROMISE_TYPE,
+    ARRAY_TYPE,
+  ];
+
+  if (skipPatterns.some((pattern) => line.includes(pattern))) {
+    return true;
+  }
+
+  const trimmed = line.trim();
+  return trimmed.startsWith(COMMENT_ASTERISK) || trimmed.startsWith(COMMENT_DOUBLE_SLASH);
 }
 
 function __transformConstantUsage(line: string, constantName: string): string {

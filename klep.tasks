@@ -41,8 +41,11 @@
   // Generate coverage reports
   coverage: "klep ts:coverage && klep rust:coverage",
 
-  // Simulate a CI pipeline
-  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep ci:secure && klep test && klep test:win',
+  // Check code quality (never-nester principles)
+  quality: "cd src/rust && cargo build --release -p code-quality-checker && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10",
+
+  // Simulate a CI pipeline  
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
