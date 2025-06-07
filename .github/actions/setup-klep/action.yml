@@ -31,7 +31,7 @@ runs:
 
         # Install universalmutator using pipx
         python3 -m pipx install universalmutator
-        
+
         # Inject setuptools into universalmutator environment (needed for pkg_resources)
         # universalmutator needs pkg_resources but doesn't declare setuptools as dependency
         python3 -m pipx inject universalmutator setuptools
