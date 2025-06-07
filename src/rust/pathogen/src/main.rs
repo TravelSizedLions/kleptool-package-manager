@@ -475,7 +475,7 @@ fn parse_universalmutator_file(mutant_path: &PathBuf, source_dir: &PathBuf, id_c
     span_start: 0, // Will be ignored - we use full content replacement
     span_end: 0, // Will be ignored - we use full content replacement  
     original: original_text.clone(), // Store just the diff for reporting
-    mutated: mutated_text.clone(), // Store just the diff for reporting
+    mutated: mutant_content, // Store the FULL mutated file content
     mutation_type: types::MutationType::ArithmeticOperator, // Default for now
     description: format!("universalmutator mutation: {} → {}", original_text, mutated_text),
   };

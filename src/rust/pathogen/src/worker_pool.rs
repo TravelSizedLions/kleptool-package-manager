@@ -7,7 +7,7 @@ use std::time::Instant;
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex, Semaphore};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MutationRequest {
     pub file_path: String,
     pub mutated_content: String,
@@ -43,6 +43,7 @@ pub struct WorkerProcess {
     receiver: mpsc::UnboundedReceiver<String>,
     id: usize,
     created_at: Instant,
+    executions: usize,
 }
 
 impl WorkerProcess {
@@ -97,6 +98,7 @@ impl WorkerProcess {
             receiver: response_receiver,
             id,
             created_at: Instant::now(),
+            executions: 0,
         })
     }
 
@@ -144,25 +146,43 @@ impl WorkerProcess {
 
     pub async fn execute_mutation(&mut self, request: MutationRequest) -> Result<TestResult> {
         // Send mutation request
-        let message = WorkerMessage::MutationRequest(request);
+        let message = WorkerMessage::MutationRequest(request.clone());
         let json = serde_json::to_string(&message)?;
         
         self.sender.send(json)
             .map_err(|_| anyhow::anyhow!("Failed to send message to worker"))?;
 
-        // Wait for response
-        if let Some(response_line) = self.receiver.recv().await {
-            match serde_json::from_str::<WorkerResponse>(&response_line)? {
-                WorkerResponse::TestResult(result) => Ok(result),
-                WorkerResponse::Error(error) => {
-                    anyhow::bail!("Worker error: {}", error);
+        // Apply timeout at worker level (10 seconds total, including test execution)
+        let timeout = std::time::Duration::from_secs(10);
+        match tokio::time::timeout(timeout, async {
+            if let Some(response_line) = self.receiver.recv().await {
+                match serde_json::from_str::<WorkerResponse>(&response_line)? {
+                    WorkerResponse::TestResult(result) => {
+                        self.executions += 1;
+                        Ok(result)
+                    },
+                    WorkerResponse::Error(error) => {
+                        anyhow::bail!("Worker error: {}", error);
+                    }
+                    other => {
+                        anyhow::bail!("Unexpected response from worker: {:?}", other);
+                    }
                 }
-                other => {
-                    anyhow::bail!("Unexpected response from worker: {:?}", other);
-                }
+            } else {
+                anyhow::bail!("Worker process died")
             }
-        } else {
-            anyhow::bail!("Worker process died")
+        }).await {
+            Ok(result) => result,
+            Err(_) => {
+                // Timeout occurred - kill this worker and return a timeout result
+                let _ = self.child.kill().await;
+                Ok(TestResult {
+                    success: false,
+                    output: format!("Worker timeout after {} seconds (likely infinite loop mutation)", timeout.as_secs()),
+                    execution_time_ms: timeout.as_millis() as u64,
+                    mutation_id: request.mutation_id,
+                })
+            }
         }
     }
 
@@ -170,7 +190,11 @@ impl WorkerProcess {
         let age = self.created_at.elapsed();
         match self.child.try_wait() {
             Ok(Some(_)) => false, // Process has exited
-            Ok(None) => age < std::time::Duration::from_secs(300), // Alive but check age (5 min max)
+            Ok(None) => {
+                // Much more aggressive recycling for high-throughput mutation testing
+                age < std::time::Duration::from_secs(30) && // Max 30 seconds old
+                self.executions < 50 // Max 50 executions per worker
+            }
             Err(_) => false, // Error checking status
         }
     }
