@@ -25,16 +25,12 @@ runs:
 
     - name: Install universalmutator
       run: |
-        # Install pipx if not available
-        python3 -m pip install --user pipx
-        python3 -m pipx ensurepath
+        # Install universalmutator with setuptools using pip --user
+        # pipx isolation was causing pkg_resources issues, so use pip directly
+        python3 -m pip install --user universalmutator setuptools
 
-        # Install universalmutator using pipx
-        python3 -m pipx install universalmutator
-
-        # Inject setuptools into universalmutator environment (needed for pkg_resources)
-        # universalmutator needs pkg_resources but doesn't declare setuptools as dependency
-        python3 -m pipx inject universalmutator setuptools
+        # Add user bin to PATH for this step
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
 
         # Verify installation
         which mutate || echo "mutate command not found after installation"
