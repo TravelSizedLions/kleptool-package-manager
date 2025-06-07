@@ -106,12 +106,17 @@ async fn execute_mutation(request: MutationRequest) -> TestResult {
 
     match test_output {
         Ok(output) => TestResult {
-            success: output.contains("0 fail"),
+            // Check for test success:
+            // - "0 fail" = tests passed, mutation survived
+            // - "had no matches" = no tests found, should fall back to full suite (treat as error)
+            // - anything else = tests failed, mutation killed
+            success: output.contains("0 fail") && !output.contains("had no matches"),
             output,
             execution_time_ms,
             mutation_id: request.mutation_id,
         },
         Err(error) => TestResult {
+            // Test execution failed = mutation was killed (success = false)
             success: false,
             output: error,
             execution_time_ms,
@@ -208,9 +213,12 @@ fn get_target_test_file(mutated_file: &str) -> Option<String> {
         let base = mutated_file.strip_suffix(".ts")?;
         let test_file = format!("{}.spec.ts", base);
         
-        // Verify the test file exists (in a real implementation, we'd check the filesystem)
-        // For now, assume it exists if it follows the pattern
-        Some(test_file)
+        // Only return if the test file actually exists
+        if std::path::Path::new(&test_file).exists() {
+            Some(test_file)
+        } else {
+            None // Fall back to full test suite if specific test doesn't exist
+        }
     } else {
         None
     }

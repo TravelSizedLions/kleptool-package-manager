@@ -573,7 +573,7 @@ fn generate_report(
 
   print_summary_report(&summary_stats, duration);
   print_per_file_breakdown(&per_file_stats);
-  print_final_assessment(&summary_stats);
+  print_final_assessment(&summary_stats, results);
 
   MutationStats {
     total_mutations: summary_stats.total,
@@ -767,19 +767,30 @@ fn print_per_file_breakdown(per_file_stats: &[FileStats]) {
 
 /// Print a single file's stats as a table row
 fn print_file_table_row(file_stat: &FileStats) {
-  let short_path = file_stat.file_path.replace("src/cli/", "");
+  // Convert temp workspace path back to src/ relative path
+  let display_path = if file_stat.file_path.contains("pathogen-workspace/") {
+    // Extract the part after "pathogen-workspace/"
+    file_stat.file_path
+      .split("pathogen-workspace/")
+      .last()
+      .unwrap_or(&file_stat.file_path)
+      .to_string()
+  } else {
+    file_stat.file_path.clone()
+  };
+  
   let status_icon = get_status_icon(file_stat.kill_rate);
   
-  let display_path = if short_path.len() > 34 { 
-    short_path[..31].to_owned() + "..." 
+  let truncated_path = if display_path.len() > 38 { 
+    display_path[..35].to_owned() + "..." 
   } else { 
-    short_path 
+    display_path 
   };
   
   println!(
     "{} {:<38} {:>8} {:>8} {:>9} {:>8.1}%",
     status_icon,
-    display_path,
+    truncated_path,
     file_stat.total_mutations,
     file_stat.behavioral_kills + file_stat.compile_errors,
     file_stat.survived,
@@ -818,14 +829,94 @@ fn print_survivors_info(file_stat: &FileStats) {
 }
 
 /// Print final assessment and warnings
-fn print_final_assessment(stats: &SummaryStats) {
+fn print_final_assessment(stats: &SummaryStats, results: &[types::MutationResult]) {
   let grade = get_coverage_grade(stats.behavioral_rate);
 
+  // Detect common pathogen issues
+  detect_and_warn_issues(stats, results);
+  
+  println!("{}", grade);
+}
+
+/// Detect and warn about common pathogen configuration issues
+fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult]) {
+  println!("🔍 Pathogen Health Check:");
+  
+  // Issue 1: Unrealistic 100% behavioral kill rate
+  if stats.behavioral_rate >= 99.5 && stats.total > 100 {
+    println!("❌ SUSPICIOUS: 100% behavioral kill rate is unrealistic");
+    println!("   • Likely issue: Missing test files or incorrect test detection");
+    println!("   • Expected: 70-90% behavioral kills, 5-15% survivors, 5-15% compile errors");
+  }
+  
+  // Issue 2: Check for "had no matches" indicating missing test files  
+  let no_matches_count = results.iter()
+    .filter(|r| r.test_output.contains("had no matches"))
+    .count();
+  
+  if no_matches_count > 0 {
+    println!("❌ DETECTED: {} mutations found no matching test files", no_matches_count);
+    println!("   • {} mutations fell back to full test suite", no_matches_count);
+    println!("   • Consider creating missing test files or improving test selection");
+  }
+  
+  // Issue 3: Check for null/empty outputs
+  let empty_outputs = results.iter()
+    .filter(|r| r.test_output.is_empty() || r.test_output == "null")
+    .count();
+    
+  if empty_outputs > 0 {
+    println!("❌ DETECTED: {} mutations have empty test outputs", empty_outputs);
+    println!("   • Tests may not be executing properly");
+    println!("   • Check worker communication and test execution");
+  }
+  
+  // Issue 4: Check for timeout patterns
+  let timeout_count = results.iter()
+    .filter(|r| r.test_output.contains("timed out") || r.test_output.contains("timeout"))
+    .count();
+    
+  if timeout_count > stats.total / 20 { // More than 5% timeouts
+    println!("⚠️  WARNING: {} mutations timed out ({}%)", 
+             timeout_count, 
+             (timeout_count * 100) / stats.total);
+    println!("   • May indicate infinite loop mutations");
+    println!("   • Consider adjusting timeout values or mutation operators");
+  }
+  
+  // Issue 5: Check execution time distribution for anomalies
+  let very_fast_mutations = results.iter()
+    .filter(|r| r.execution_time_ms < 10) // Less than 10ms is suspiciously fast
+    .count();
+    
+  if very_fast_mutations > stats.total / 10 { // More than 10% super fast
+    println!("⚠️  WARNING: {} mutations completed in <10ms ({}%)",
+             very_fast_mutations,
+             (very_fast_mutations * 100) / stats.total);
+    println!("   • Tests may not be running properly");
+    println!("   • Check if targeted test selection is working");
+  }
+  
+  // Issue 6: Reasonable baseline check
   if stats.compile_errors > stats.behavioral_kills {
     println!("⚠️  WARNING: More compile errors than behavioral kills!");
-    println!("🔧 Consider refining mutation operators");
+    println!("   • Consider refining mutation operators");
+    println!("   • May indicate syntax-heavy mutations that don't test logic");
   }
-  println!("{}", grade);
+  
+  // Positive feedback if everything looks good
+  let issues_detected = (stats.behavioral_rate >= 99.5) as u32 +
+                       (no_matches_count > 0) as u32 +
+                       (empty_outputs > 0) as u32 +
+                       (timeout_count > stats.total / 20) as u32 +
+                       (very_fast_mutations > stats.total / 10) as u32 +
+                       (stats.compile_errors > stats.behavioral_kills) as u32;
+                       
+  if issues_detected == 0 {
+    println!("✅ All health checks passed - results appear reliable!");
+  }
+  
+  println!();
 }
 
 /// Get coverage grade based on behavioral rate
