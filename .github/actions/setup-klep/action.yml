@@ -28,10 +28,10 @@ runs:
         # Install pipx if not available
         python3 -m pip install --user pipx
         python3 -m pipx ensurepath
-        
+
         # Install universalmutator using pipx (proper way for CLI tools)
         python3 -m pipx install universalmutator
-        
+
         # Verify installation
         which mutate || echo "mutate command not found after installation"
         mutate --help || echo "mutate command failed"
