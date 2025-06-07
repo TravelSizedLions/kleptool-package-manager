@@ -1,62 +1,9 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use pathogen::{Language, MutationRequest, TestResult, WorkerMessage, WorkerResponse};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::Instant;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Language {
-  TypeScript,
-  Rust,
-}
-
-impl Language {
-  pub fn get_test_runner_command(&self) -> &'static str {
-    match self {
-      Language::TypeScript => "bun",
-      Language::Rust => "cargo",
-    }
-  }
-
-  pub fn get_test_args(&self) -> Vec<&'static str> {
-    match self {
-      Language::TypeScript => vec!["test"],
-      Language::Rust => vec!["test"],
-    }
-  }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct MutationRequest {
-  file_path: String,
-  mutated_content: String,
-  mutation_id: String,
-  workspace_dir: String,
-  language: Language,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct TestResult {
-  success: bool,
-  output: String,
-  execution_time_ms: u64,
-  mutation_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-enum WorkerMessage {
-  MutationRequest(MutationRequest),
-  Shutdown,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-enum WorkerResponse {
-  TestResult(TestResult),
-  Ready,
-  Shutdown,
-  Error(String),
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {

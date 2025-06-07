@@ -13,6 +13,10 @@ categories = ["development-tools::testing"]
 name = "pathogen"
 path = "src/main.rs"
 
+[[bin]]
+name = "pathogen-worker"
+path = "src/bin/pathogen-worker.rs"
+
 [dependencies]
 # CLI and configuration
 clap = { version = "4.0", features = ["derive"] }
@@ -28,12 +32,12 @@ regex = "1.10"
 
 # File operations
 walkdir = "2.0"
-tempfile = "3.8"
+tempfile = "3.0"
 
 # Parallelization 
-rayon = "1.8"
+rayon = "1.10"
 crossbeam = "0.8"
-dashmap = "6.0"
+dashmap = "5.0"
 
 # Error handling
 anyhow = "1.0"

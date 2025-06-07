@@ -1,20 +1,12 @@
 use anyhow::{Context, Result};
 use clap::{Arg, ArgMatches, Command};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-mod ast_parser;
-mod cache;
-mod file_safety;
-mod mutation_engine;
-mod mutation_runner;
-mod types;
-mod worker_pool;
+pub mod cache;
+pub mod types;
+pub mod worker_pool;
 
-use ast_parser::TypeScriptParser;
-use file_safety::SafeFileManager;
-use mutation_engine::MutationEngine;
-use mutation_runner::MutationRunner;
 use types::{FileStats, KillType, MutationConfig, MutationStats};
 use worker_pool::WorkerPool;
 
@@ -47,20 +39,9 @@ async fn main() -> Result<()> {
   // Print banner with the actual workspace being used
   print_startup_banner(&temp_config);
 
-  let mut components = initialize_components(&temp_config, &temp_workspace)?;
   let target_files = discover_and_validate_files(&temp_config)?;
 
-  if !temp_config.dry_run {
-    run_baseline_validation(&components.runner).await?;
-  }
-
-  let mutations = generate_mutations(
-    &mut components,
-    &target_files,
-    &config.source_dir,
-    &temp_config,
-    temp_config.verbose,
-  )?;
+  let mutations = generate_mutations(&temp_config.source_dir, &temp_config, temp_config.verbose)?;
 
   if temp_config.dry_run {
     handle_dry_run(&mutations, temp_config.verbose);
@@ -165,31 +146,6 @@ fn print_startup_banner(config: &MutationConfig) {
   }
 }
 
-/// Components needed for mutation testing
-struct MutationComponents {
-  parser: TypeScriptParser,
-  engine: MutationEngine,
-  runner: MutationRunner,
-}
-
-/// Initialize all components with safety-first design
-fn initialize_components(
-  config: &MutationConfig,
-  workspace_dir: &PathBuf,
-) -> Result<MutationComponents> {
-  let parser = TypeScriptParser::new()?;
-  let file_manager = SafeFileManager::new()?;
-  let engine = MutationEngine::new()?;
-  let runner = MutationRunner::new(config.parallel_count, file_manager, config.no_cache)?
-    .with_workspace_dir(workspace_dir.clone());
-
-  Ok(MutationComponents {
-    parser,
-    engine,
-    runner,
-  })
-}
-
 /// Discover and validate target files
 fn discover_and_validate_files(config: &MutationConfig) -> Result<Vec<PathBuf>> {
   println!(
@@ -211,18 +167,8 @@ fn discover_and_validate_files(config: &MutationConfig) -> Result<Vec<PathBuf>> 
   Ok(target_files)
 }
 
-/// Run baseline test validation
-async fn run_baseline_validation(runner: &MutationRunner) -> Result<()> {
-  if !runner.run_baseline_tests().await? {
-    anyhow::bail!("❌ Baseline tests are failing! Fix tests before running mutation testing.");
-  }
-  Ok(())
-}
-
 /// Generate mutations from universalmutator files
 fn generate_mutations(
-  _components: &mut MutationComponents,
-  _target_files: &[PathBuf],
   source_dir: &PathBuf,
   config: &MutationConfig,
   verbose: bool,
@@ -253,7 +199,7 @@ fn handle_dry_run(mutations: &[types::Mutation], verbose: bool) {
 
 /// Run mutation tests
 async fn run_mutation_tests(
-  workspace_dir: &PathBuf,
+  workspace_dir: &Path,
   mutations: Vec<types::Mutation>,
   parallel_count: usize,
   verbose: bool,
@@ -263,7 +209,7 @@ async fn run_mutation_tests(
     parallel_count
   );
 
-  let worker_pool = WorkerPool::new(parallel_count, workspace_dir.clone()).await?;
+  let worker_pool = WorkerPool::new(parallel_count, workspace_dir.to_path_buf()).await?;
   let results = worker_pool.run_mutations(mutations, verbose).await?;
   worker_pool.shutdown().await?;
 
@@ -307,7 +253,7 @@ fn __resolve_workspace_paths(config: &MutationConfig) -> Result<(PathBuf, PathBu
   Ok((project_root, source_canonical, project_canonical))
 }
 
-fn __symlink_project_files(project_root: &PathBuf, temp_workspace: &PathBuf) -> Result<()> {
+fn __symlink_project_files(project_root: &Path, temp_workspace: &Path) -> Result<()> {
   use std::fs;
 
   for entry in fs::read_dir(project_root)? {
@@ -333,7 +279,7 @@ fn __should_skip_file(name: &str) -> bool {
     || name == "node_modules/.cache"
 }
 
-fn __link_or_copy_file(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
+fn __link_or_copy_file(src_path: &Path, dst_path: &Path) -> Result<()> {
   use std::fs;
 
   if let Ok(src_canonical) = src_path.canonicalize() {
@@ -351,9 +297,9 @@ fn __link_or_copy_file(src_path: &PathBuf, dst_path: &PathBuf) -> Result<()> {
 
 fn __setup_source_directory_for_mutation(
   config: &MutationConfig,
-  temp_workspace: &PathBuf,
-  source_canonical: &PathBuf,
-  project_canonical: &PathBuf,
+  temp_workspace: &Path,
+  source_canonical: &Path,
+  project_canonical: &Path,
 ) -> Result<()> {
   let source_relative = __get_source_relative_path(source_canonical, project_canonical)?;
   let dst_source = temp_workspace.join(&source_relative);
@@ -366,8 +312,8 @@ fn __setup_source_directory_for_mutation(
 }
 
 fn __get_source_relative_path(
-  source_canonical: &PathBuf,
-  project_canonical: &PathBuf,
+  source_canonical: &Path,
+  project_canonical: &Path,
 ) -> Result<PathBuf> {
   source_canonical
     .strip_prefix(project_canonical)
@@ -381,7 +327,7 @@ fn __get_source_relative_path(
     })
 }
 
-fn __validate_destination_path(dst_path: &PathBuf, temp_workspace: &PathBuf) -> Result<()> {
+fn __validate_destination_path(dst_path: &Path, temp_workspace: &Path) -> Result<()> {
   if !dst_path.starts_with(temp_workspace) {
     return Err(
       std::io::Error::new(
@@ -395,9 +341,9 @@ fn __validate_destination_path(dst_path: &PathBuf, temp_workspace: &PathBuf) -> 
 }
 
 fn __recreate_source_structure(
-  temp_workspace: &PathBuf,
-  source_relative: &PathBuf,
-  project_canonical: &PathBuf,
+  temp_workspace: &Path,
+  source_relative: &Path,
+  project_canonical: &Path,
 ) -> Result<()> {
   use std::fs;
 
@@ -437,7 +383,7 @@ fn __copy_source_files_for_mutation(config: &MutationConfig, dst_source: &PathBu
 }
 
 /// Recursively copy a directory and all its contents
-fn copy_directory_recursively(src: &PathBuf, dst: &PathBuf) -> Result<()> {
+fn copy_directory_recursively(src: &Path, dst: &Path) -> Result<()> {
   use std::fs;
   use walkdir::WalkDir;
 
@@ -613,7 +559,7 @@ fn parse_universalmutator_file(
       "universalmutator mutation: {} → {}",
       original_text, mutated_text
     ),
-    language: *language,
+    language: language.clone(),
   };
 
   Ok(Some(mutation))
@@ -664,11 +610,11 @@ fn __check_entry_for_target(path: &PathBuf, target: &str) -> Option<PathBuf> {
   None
 }
 
-fn __check_if_target_file(path: &PathBuf, target: &str) -> Option<PathBuf> {
+fn __check_if_target_file(path: &Path, target: &str) -> Option<PathBuf> {
   path
     .file_name()
     .filter(|name| *name == target)
-    .map(|_| path.clone())
+    .map(|_| path.to_path_buf())
 }
 
 /// Find the difference between original and mutant content
@@ -696,38 +642,6 @@ fn find_mutation_difference(original: &str, mutant: &str) -> Result<(usize, Stri
 
   // Fallback if no difference found
   Ok((1, "unknown".to_string(), "unknown".to_string()))
-}
-
-fn generate_mutations_from_ast(
-  parser: &mut TypeScriptParser,
-  engine: &MutationEngine,
-  files: &[PathBuf],
-  verbose: bool,
-) -> Result<Vec<types::Mutation>> {
-  // NOTE: Cannot use rayon here because parser is not Send + Sync
-  // This is a limitation of tree-sitter parsers
-  let mut mutations = Vec::new();
-
-  for file_path in files {
-    if verbose {
-      println!("   🔍 Parsing: {}", file_path.display());
-    }
-
-    match parser.parse_file_with_ast(file_path) {
-      Ok(parsed_file) => {
-        let file_mutations = engine.generate_ast_mutations(&parsed_file);
-        if verbose {
-          println!("      Generated {} mutations", file_mutations.len());
-        }
-        mutations.extend(file_mutations);
-      }
-      Err(e) => {
-        eprintln!("⚠️  Failed to parse {}: {}", file_path.display(), e);
-      }
-    }
-  }
-
-  Ok(mutations)
 }
 
 fn generate_report(

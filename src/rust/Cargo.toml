@@ -8,7 +8,6 @@ members = [
   "api/std",
   "code-quality-checker",
   "pathogen",
-  "pathogen-worker",
 ]
 
 # Workspace-wide linting configuration

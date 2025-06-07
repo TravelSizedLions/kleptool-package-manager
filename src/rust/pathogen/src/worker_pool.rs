@@ -19,7 +19,7 @@ pub struct MutationRequest {
   pub language: Language,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestResult {
   pub success: bool,
   pub output: String,
@@ -28,13 +28,13 @@ pub struct TestResult {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum WorkerMessage {
+pub enum WorkerMessage {
   MutationRequest(MutationRequest),
   Shutdown,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum WorkerResponse {
+pub enum WorkerResponse {
   TestResult(TestResult),
   Ready,
   Shutdown,
@@ -45,13 +45,12 @@ pub struct WorkerProcess {
   child: Child,
   sender: mpsc::UnboundedSender<String>,
   receiver: mpsc::UnboundedReceiver<String>,
-  id: usize,
   created_at: Instant,
   executions: usize,
 }
 
 impl WorkerProcess {
-  pub async fn new(id: usize, workspace_dir: &PathBuf) -> Result<Self> {
+  pub async fn new(workspace_dir: &PathBuf) -> Result<Self> {
     // Spawn pathogen-worker directly using IPC communication
     let worker_binary = std::env::current_exe()?
       .parent()
@@ -100,7 +99,6 @@ impl WorkerProcess {
       child,
       sender: tx,
       receiver: response_receiver,
-      id,
       created_at: Instant::now(),
       executions: 0,
     })
@@ -244,7 +242,6 @@ pub struct WorkerPool {
   semaphore: Arc<Semaphore>,
   workspace_dir: PathBuf,
   pool_size: usize,
-  next_id: Arc<Mutex<usize>>,
 }
 
 impl WorkerPool {
@@ -252,8 +249,8 @@ impl WorkerPool {
     let mut available_workers = VecDeque::new();
 
     // Pre-create the worker pool
-    for i in 0..pool_size {
-      let worker = WorkerProcess::new(i, &workspace_dir).await?;
+    for _i in 0..pool_size {
+      let worker = WorkerProcess::new(&workspace_dir).await?;
       available_workers.push_back(worker);
     }
 
@@ -263,7 +260,6 @@ impl WorkerPool {
       semaphore: Arc::new(Semaphore::new(pool_size)),
       workspace_dir,
       pool_size,
-      next_id: Arc::new(Mutex::new(pool_size)),
     })
   }
 
@@ -363,7 +359,7 @@ impl WorkerPool {
       mutated_content: mutation.mutated.clone(),
       mutation_id: mutation.id.clone(),
       workspace_dir: self.workspace_dir.to_string_lossy().to_string(),
-      language: mutation.language,
+      language: mutation.language.clone(),
     }
   }
 
@@ -377,9 +373,9 @@ impl WorkerPool {
       return crate::types::KillType::Survived;
     }
 
-    if self.__is_system_error(&test_result.output) {
-      crate::types::KillType::CompileError
-    } else if self.__is_compilation_error(&test_result.output) {
+    if self.__is_system_error(&test_result.output)
+      || self.__is_compilation_error(&test_result.output)
+    {
       crate::types::KillType::CompileError
     } else {
       crate::types::KillType::BehavioralKill
@@ -414,14 +410,8 @@ impl WorkerPool {
     }
 
     // No healthy workers available, create a new one
-    let next_id = {
-      let mut id_guard = self.next_id.lock().await;
-      let id = *id_guard;
-      *id_guard += 1;
-      id
-    };
 
-    WorkerProcess::new(next_id, &self.workspace_dir).await
+    WorkerProcess::new(&self.workspace_dir).await
   }
 
   async fn return_worker(&self, mut worker: WorkerProcess) {
