@@ -48,7 +48,7 @@
   ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win',
 
   // Thorough CI pipeline (complete local CI/CD simulation including mutation testing)
-  'ci:thorough': 'klep ci && klep coverage',
+  'ci:all': 'klep ci && klep coverage',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
