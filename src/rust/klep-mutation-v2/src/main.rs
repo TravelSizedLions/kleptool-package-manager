@@ -94,7 +94,10 @@ fn build_cli_interface() -> ArgMatches {
 /// Print the startup banner with configuration info
 fn print_startup_banner(config: &MutationConfig) {
   println!("{}", "=".repeat(80));
-  println!("                             Pathogen v{}", env!("CARGO_PKG_VERSION"));
+  println!(
+    "                             Pathogen v{}",
+    env!("CARGO_PKG_VERSION")
+  );
   println!("{}", "=".repeat(80));
   println!("📂 Source directory: {}", config.source_dir.display());
   println!("🔧 Parallel runners: {}", config.parallel_count);
@@ -444,20 +447,24 @@ fn print_per_file_breakdown(per_file_stats: &[FileStats]) {
   println!();
   println!("📁 File Coverage Breakdown");
   println!("{}", "-".repeat(80));
-  println!("{:<41} {:>8} {:>8} {:>9} {:>9}", "File", "Total", "Killed", "Survived", "Coverage");
+  println!(
+    "{:<41} {:>8} {:>8} {:>9} {:>9}",
+    "File", "Total", "Killed", "Survived", "Coverage"
+  );
   println!("{}", "-".repeat(80));
-  
+
   for file_stat in per_file_stats {
     print_file_table_row(file_stat);
   }
-  
+
   println!("{}", "-".repeat(80));
-  
+
   // Show survivor details for files that have them
-  let files_with_survivors: Vec<_> = per_file_stats.iter()
+  let files_with_survivors: Vec<_> = per_file_stats
+    .iter()
     .filter(|fs| !fs.survived_mutations.is_empty())
     .collect();
-    
+
   if !files_with_survivors.is_empty() {
     println!();
     println!("Mutation Survivors:");
@@ -473,13 +480,13 @@ fn print_per_file_breakdown(per_file_stats: &[FileStats]) {
 fn print_file_table_row(file_stat: &FileStats) {
   let short_path = file_stat.file_path.replace("src/cli/", "");
   let status_icon = get_status_icon(file_stat.kill_rate);
-  
-  let display_path = if short_path.len() > 34 { 
-    short_path[..31].to_owned() + "..." 
-  } else { 
-    short_path 
+
+  let display_path = if short_path.len() > 34 {
+    short_path[..31].to_owned() + "..."
+  } else {
+    short_path
   };
-  
+
   println!(
     "{} {:<38} {:>8} {:>8} {:>9} {:>8.1}%",
     status_icon,
@@ -506,12 +513,19 @@ fn get_status_icon(kill_rate: f64) -> &'static str {
 fn print_survivors_info(file_stat: &FileStats) {
   let short_path = file_stat.file_path.replace("src/cli/", "");
   println!();
-  println!("📄 {} ({} survivors):", short_path, file_stat.survived_mutations.len());
-  
+  println!(
+    "📄 {} ({} survivors):",
+    short_path,
+    file_stat.survived_mutations.len()
+  );
+
   for (i, survivor) in file_stat.survived_mutations.iter().enumerate() {
-    if i >= 5 {  // Limit to first 5 for readability
-      println!("     ... and {} more (see JSON report for full list)", 
-               file_stat.survived_mutations.len() - 5);
+    if i >= 5 {
+      // Limit to first 5 for readability
+      println!(
+        "     ... and {} more (see JSON report for full list)",
+        file_stat.survived_mutations.len() - 5
+      );
       break;
     }
     println!(

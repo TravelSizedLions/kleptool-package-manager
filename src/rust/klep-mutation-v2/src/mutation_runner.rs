@@ -139,16 +139,17 @@ impl MutationRunner {
             let bar_width = 40;
             let filled = ((completed as f64 / total_mutations as f64) * bar_width as f64) as usize;
             let empty = bar_width - filled;
-            
-            print!("\r   🧬 [{}/{}] {}% [{}{}] Mutations tested", 
-              completed, 
-              total_mutations, 
+
+            print!(
+              "\r   🧬 [{}/{}] {}% [{}{}] Mutations tested",
+              completed,
+              total_mutations,
               percentage as u8,
               "█".repeat(filled),
               "░".repeat(empty)
             );
             std::io::stdout().flush().unwrap();
-            
+
             // Add newline on completion
             if completed == total_mutations {
               println!();

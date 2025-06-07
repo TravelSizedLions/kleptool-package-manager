@@ -39,13 +39,13 @@
   'test:no-colors': "NO_COLOR=1 klep ts:test && klep rust:test",
 
   // Generate behavioral coverage reports (mutation testing)
-  coverage: "klep mutation:v2:ci",
+  coverage: "klep ci:mutation",
 
   // Check code quality (never-nester principles)
   quality: "cd src/rust && cargo build --release -p code-quality-checker && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10",
 
   // Simulate a CI pipeline  
-  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win',
+  ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win && klep coverage',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
@@ -85,14 +85,13 @@
   'ts:test:win': 'KLEP_SIMULATE_WINDOWS=1 bun test',
   'rust:test': 'cd src/rust && cargo test --workspace',
 
+  // Mutation Testing
+  mutation: 'cd src/rust && cargo build --release && cd ../.. && ./src/rust/target/release/klep-mutation-v2 --source src/ --parallel $(nproc) --verbose',
+
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'bun run --bun tsc --noEmit',
-
-  // High-Performance AST-Based Rust Mutation Testing v2 🚀
-  'mutation:v2:build': 'cd src/rust && cargo build --release',
-  'mutation:v2': 'klep mutation:v2:build && ./src/rust/target/release/klep-mutation-v2 --source src/ --parallel $(nproc) --verbose',
-  'mutation:v2:ci': 'klep mutation:v2:build && THREADS=$(nproc) && ./src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $THREADS --output mutations-report.json',
+  'ci:mutation': './src/rust/target/release/klep-mutation-v2 --source src/cli --parallel $(nproc) --output mutations-report.json',
 }
