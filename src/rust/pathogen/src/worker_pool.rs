@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, Mutex, Semaphore};
+use crate::types::Language;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MutationRequest {
@@ -13,6 +14,7 @@ pub struct MutationRequest {
     pub mutated_content: String,
     pub mutation_id: String,
     pub workspace_dir: String,
+    pub language: Language,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -282,11 +284,13 @@ impl WorkerPool {
             let progress = progress.clone();
             let completed = completed.clone();
             async move {
+                let language = mutation.language; // Copy the language before moving mutation
                 let request = MutationRequest {
                     file_path: mutation.file.to_string_lossy().to_string(),
                     mutated_content: mutation.mutated.clone(),
                     mutation_id: mutation.id.clone(),
                     workspace_dir: self.workspace_dir.to_string_lossy().to_string(),
+                    language,
                 };
                 
                 let test_result = pool.execute_mutation(request).await?;

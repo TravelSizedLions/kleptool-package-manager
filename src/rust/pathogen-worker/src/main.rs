@@ -6,11 +6,34 @@ use std::process::{Command, Stdio};
 use std::time::Instant;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum Language {
+    TypeScript,
+    Rust,
+}
+
+impl Language {
+    pub fn get_test_runner_command(&self) -> &'static str {
+        match self {
+            Language::TypeScript => "bun",
+            Language::Rust => "cargo",
+        }
+    }
+    
+    pub fn get_test_args(&self) -> Vec<&'static str> {
+        match self {
+            Language::TypeScript => vec!["test"],
+            Language::Rust => vec!["test"],
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 struct MutationRequest {
     file_path: String,
     mutated_content: String,
     mutation_id: String,
     workspace_dir: String,
+    language: Language,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,7 +117,7 @@ async fn execute_mutation(request: MutationRequest) -> TestResult {
     }
 
     // Run targeted tests for massive performance improvement
-    let test_output = run_targeted_tests(&workspace_dir, &request.file_path).await;
+    let test_output = run_targeted_tests(&workspace_dir, &request.file_path, &request.language).await;
     
     // CRITICAL: Restore original content after test
     let restore_result = tokio::fs::write(&target_file, &original_content).await;
@@ -165,14 +188,14 @@ async fn execute_mutation(request: MutationRequest) -> TestResult {
     }
 }
 
-async fn run_targeted_tests(workspace_dir: &PathBuf, mutated_file: &str) -> Result<String, String> {
+async fn run_targeted_tests(workspace_dir: &PathBuf, mutated_file: &str, language: &Language) -> Result<String, String> {
     // Implement targeted test selection for massive performance gains
     // Instead of running all 154 tests, only run tests relevant to the mutated file
     
     let _start = std::time::Instant::now();
     
     // Determine the target test file based on the mutated file
-    let test_file = if let Some(spec_file) = get_target_test_file(mutated_file) {
+    let test_file = if let Some(spec_file) = get_target_test_file(mutated_file, language) {
         spec_file
     } else {
         // No specific test file found - this means no tests cover this file
@@ -181,9 +204,26 @@ async fn run_targeted_tests(workspace_dir: &PathBuf, mutated_file: &str) -> Resu
     };
     
     // Run the specific test file with timeout to prevent infinite loops
-    let mut child = Command::new("bun")
-        .arg("test")
-        .arg(&test_file)
+    let mut child = Command::new(language.get_test_runner_command());
+    
+    // Add language-specific test arguments
+    for arg in language.get_test_args() {
+        child.arg(arg);
+    }
+    
+    // Add the test file argument (language-specific handling)
+    match language {
+        Language::TypeScript => {
+            child.arg(&test_file);
+        },
+        Language::Rust => {
+            // For Rust, we'll run specific test functions/modules if possible
+            // For now, just run all tests in the workspace
+            // TODO: Add more targeted Rust test selection
+        }
+    }
+    
+    let mut child = child
         .current_dir(workspace_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -246,22 +286,56 @@ async fn run_full_test_suite(workspace_dir: &PathBuf) -> Result<String, String> 
     }
 }
 
-fn get_target_test_file(mutated_file: &str) -> Option<String> {
-    // Map mutated files to their corresponding test files
-    // Example: "src/cli/git.ts" -> "src/cli/git.spec.ts"
-    
-    if mutated_file.ends_with(".ts") && !mutated_file.ends_with(".spec.ts") {
-        let base = mutated_file.strip_suffix(".ts")?;
-        let test_file = format!("{}.spec.ts", base);
-        
-        // Only return if the test file actually exists
-        if std::path::Path::new(&test_file).exists() {
-            Some(test_file)
-        } else {
-            None // Fall back to full test suite if specific test doesn't exist
+fn get_target_test_file(mutated_file: &str, language: &Language) -> Option<String> {
+    match language {
+        Language::TypeScript => {
+            // TypeScript: "src/cli/git.ts" -> "src/cli/git.spec.ts"
+            if mutated_file.ends_with(".ts") && !mutated_file.ends_with(".spec.ts") {
+                let base = &mutated_file[..mutated_file.len() - 3]; // Remove ".ts"
+                let test_file = format!("{}.spec.ts", base);
+                
+                // Check if the test file exists
+                if std::path::Path::new(&test_file).exists() {
+                    Some(test_file)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        },
+        Language::Rust => {
+            // Rust test patterns:
+            // 1. Tests in the same file (mod tests)
+            // 2. Tests in separate test files in tests/ directory
+            // 3. For now, we'll check if the file itself contains #[cfg(test)]
+            
+            if mutated_file.ends_with(".rs") {
+                // For Rust, the tests are often in the same file
+                // We'll return the same file if it contains tests
+                if let Ok(content) = std::fs::read_to_string(mutated_file) {
+                    if content.contains("#[cfg(test)]") || content.contains("#[test]") {
+                        Some(mutated_file.to_string())
+                    } else {
+                        // Check for integration tests in tests/ directory
+                        let file_stem = std::path::Path::new(mutated_file)
+                            .file_stem()
+                            .and_then(|s| s.to_str())?;
+                        
+                        let test_file = format!("tests/{}.rs", file_stem);
+                        if std::path::Path::new(&test_file).exists() {
+                            Some(test_file)
+                        } else {
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         }
-    } else {
-        None
     }
 }
 

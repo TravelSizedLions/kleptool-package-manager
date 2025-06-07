@@ -29,9 +29,16 @@ async fn main() -> Result<()> {
   let temp_workspace = create_temp_workspace(&config)?;
   println!("🏗️  Created isolated workspace: {}", temp_workspace.display());
   
+  // Calculate the relative path of the source directory within the project
+  let project_root = std::env::current_dir()?;
+  let source_canonical = config.source_dir.canonicalize()?;
+  let project_canonical = project_root.canonicalize()?;
+  let source_relative = source_canonical.strip_prefix(&project_canonical)
+    .map_err(|_| anyhow::anyhow!("Source dir must be within project"))?;
+  
   // Update config to use temp workspace
   let mut temp_config = config.clone();
-  temp_config.source_dir = temp_workspace.join("src/cli");
+  temp_config.source_dir = temp_workspace.join(source_relative);
   
   // Print banner with the actual workspace being used
   print_startup_banner(&temp_config);
@@ -43,7 +50,7 @@ async fn main() -> Result<()> {
     run_baseline_validation(&components.runner).await?;
   }
 
-  let mutations = generate_mutations(&mut components, &target_files, &temp_config.source_dir, temp_config.verbose)?;
+  let mutations = generate_mutations(&mut components, &target_files, &config.source_dir, &temp_config, temp_config.verbose)?;
 
   if temp_config.dry_run {
     handle_dry_run(&mutations, temp_config.verbose);
@@ -160,8 +167,13 @@ fn initialize_components(config: &MutationConfig, workspace_dir: &PathBuf) -> Re
 
 /// Discover and validate target files
 fn discover_and_validate_files(config: &MutationConfig) -> Result<Vec<PathBuf>> {
-  println!("\n🔍 Discovering TypeScript files...");
-  let target_files = discover_target_files(&config.source_dir)?;
+  println!("\n🔍 Discovering {} files...", 
+    match config.language {
+      types::Language::TypeScript => "TypeScript",
+      types::Language::Rust => "Rust",
+    }
+  );
+  let target_files = discover_target_files(config)?;
   println!("🎯 Found {} files to analyze", target_files.len());
 
   if config.verbose {
@@ -186,10 +198,11 @@ fn generate_mutations(
   _components: &mut MutationComponents,
   _target_files: &[PathBuf],
   source_dir: &PathBuf,
+  config: &MutationConfig,
   verbose: bool,
 ) -> Result<Vec<types::Mutation>> {
   println!("\n🧬 Loading universalmutator mutations...");
-  let mutations = load_universalmutator_mutations(source_dir, verbose)?;
+  let mutations = load_universalmutator_mutations(source_dir, &config.language, verbose)?;
   println!("🎭 Loaded {} total mutations", mutations.len());
   Ok(mutations)
 }
@@ -377,23 +390,26 @@ fn generate_and_save_report(
   Ok(())
 }
 
-fn discover_target_files(source_dir: &PathBuf) -> Result<Vec<PathBuf>> {
+fn discover_target_files(config: &MutationConfig) -> Result<Vec<PathBuf>> {
   use walkdir::WalkDir;
 
-  let exclude_patterns = [
-    ".spec.ts",
-    ".test.ts",
-    "testing/moxxy/",
-    "testing/utils/",
-    "testing/setup/",
-  ];
+  let (target_extension, exclude_patterns) = match config.language {
+    types::Language::TypeScript => (
+      "ts",
+      vec![".spec.ts", ".test.ts", "testing/moxxy/", "testing/utils/", "testing/setup/"]
+    ),
+    types::Language::Rust => (
+      "rs", 
+      vec!["tests/", "target/", "examples/"] // Exclude test directories and build artifacts
+    ),
+  };
 
-  let files: Vec<PathBuf> = WalkDir::new(source_dir)
+  let files: Vec<PathBuf> = WalkDir::new(&config.source_dir)
     .into_iter()
     .filter_map(|entry| entry.ok())
     .filter(|entry| {
       let path = entry.path();
-      path.extension().is_some_and(|ext| ext == "ts")
+      path.extension().is_some_and(|ext| ext == target_extension)
         && !exclude_patterns
           .iter()
           .any(|pattern| path.to_string_lossy().contains(pattern))
@@ -405,12 +421,16 @@ fn discover_target_files(source_dir: &PathBuf) -> Result<Vec<PathBuf>> {
 }
 
 /// Load mutations from universalmutator-generated files
-fn load_universalmutator_mutations(source_dir: &PathBuf, _verbose: bool) -> Result<Vec<types::Mutation>> {
+fn load_universalmutator_mutations(source_dir: &PathBuf, language: &types::Language, _verbose: bool) -> Result<Vec<types::Mutation>> {
   use std::fs;
   
-  let mutations_dir = PathBuf::from(".mutations/typescript");
+  let (mutations_dir, file_extension) = match language {
+    types::Language::TypeScript => (PathBuf::from(".mutations/typescript"), "ts"),
+    types::Language::Rust => (PathBuf::from(".mutations/rust"), "rs"),
+  };
+  
   if !mutations_dir.exists() {
-    anyhow::bail!("❌ No mutations directory found at .mutations/typescript. Run pathogen:plan first!");
+    anyhow::bail!("❌ No mutations directory found at {}. Run pathogen:plan first!", mutations_dir.display());
   }
 
   let mut mutations = Vec::new();
@@ -421,15 +441,15 @@ fn load_universalmutator_mutations(source_dir: &PathBuf, _verbose: bool) -> Resu
     let entry = entry?;
     let path = entry.path();
     
-    if !path.extension().map_or(false, |ext| ext == "ts") {
+    if !path.extension().map_or(false, |ext| ext == file_extension) {
       continue;
     }
 
     // Removed verbose loading messages to reduce output noise
 
     // Parse the mutation file info from filename
-    // Format: originalfile.mutant.NUMBER.ts
-    if let Some(mutation) = parse_universalmutator_file(&path, source_dir, mutation_id_counter)? {
+    // Format: originalfile.mutant.NUMBER.ext
+    if let Some(mutation) = parse_universalmutator_file(&path, source_dir, mutation_id_counter, language)? {
       mutations.push(mutation);
       mutation_id_counter += 1;
     }
@@ -439,7 +459,7 @@ fn load_universalmutator_mutations(source_dir: &PathBuf, _verbose: bool) -> Resu
 }
 
 /// Parse a single universalmutator file into a Mutation struct
-fn parse_universalmutator_file(mutant_path: &PathBuf, source_dir: &PathBuf, id_counter: usize) -> Result<Option<types::Mutation>> {
+fn parse_universalmutator_file(mutant_path: &PathBuf, source_dir: &PathBuf, id_counter: usize, language: &types::Language) -> Result<Option<types::Mutation>> {
   use std::fs;
   
   // Extract original file and mutation number from filename
@@ -456,7 +476,7 @@ fn parse_universalmutator_file(mutant_path: &PathBuf, source_dir: &PathBuf, id_c
   let original_filename = parts[0]; // Just the base filename
   
   // Try to find the original file in the source tree
-  let original_file = find_original_file(original_filename, source_dir)?;
+  let original_file = find_original_file(original_filename, source_dir, language)?;
   
   // Read both original and mutant content
   let original_content = fs::read_to_string(&original_file)
@@ -478,16 +498,17 @@ fn parse_universalmutator_file(mutant_path: &PathBuf, source_dir: &PathBuf, id_c
     mutated: mutant_content, // Store the FULL mutated file content
     mutation_type: types::MutationType::ArithmeticOperator, // Default for now
     description: format!("universalmutator mutation: {} → {}", original_text, mutated_text),
+    language: language.clone(),
   };
   
   Ok(Some(mutation))
 }
 
 /// Find the original source file for a given base filename
-fn find_original_file(base_filename: &str, source_dir: &PathBuf) -> Result<PathBuf> {
+fn find_original_file(base_filename: &str, source_dir: &PathBuf, language: &types::Language) -> Result<PathBuf> {
   use std::fs;
   
-  let target_filename = format!("{}.ts", base_filename);
+  let target_filename = format!("{}.{}", base_filename, language.extension());
   
   // Search recursively in the provided source directory
   fn search_in_dir(dir: &PathBuf, target: &str) -> Option<PathBuf> {
