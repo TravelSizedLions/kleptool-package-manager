@@ -265,13 +265,19 @@ fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
     }
   }
 
-  // Step 2: Replace the symlinked source directory with actual copies (for mutation)
+  // Step 2: Replace symlinked source directory with actual copies (for mutation)
   let source_relative = source_canonical.strip_prefix(&project_canonical)
     .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Source dir must be within project"))?;
   
   let dst_source = temp_workspace.join(source_relative);
   
-  // Remove the symlinked subdirectory if it exists
+  // SAFETY: Only proceed if dst_source is clearly within temp_workspace
+  if !dst_source.starts_with(&temp_workspace) {
+    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, 
+      "Safety check failed: destination path not in temp workspace").into());
+  }
+  
+  // Remove the symlinked source directory and replace with actual copies
   if dst_source.exists() {
     if dst_source.is_dir() {
       fs::remove_dir_all(&dst_source)?;
