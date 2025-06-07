@@ -38,8 +38,8 @@
   // Test without colors (for CI/CD)
   'test:no-colors': "NO_COLOR=1 klep ts:test && klep rust:test",
 
-  // Generate coverage reports
-  coverage: "klep ts:coverage && klep rust:coverage",
+  // Generate behavioral coverage reports (mutation testing)
+  coverage: "klep mutation:v2:ci",
 
   // Check code quality (never-nester principles)
   quality: "cd src/rust && cargo build --release -p code-quality-checker && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10",
@@ -84,10 +84,6 @@
   'ts:test': 'bun test',
   'ts:test:win': 'KLEP_SIMULATE_WINDOWS=1 bun test',
   'rust:test': 'cd src/rust && cargo test --workspace',
-
-  // Coverage
-  'ts:coverage': 'bash scripts/filter-coverage.sh',
-  'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --out json --output-dir ../../coverage/rust --workspace',
 
   // CI/CD Tasks
   'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',

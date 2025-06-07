@@ -36,4 +36,3 @@ jobs:
         operation: compare
         github_token: ${{ secrets.GITHUB_TOKEN }}
         barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
-        coverage_type: mutation

@@ -36,7 +36,6 @@ jobs:
         operation: upload
         github_token: ${{ secrets.GITHUB_TOKEN }}
         barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
-        coverage_type: mutation
 
     - name: Create Behavioral Coverage Badges
       uses: ./.github/actions/handle-coverage
@@ -44,4 +43,3 @@ jobs:
         operation: badge
         github_token: ${{ secrets.GIST_TOKEN }}
         gist_id: ${{ secrets.GIST_ID }}
-        coverage_type: mutation
