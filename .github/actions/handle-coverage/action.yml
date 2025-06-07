@@ -1,5 +1,5 @@
 name: 'Coverage'
-description: 'Handles uploading and comparing behavioral coverage (mutation testing) for a pull request'
+description: 'Handles uploading and comparing behavioral coverage for a pull request'
 
 inputs:
   operation:
