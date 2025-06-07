@@ -65,7 +65,7 @@ export async function repositoryStat(url: string): Promise<RepositoryStat> {
       context: {
         'provided value': `"${url}"`,
         'example values': [
-          'https:/*github.com/username/repository.git',
+          'https://github.com/username/repository.git',
           'git@github.com:username/repository.git',
           '../path/to/local/repo',
           '/home/user/path/to/local/repo',

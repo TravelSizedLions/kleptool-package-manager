@@ -222,33 +222,133 @@ mod tests {
   use super::*;
   use std::io::Write;
   use tempfile::NamedTempFile;
+  use sha256;
 
   #[test]
   fn test_file_safety_basic_operations() -> Result<()> {
     let mut manager = SafeFileManager::new()?;
-
-    // Create a test file
-    let mut test_file = NamedTempFile::new()?;
-    writeln!(test_file, "const original = 'content';")?;
-    let test_path = test_file.path();
-
+    let temp_dir = tempfile::TempDir::new()?;
+    let test_file = temp_dir.path().join("test.ts");
+    
+    // Create test file with original content
+    let original_content = "const x = 5;";
+    fs::write(&test_file, original_content)?;
+    
     // Prepare file for mutation
-    let _temp_copy = manager.prepare_file_for_mutation(test_path)?;
-
-    // Apply mutation
-    let token = manager.apply_mutation_temporarily(test_path, "const mutated = 'content';")?;
-
+    let temp_copy = manager.prepare_file_for_mutation(&test_file)?;
+    assert!(temp_copy.exists());
+    
+    // Apply mutation temporarily
+    let mutated_content = "const x = 999;";
+    let token = manager.apply_mutation_temporarily(&test_file, mutated_content)?;
+    
     // Verify mutation was applied
-    let current_content = fs::read_to_string(test_path)?;
-    assert!(current_content.contains("mutated"));
-
+    let current_content = fs::read_to_string(&test_file)?;
+    assert_eq!(current_content, mutated_content);
+    
     // Restore file
     manager.restore_file(token)?;
+    
+    // Verify original content is restored
+    let restored_content = fs::read_to_string(&test_file)?;
+    assert_eq!(restored_content, original_content);
+    
+    Ok(())
+  }
 
-    // Verify restoration
-    let restored_content = fs::read_to_string(test_path)?;
-    assert!(restored_content.contains("original"));
+  #[test]
+  fn test_mutation_leak_protection() -> Result<()> {
+    let mut manager = SafeFileManager::new()?;
+    let temp_dir = tempfile::TempDir::new()?;
+    let test_file = temp_dir.path().join("mutation_leak_test.ts");
+    
+    // Create test file
+    let original_content = "https://github.com/username/repository.git";
+    fs::write(&test_file, original_content)?;
+    
+    // Record original content hash
+    let original_hash = sha256::digest(original_content);
+    
+    // Prepare for mutation
+    manager.prepare_file_for_mutation(&test_file)?;
+    
+    // Apply problematic mutation (like the one that leaked)
+    let mutated_content = "https:/*github.com/username/repository.git";
+    let token = manager.apply_mutation_temporarily(&test_file, mutated_content)?;
+    
+    // Verify mutation is applied
+    let current_content = fs::read_to_string(&test_file)?;
+    assert_eq!(current_content, mutated_content);
+    
+    // Restore immediately
+    manager.restore_file(token)?;
+    
+    // CRITICAL: Verify no mutation leaked
+    let final_content = fs::read_to_string(&test_file)?;
+    let final_hash = sha256::digest(&final_content);
+    
+    assert_eq!(final_content, original_content, "Mutation leaked! Content changed permanently");
+    assert_eq!(final_hash, original_hash, "File hash changed - mutation may have leaked");
+    
+    Ok(())
+  }
 
+  #[test]
+  fn test_emergency_restoration() -> Result<()> {
+    let mut manager = SafeFileManager::new()?;
+    let temp_dir = tempfile::TempDir::new()?;
+    let test_file = temp_dir.path().join("emergency_test.ts");
+    
+    let original_content = "const safe = true;";
+    fs::write(&test_file, original_content)?;
+    
+    manager.prepare_file_for_mutation(&test_file)?;
+    
+    // Apply mutation but DON'T restore normally (simulate failure)
+    let mutated_content = "const safe = false;";
+    let _token = manager.apply_mutation_temporarily(&test_file, mutated_content)?;
+    // Intentionally drop token without restoring
+    
+    // Emergency restore
+    manager.emergency_restore_all()?;
+    
+    // Verify restoration worked
+    let restored_content = fs::read_to_string(&test_file)?;
+    assert_eq!(restored_content, original_content);
+    
+    Ok(())
+  }
+
+  #[test]
+  fn test_auto_restore_on_token_drop() -> Result<()> {
+    let mut manager = SafeFileManager::new()?;
+    let temp_dir = tempfile::TempDir::new()?;
+    let test_file = temp_dir.path().join("auto_restore_test.ts");
+    
+    let original_content = "const auto = 'restore';";
+    fs::write(&test_file, original_content)?;
+    
+    manager.prepare_file_for_mutation(&test_file)?;
+    
+    {
+      // Apply mutation in limited scope
+      let mutated_content = "const auto = 'MUTATED';";
+      let _token = manager.apply_mutation_temporarily(&test_file, mutated_content)?;
+      
+      // Verify mutation applied
+      let current_content = fs::read_to_string(&test_file)?;
+      assert_eq!(current_content, mutated_content);
+      
+      // Token will be dropped here, triggering auto-restore
+    }
+    
+    // Give a moment for Drop to execute
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    
+    // Verify auto-restoration worked
+    let restored_content = fs::read_to_string(&test_file)?;
+    assert_eq!(restored_content, original_content);
+    
     Ok(())
   }
 }

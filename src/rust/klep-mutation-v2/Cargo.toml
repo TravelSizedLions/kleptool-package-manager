@@ -46,4 +46,5 @@ ahash = "0.8"          # Fast non-crypto hashing
 lru = "0.12"           # LRU cache for compiled artifacts
 
 [dev-dependencies]
-tempfile = "3.8" 
+tempfile = "3.8"
+sha256 = "1.4" 
