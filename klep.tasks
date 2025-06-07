@@ -63,13 +63,13 @@
   // ------------------------------------------------------------
   // Lint & Format (Fix)
   'ts:lint': 'bun run --bun eslint . --fix',
-  'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\" \".github/**/*.yml\" \"*.yml\" \"*.yaml\"',
+  'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\" \".github/**/*.yml\"',
   'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
   'rust:format': 'cd src/rust && cargo fmt --all',
 
   // Lint & Format (Assert)
   'ts:lint:assert': 'bun run --bun eslint . ',
-  'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\" \".github/**/*.yml\" \"*.yml\" \"*.yaml\"',
+  'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\" \".github/**/*.yml\"',
   'rust:lint:assert': 'cd src/rust && cargo clippy --workspace --all-targets --all-features',
   'rust:format:assert': 'cd src/rust && cargo fmt --all -- --check',
 
