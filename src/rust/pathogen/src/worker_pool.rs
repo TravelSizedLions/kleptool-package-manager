@@ -51,21 +51,8 @@ pub struct WorkerProcess {
 
 impl WorkerProcess {
   pub async fn new(workspace_dir: &PathBuf) -> Result<Self> {
-    // Spawn pathogen-worker directly using IPC communication
-    let worker_binary = std::env::current_exe()?
-      .parent()
-      .context("Failed to get binary directory")?
-      .join("pathogen-worker");
-
-    // Verify the worker binary exists before attempting to spawn
-    if !worker_binary.exists() {
-      anyhow::bail!(
-        "Worker binary not found at: {}\nCurrent exe: {:?}\nBinary dir: {:?}",
-        worker_binary.display(),
-        std::env::current_exe()?,
-        std::env::current_exe()?.parent()
-      );
-    }
+    // Try to find pathogen-worker binary in multiple locations
+    let worker_binary = Self::__find_worker_binary()?;
 
     let mut child = Command::new(&worker_binary)
       .current_dir(workspace_dir)
@@ -112,6 +99,41 @@ impl WorkerProcess {
       created_at: Instant::now(),
       executions: 0,
     })
+  }
+
+  fn __find_worker_binary() -> Result<std::path::PathBuf> {
+    let current_exe = std::env::current_exe()
+      .context("Failed to get current executable path")?;
+    
+    let exe_dir = current_exe.parent()
+      .context("Failed to get binary directory")?;
+
+    // Try different possible locations for the worker binary
+    let possible_paths = vec![
+      // 1. Same directory as current executable (installed/release case)
+      exe_dir.join("pathogen-worker"),
+      exe_dir.join("pathogen-worker.exe"), // Windows
+      
+      // 2. In target/release or target/debug during development
+      exe_dir.join("../target/release/pathogen-worker"),
+      exe_dir.join("../target/debug/pathogen-worker"),
+      exe_dir.join("../target/release/pathogen-worker.exe"), // Windows
+      exe_dir.join("../target/debug/pathogen-worker.exe"), // Windows
+      
+      // 3. In the same target directory (most likely for Cargo builds)
+      exe_dir.join("pathogen-worker"),
+      exe_dir.join("pathogen-worker.exe"), // Windows
+    ];
+
+    for path in &possible_paths {
+      if path.exists() {
+        return Ok(path.clone());
+      }
+    }
+
+    // If we can't find it by path, try just the binary name
+    // This will work if pathogen-worker is in PATH or same directory
+    Ok("pathogen-worker".into())
   }
 
   fn spawn_writer_task(
