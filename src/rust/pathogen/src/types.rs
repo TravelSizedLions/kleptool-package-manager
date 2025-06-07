@@ -153,7 +153,7 @@ pub struct MutationResult {
 }
 
 /// Classification of how a mutation was killed
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum KillType {
   /// Tests passed, mutation survived
   Survived,

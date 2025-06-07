@@ -9,12 +9,14 @@ mod file_safety;
 mod mutation_engine;
 mod mutation_runner;
 mod types;
+mod worker_pool;
 
 use ast_parser::TypeScriptParser;
 use file_safety::SafeFileManager;
 use mutation_engine::MutationEngine;
 use mutation_runner::MutationRunner;
 use types::{FileStats, KillType, MutationConfig, MutationStats};
+use worker_pool::WorkerPool;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -48,7 +50,7 @@ async fn main() -> Result<()> {
     return Ok(());
   }
 
-  let results = run_mutation_tests(&components.runner, mutations, temp_config.verbose).await?;
+  let results = run_mutation_tests(&temp_workspace, mutations, temp_config.parallel_count, temp_config.verbose).await?;
   let duration = start_time.elapsed();
 
   generate_and_save_report(&results, &target_files, duration, &temp_config)?;
@@ -212,11 +214,18 @@ fn handle_dry_run(mutations: &[types::Mutation], verbose: bool) {
 
 /// Run mutation tests
 async fn run_mutation_tests(
-  runner: &MutationRunner,
+  workspace_dir: &PathBuf,
   mutations: Vec<types::Mutation>,
+  parallel_count: usize,
   verbose: bool,
 ) -> Result<Vec<types::MutationResult>> {
-  runner.run_mutations_safely(mutations, verbose).await
+  println!("\n🧪 Starting mutation testing with {} workers...", parallel_count);
+  
+  let worker_pool = WorkerPool::new(parallel_count, workspace_dir.clone()).await?;
+  let results = worker_pool.run_mutations(mutations, verbose).await?;
+  worker_pool.shutdown().await?;
+  
+  Ok(results)
 }
 
 /// Create an isolated temp workspace by copying necessary project files
@@ -281,7 +290,7 @@ fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
   // Solution: Remove the parent symlink and rebuild the structure manually
   
   // Find the top-level directory that was symlinked (e.g., 'src' if source is 'src/cli')
-  let mut source_parts: Vec<_> = source_relative.components().collect();
+  let source_parts: Vec<_> = source_relative.components().collect();
   if source_parts.is_empty() {
     return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Empty source path").into());
   }
@@ -396,7 +405,7 @@ fn discover_target_files(source_dir: &PathBuf) -> Result<Vec<PathBuf>> {
 }
 
 /// Load mutations from universalmutator-generated files
-fn load_universalmutator_mutations(source_dir: &PathBuf, verbose: bool) -> Result<Vec<types::Mutation>> {
+fn load_universalmutator_mutations(source_dir: &PathBuf, _verbose: bool) -> Result<Vec<types::Mutation>> {
   use std::fs;
   
   let mutations_dir = PathBuf::from(".mutations/typescript");
@@ -416,13 +425,7 @@ fn load_universalmutator_mutations(source_dir: &PathBuf, verbose: bool) -> Resul
       continue;
     }
 
-    let filename = path.file_name()
-      .and_then(|f| f.to_str())
-      .unwrap_or("unknown");
-
-    if verbose {
-      println!("   🔍 Loading: {}", filename);
-    }
+    // Removed verbose loading messages to reduce output noise
 
     // Parse the mutation file info from filename
     // Format: originalfile.mutant.NUMBER.ts
