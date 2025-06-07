@@ -23,7 +23,7 @@
 
   // Lint & Format the project
   lint: "klep ts:lint && klep rust:lint",
-  format: "klep ts:format && klep rust:format",
+  format: "klep ts:format && klep rust:format && klep endlines:fix",
   tidy: 'klep lint && klep format',
 
   // Security Audit
@@ -38,33 +38,38 @@
   // Test without colors (for CI/CD)
   'test:no-colors': "NO_COLOR=1 klep ts:test && klep rust:test",
 
-  // Generate coverage reports
-  coverage: "klep ts:coverage && klep rust:coverage",
+  // Generate behavioral coverage reports (mutation testing)
+  coverage: "klep pathogen",
 
   // Check code quality (never-nester principles)
-  quality: "cd src/rust && cargo build --release -p code-quality-checker && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10",
+  quality: "cd src/rust && cargo build --release -p code-quality-checker && ./target/release/code-quality-checker check ../../src --max-depth 3 --max-length 100 --max-complexity 10 && ./target/release/code-quality-checker check ../../scripts --max-depth 3 --max-length 100 --max-complexity 10",
 
-  // Simulate a CI pipeline  
+  // Fast CI pipeline (essential checks that can cause workflow failures)
   ci: 'klep ci:tidy && klep ci:build && klep ci:typecheck && klep quality && klep ci:secure && klep test && klep test:win',
+
+  // Thorough CI pipeline (complete local CI/CD simulation including mutation testing)
+  'ci:all': 'klep ci && klep coverage',
 
   // Git Tasks
   'git:del:all': 'git checkout dev && git branch | grep -v "dev" | xargs git branch -D',
-  'tweak' : 'git add . && git commit -m "tweaks" && git push',
+  'tweak' : 'klep tidy && klep ci && git add . && git commit -m "tweaks" && git push',
 
   // ------------------------------------------------------------
   // Sub-tasks
   // ------------------------------------------------------------
   // Lint & Format (Fix)
   'ts:lint': 'bun run --bun eslint . --fix',
-  'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\"',
+  'ts:format': 'bun run --bun prettier --write \"src/**/*.ts\" \".github/**/*.yml\"',
   'rust:lint': 'cd src/rust && cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged',
   'rust:format': 'cd src/rust && cargo fmt --all',
+  'endlines:fix': 'bash scripts/ensure-final-newlines.sh --fix',
 
   // Lint & Format (Assert)
   'ts:lint:assert': 'bun run --bun eslint . ',
-  'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\"',
-  'rust:lint:assert': 'cd src/rust && cargo clippy --workspace --all-targets --all-features',
+  'ts:format:assert': 'bun run --bun prettier --check \"src/**/*.ts\" \".github/**/*.yml\"',
+  'rust:lint:assert': 'cd src/rust && RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --all-features',
   'rust:format:assert': 'cd src/rust && cargo fmt --all -- --check',
+  'endlines': 'bash scripts/ensure-final-newlines.sh --check',
 
   // Build and/or clean the Rust code
   'rust:build': "cd src/rust && cargo build --release && cd ..",
@@ -85,13 +90,16 @@
   'ts:test:win': 'KLEP_SIMULATE_WINDOWS=1 bun test',
   'rust:test': 'cd src/rust && cargo test --workspace',
 
-  // Coverage
-  'ts:coverage': 'bash scripts/filter-coverage.sh',
-  'rust:coverage': 'cd src/rust && cargo tarpaulin --out lcov --out json --output-dir ../../coverage/rust --workspace',
-
   // CI/CD Tasks
-  'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert',
+  'ci:tidy': 'klep ts:lint:assert && klep ts:format:assert && klep rust:lint:assert && klep rust:format:assert && bash scripts/ensure-final-newlines.sh --check',
   'ci:build': 'klep build',
   'ci:secure': 'klep ts:audit && klep rust:audit',
   'ci:typecheck': 'bun run --bun tsc --noEmit',
+  'ci:mutation': 'klep pathogen',
+
+  // Pathogen (Mutation Testing)
+  'pathogen:plan': 'bash scripts/pathogen-plan.sh',
+  'pathogen:test': 'src/rust/target/release/pathogen --source src/cli --output pathogen-report.json --parallel $(( $(nproc) * 2 ))',
+  'pathogen:aggregate': 'bash scripts/pathogen-aggregate.sh',
+  pathogen: 'klep pathogen:plan && klep pathogen:test && klep pathogen:aggregate',
 }

@@ -20,6 +20,9 @@ fi
 
 echo "Resolving thread: $THREAD_ID"
 
+# Unset PAGER to prevent shell pipe issues with gh CLI
+unset PAGER
+
 # Use GraphQL mutation to resolve the thread
 gh api graphql -f query='
 mutation($threadId: ID!) {

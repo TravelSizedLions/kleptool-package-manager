@@ -1,36 +1,36 @@
 version: 2
 updates:
   # Enable version updates for Bun (Node.js/TypeScript)
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "bun"
-      include: "scope"
+      prefix: 'bun'
+      include: 'scope'
 
   # Enable version updates for Cargo (Rust)
-  - package-ecosystem: "cargo"
-    directory: "/src/rust"
+  - package-ecosystem: 'cargo'
+    directory: '/src/rust'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "cargo"
-      include: "scope"
+      prefix: 'cargo'
+      include: 'scope'
 
   # Enable version updates for GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
     open-pull-requests-limit: 3
     commit-message:
-      prefix: "ci" 
+      prefix: 'ci'

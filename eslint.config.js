@@ -5,6 +5,17 @@ import prettierConfig from 'eslint-config-prettier';
 import prettierPlugin from 'eslint-plugin-prettier';
 
 export default [
+  // Global ignores - placed before any other configurations
+  {
+    ignores: [
+      'node_modules/**',
+      '.mutations/**',
+      'coverage/**',
+      'dist/**',
+      'build/**'
+    ]
+  },
+
   js.configs.recommended,
   
   {
@@ -37,6 +48,9 @@ export default [
       prettier: prettierPlugin,
     },
     rules: {
+      // File formatting rules
+      'eol-last': ['error', 'always'],
+      
       // Prettier integration
       'prettier/prettier': 'error',
       
@@ -102,6 +116,9 @@ export default [
       prettier: prettierPlugin,
     },
     rules: {
+      // File formatting rules
+      'eol-last': ['error', 'always'],
+      
       // Prettier integration
       'prettier/prettier': 'error',
       
