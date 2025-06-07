@@ -274,10 +274,15 @@ async fn run_mutation_tests(
 fn create_temp_workspace(config: &MutationConfig) -> Result<PathBuf> {
   let temp_workspace = __setup_temp_directory()?;
   let (project_root, source_canonical, project_canonical) = __resolve_workspace_paths(config)?;
-  
+
   __symlink_project_files(&project_root, &temp_workspace)?;
-  __setup_source_directory_for_mutation(config, &temp_workspace, &source_canonical, &project_canonical)?;
-  
+  __setup_source_directory_for_mutation(
+    config,
+    &temp_workspace,
+    &source_canonical,
+    &project_canonical,
+  )?;
+
   Ok(temp_workspace)
 }
 
@@ -288,10 +293,10 @@ fn __setup_temp_directory() -> Result<PathBuf> {
   let temp_dir = tempdir()?;
   let temp_workspace = temp_dir.path().join("pathogen-workspace");
   fs::create_dir_all(&temp_workspace)?;
-  
+
   // Keep the temp directory alive by forgetting the tempdir handle
   std::mem::forget(temp_dir);
-  
+
   Ok(temp_workspace)
 }
 
@@ -322,9 +327,9 @@ fn __symlink_project_files(project_root: &PathBuf, temp_workspace: &PathBuf) -> 
 }
 
 fn __should_skip_file(name: &str) -> bool {
-  name.starts_with('.') 
-    || name == "target" 
-    || name.starts_with("tmp") 
+  name.starts_with('.')
+    || name == "target"
+    || name.starts_with("tmp")
     || name == "node_modules/.cache"
 }
 
@@ -360,7 +365,10 @@ fn __setup_source_directory_for_mutation(
   Ok(())
 }
 
-fn __get_source_relative_path(source_canonical: &PathBuf, project_canonical: &PathBuf) -> Result<PathBuf> {
+fn __get_source_relative_path(
+  source_canonical: &PathBuf,
+  project_canonical: &PathBuf,
+) -> Result<PathBuf> {
   source_canonical
     .strip_prefix(project_canonical)
     .map(|p| p.to_path_buf())
@@ -368,7 +376,8 @@ fn __get_source_relative_path(source_canonical: &PathBuf, project_canonical: &Pa
       std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
         "Source dir must be within project",
-      ).into()
+      )
+      .into()
     })
 }
 
@@ -378,7 +387,8 @@ fn __validate_destination_path(dst_path: &PathBuf, temp_workspace: &PathBuf) -> 
       std::io::Error::new(
         std::io::ErrorKind::InvalidInput,
         "Safety check failed: destination path not in temp workspace",
-      ).into(),
+      )
+      .into(),
     );
   }
   Ok(())
@@ -630,15 +640,15 @@ fn __recursive_file_search(dir: &PathBuf, target: &str) -> Option<PathBuf> {
   use std::fs;
 
   let entries = fs::read_dir(dir).ok()?;
-  
+
   for entry in entries.flatten() {
     let path = entry.path();
-    
+
     if let Some(found) = __check_entry_for_target(&path, target) {
       return Some(found);
     }
   }
-  
+
   None
 }
 
@@ -646,16 +656,17 @@ fn __check_entry_for_target(path: &PathBuf, target: &str) -> Option<PathBuf> {
   if path.is_file() {
     return __check_if_target_file(path, target);
   }
-  
+
   if path.is_dir() {
     return __recursive_file_search(path, target);
   }
-  
+
   None
 }
 
 fn __check_if_target_file(path: &PathBuf, target: &str) -> Option<PathBuf> {
-  path.file_name()
+  path
+    .file_name()
     .filter(|name| *name == target)
     .map(|_| path.clone())
 }
@@ -1094,11 +1105,11 @@ fn __check_timeout_patterns(results: &[types::MutationResult], stats: &SummarySt
   0
 }
 
-fn __check_execution_time_anomalies(results: &[types::MutationResult], stats: &SummaryStats) -> u32 {
-  let very_fast_mutations = results
-    .iter()
-    .filter(|r| r.execution_time_ms < 10)
-    .count();
+fn __check_execution_time_anomalies(
+  results: &[types::MutationResult],
+  stats: &SummaryStats,
+) -> u32 {
+  let very_fast_mutations = results.iter().filter(|r| r.execution_time_ms < 10).count();
 
   if very_fast_mutations > stats.total / 10 {
     println!(

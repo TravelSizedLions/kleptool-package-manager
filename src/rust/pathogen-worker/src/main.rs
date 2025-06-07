@@ -161,7 +161,11 @@ fn __create_test_result(
   }
 }
 
-fn __handle_successful_test(output: String, execution_time_ms: u64, mutation_id: String) -> TestResult {
+fn __handle_successful_test(
+  output: String,
+  execution_time_ms: u64,
+  mutation_id: String,
+) -> TestResult {
   let has_test_matches = !output.contains("had no matches");
   let tests_passed = output.contains("0 fail");
 
@@ -246,10 +250,7 @@ fn __add_language_specific_args(child: &mut Command, language: &Language, test_f
   }
 }
 
-async fn __execute_test_with_timeout(
-  child: Child,
-  timeout_secs: u64,
-) -> Result<String, String> {
+async fn __execute_test_with_timeout(child: Child, timeout_secs: u64) -> Result<String, String> {
   let timeout = std::time::Duration::from_secs(timeout_secs);
   let output = match tokio::time::timeout(timeout, async move { child.wait_with_output() }).await {
     Ok(Ok(output)) => output,

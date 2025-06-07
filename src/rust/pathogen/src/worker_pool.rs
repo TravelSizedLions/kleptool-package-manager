@@ -1,8 +1,10 @@
 use crate::types::Language;
 use anyhow::{Context, Result};
+use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::process::{Child, Command};
@@ -142,52 +144,70 @@ impl WorkerProcess {
   }
 
   pub async fn execute_mutation(&mut self, request: MutationRequest) -> Result<TestResult> {
-    // Send mutation request
+    self.__send_mutation_request(&request).await?;
+
+    let timeout = std::time::Duration::from_secs(10);
+    match self.__execute_with_timeout(timeout).await {
+      Ok(result) => result,
+      Err(_) => self.__handle_worker_timeout(timeout, &request).await,
+    }
+  }
+
+  async fn __send_mutation_request(&mut self, request: &MutationRequest) -> Result<()> {
     let message = WorkerMessage::MutationRequest(request.clone());
     let json = serde_json::to_string(&message)?;
 
     self
       .sender
       .send(json)
-      .map_err(|_| anyhow::anyhow!("Failed to send message to worker"))?;
+      .map_err(|_| anyhow::anyhow!("Failed to send message to worker"))
+  }
 
-    // Apply timeout at worker level (10 seconds total, including test execution)
-    let timeout = std::time::Duration::from_secs(10);
-    match tokio::time::timeout(timeout, async {
-      if let Some(response_line) = self.receiver.recv().await {
-        match serde_json::from_str::<WorkerResponse>(&response_line)? {
-          WorkerResponse::TestResult(result) => {
-            self.executions += 1;
-            Ok(result)
-          }
-          WorkerResponse::Error(error) => {
-            anyhow::bail!("Worker error: {}", error);
-          }
-          other => {
-            anyhow::bail!("Unexpected response from worker: {:?}", other);
-          }
-        }
-      } else {
-        anyhow::bail!("Worker process died")
+  async fn __execute_with_timeout(
+    &mut self,
+    timeout: std::time::Duration,
+  ) -> Result<Result<TestResult>, tokio::time::error::Elapsed> {
+    tokio::time::timeout(timeout, async { self.__wait_for_worker_response().await }).await
+  }
+
+  async fn __wait_for_worker_response(&mut self) -> Result<TestResult> {
+    if let Some(response_line) = self.receiver.recv().await {
+      self.__process_worker_response(&response_line)
+    } else {
+      anyhow::bail!("Worker process died")
+    }
+  }
+
+  fn __process_worker_response(&mut self, response_line: &str) -> Result<TestResult> {
+    match serde_json::from_str::<WorkerResponse>(response_line)? {
+      WorkerResponse::TestResult(result) => {
+        self.executions += 1;
+        Ok(result)
       }
-    })
-    .await
-    {
-      Ok(result) => result,
-      Err(_) => {
-        // Timeout occurred - kill this worker and return a timeout result
-        let _ = self.child.kill().await;
-        Ok(TestResult {
-          success: false,
-          output: format!(
-            "Worker timeout after {} seconds (likely infinite loop mutation)",
-            timeout.as_secs()
-          ),
-          execution_time_ms: timeout.as_millis() as u64,
-          mutation_id: request.mutation_id,
-        })
+      WorkerResponse::Error(error) => {
+        anyhow::bail!("Worker error: {}", error);
+      }
+      other => {
+        anyhow::bail!("Unexpected response from worker: {:?}", other);
       }
     }
+  }
+
+  async fn __handle_worker_timeout(
+    &mut self,
+    timeout: std::time::Duration,
+    request: &MutationRequest,
+  ) -> Result<TestResult> {
+    let _ = self.child.kill().await;
+    Ok(TestResult {
+      success: false,
+      output: format!(
+        "Worker timeout after {} seconds (likely infinite loop mutation)",
+        timeout.as_secs()
+      ),
+      execution_time_ms: timeout.as_millis() as u64,
+      mutation_id: request.mutation_id.clone(),
+    })
   }
 
   pub fn is_healthy(&mut self) -> bool {
@@ -270,7 +290,6 @@ impl WorkerPool {
   ) -> Result<Vec<crate::types::MutationResult>> {
     use futures::stream::{FuturesUnordered, StreamExt};
     use indicatif::{ProgressBar, ProgressStyle};
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     let total = mutations.len();
     println!(
@@ -297,52 +316,9 @@ impl WorkerPool {
         let progress = progress.clone();
         let completed = completed.clone();
         async move {
-          let language = mutation.language; // Copy the language before moving mutation
-          let request = MutationRequest {
-            file_path: mutation.file.to_string_lossy().to_string(),
-            mutated_content: mutation.mutated.clone(),
-            mutation_id: mutation.id.clone(),
-            workspace_dir: self.workspace_dir.to_string_lossy().to_string(),
-            language,
-          };
-
-          let test_result = pool.execute_mutation(request).await?;
-
-          // Update progress
-          let current = completed.fetch_add(1, Ordering::Relaxed) + 1;
-          progress.set_position(current as u64);
-
-          // Convert to MutationResult
-          let kill_type = if test_result.success {
-            crate::types::KillType::Survived
-          } else {
-            // Better classification based on error prefixes
-            if test_result.output.starts_with("TIMEOUT:")
-              || test_result.output.starts_with("FILE_ERROR:")
-              || test_result.output.starts_with("EXECUTION_ERROR:")
-            {
-              // These are not behavioral kills - they're inconclusive/system errors
-              // For now, treat them as compile errors to separate from behavioral kills
-              crate::types::KillType::CompileError
-            } else if test_result.output.contains("compilation")
-              || test_result.output.contains("syntax")
-              || test_result.output.contains("SyntaxError")
-              || test_result.output.contains("TypeError")
-              || test_result.output.contains("ReferenceError")
-            {
-              crate::types::KillType::CompileError
-            } else {
-              crate::types::KillType::BehavioralKill
-            }
-          };
-
-          Ok::<crate::types::MutationResult, anyhow::Error>(crate::types::MutationResult {
-            mutation,
-            killed: kill_type != crate::types::KillType::Survived,
-            kill_type,
-            test_output: test_result.output,
-            execution_time_ms: test_result.execution_time_ms,
-          })
+          pool
+            .__execute_single_mutation(mutation, pool, progress, completed)
+            .await
         }
       })
       .collect();
@@ -357,6 +333,71 @@ impl WorkerPool {
     }
 
     Ok(mutation_results)
+  }
+
+  async fn __execute_single_mutation(
+    &self,
+    mutation: crate::types::Mutation,
+    pool: &WorkerPool,
+    progress: ProgressBar,
+    completed: Arc<AtomicUsize>,
+  ) -> Result<crate::types::MutationResult> {
+    let request = self.__create_mutation_request(&mutation);
+    let test_result = pool.execute_mutation(request).await?;
+
+    self.__update_progress(completed, progress);
+    let kill_type = self.__classify_kill_type(&test_result);
+
+    Ok(crate::types::MutationResult {
+      mutation,
+      killed: kill_type != crate::types::KillType::Survived,
+      kill_type,
+      test_output: test_result.output,
+      execution_time_ms: test_result.execution_time_ms,
+    })
+  }
+
+  fn __create_mutation_request(&self, mutation: &crate::types::Mutation) -> MutationRequest {
+    MutationRequest {
+      file_path: mutation.file.to_string_lossy().to_string(),
+      mutated_content: mutation.mutated.clone(),
+      mutation_id: mutation.id.clone(),
+      workspace_dir: self.workspace_dir.to_string_lossy().to_string(),
+      language: mutation.language,
+    }
+  }
+
+  fn __update_progress(&self, completed: Arc<AtomicUsize>, progress: ProgressBar) {
+    let current = completed.fetch_add(1, Ordering::Relaxed) + 1;
+    progress.set_position(current as u64);
+  }
+
+  fn __classify_kill_type(&self, test_result: &TestResult) -> crate::types::KillType {
+    if test_result.success {
+      return crate::types::KillType::Survived;
+    }
+
+    if self.__is_system_error(&test_result.output) {
+      crate::types::KillType::CompileError
+    } else if self.__is_compilation_error(&test_result.output) {
+      crate::types::KillType::CompileError
+    } else {
+      crate::types::KillType::BehavioralKill
+    }
+  }
+
+  fn __is_system_error(&self, output: &str) -> bool {
+    output.starts_with("TIMEOUT:")
+      || output.starts_with("FILE_ERROR:")
+      || output.starts_with("EXECUTION_ERROR:")
+  }
+
+  fn __is_compilation_error(&self, output: &str) -> bool {
+    output.contains("compilation")
+      || output.contains("syntax")
+      || output.contains("SyntaxError")
+      || output.contains("TypeError")
+      || output.contains("ReferenceError")
   }
 
   async fn get_worker(&self) -> Result<WorkerProcess> {

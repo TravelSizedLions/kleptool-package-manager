@@ -51,23 +51,50 @@ impl MutationConfig {
 }
 
 fn detect_language_from_directory(dir: &PathBuf) -> anyhow::Result<Language> {
-  // Count files by extension to determine primary language
-  let mut extension_counts: HashMap<String, usize> = HashMap::new();
+  let extension_counts = __count_file_extensions(dir)?;
+  __determine_primary_language(&extension_counts)
+}
 
-  if dir.exists() && dir.is_dir() {
-    for entry in std::fs::read_dir(dir)? {
-      let entry = entry?;
-      let path = entry.path();
+fn __count_file_extensions(dir: &PathBuf) -> anyhow::Result<HashMap<String, usize>> {
+  let mut extension_counts = HashMap::new();
 
-      if path.is_file() {
-        if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-          *extension_counts.entry(extension.to_string()).or_insert(0) += 1;
-        }
-      }
-    }
+  if !dir.exists() || !dir.is_dir() {
+    return Ok(extension_counts);
   }
 
-  // Determine language based on file counts
+  for entry in std::fs::read_dir(dir)? {
+    let entry = entry?;
+    __process_directory_entry(&entry, &mut extension_counts);
+  }
+
+  Ok(extension_counts)
+}
+
+fn __process_directory_entry(
+  entry: &std::fs::DirEntry,
+  extension_counts: &mut HashMap<String, usize>,
+) {
+  let path = entry.path();
+
+  if !path.is_file() {
+    return;
+  }
+
+  if let Some(extension) = __extract_file_extension(&path) {
+    *extension_counts.entry(extension).or_insert(0) += 1;
+  }
+}
+
+fn __extract_file_extension(path: &PathBuf) -> Option<String> {
+  path
+    .extension()
+    .and_then(|ext| ext.to_str())
+    .map(|s| s.to_string())
+}
+
+fn __determine_primary_language(
+  extension_counts: &HashMap<String, usize>,
+) -> anyhow::Result<Language> {
   let ts_count = extension_counts.get("ts").unwrap_or(&0);
   let rs_count = extension_counts.get("rs").unwrap_or(&0);
 
