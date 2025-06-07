@@ -274,40 +274,6 @@ async fn __execute_test_with_timeout(child: Child, timeout_secs: u64) -> Result<
   }
 }
 
-async fn run_full_test_suite(workspace_dir: &PathBuf) -> Result<String, String> {
-  // Fallback to full test suite with timeout
-  let child = Command::new("klep")
-    .arg("ts:test")
-    .current_dir(workspace_dir)
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|e| format!("Failed to spawn full test command: {}", e))?;
-
-  // Longer timeout for full test suite (30 seconds)
-  let timeout = std::time::Duration::from_secs(30);
-  let output = match tokio::time::timeout(timeout, async move { child.wait_with_output() }).await {
-    Ok(Ok(output)) => output,
-    Ok(Err(e)) => return Err(format!("Failed to get test output: {}", e)),
-    Err(_) => {
-      return Err(format!(
-        "Full test suite timed out after {} seconds (likely infinite loop)",
-        timeout.as_secs()
-      ));
-    }
-  };
-
-  if output.status.success() {
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-  } else {
-    Err(format!(
-      "{}\n{}",
-      String::from_utf8_lossy(&output.stdout),
-      String::from_utf8_lossy(&output.stderr)
-    ))
-  }
-}
-
 fn get_target_test_file(mutated_file: &str, language: &Language) -> Option<String> {
   match language {
     Language::TypeScript => __get_typescript_test_file(mutated_file),
