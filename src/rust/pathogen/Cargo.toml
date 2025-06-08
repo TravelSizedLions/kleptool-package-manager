@@ -56,7 +56,7 @@ chrono = { version = "0.4", features = ["serde"] }
 # Performance optimization dependencies
 memmap2 = "0.9"        # Memory-mapped file I/O
 ahash = "0.8"          # Fast non-crypto hashing
-lru = "0.12"           # LRU cache for compiled artifacts
+lru = "0.14"           # LRU cache for compiled artifacts
 
 # Progress reporting
 indicatif = "0.17"     # Progress bars and spinners
