@@ -23,24 +23,45 @@ validate_env_vars() {
 }
 
 # Function to log with emoji prefix
+log() {
+  echo "$1" >&2
+  add_lines "$2"
+}
+
 log_info() {
   echo "ℹ️  $1" >&2
+  add_lines "$2"
 }
 
 log_success() {
   echo "✅ $1" >&2
+  add_lines "$2"
 }
 
 log_warning() {
   echo "⚠️  $1" >&2
+  add_lines "$2"
 }
 
 log_error() {
   echo "❌ $1" >&2
+  add_lines "$2"
 }
 
 log_step() {
   echo "🔧 $1" >&2
+  add_lines "$2"
+}
+
+add_lines() {
+  local lines=$1
+  if [[ -z "$lines" ]]; then
+    return
+  fi
+
+  for i in $(seq 1 $lines); do
+    echo "" >&2
+  done
 }
 
 # Function to determine badge color based on coverage percentage

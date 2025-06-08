@@ -146,7 +146,7 @@ fn print_startup_banner(config: &MutationConfig) {
       println!("Cache disabled - All tests will run fresh");
     }
   } else {
-    println!("Pathogen v{} - {} workers", env!("CARGO_PKG_VERSION"), config.parallel_count);
+    println!("🧬 Pathogen v{}", env!("CARGO_PKG_VERSION"));
   }
 }
 
@@ -212,11 +212,6 @@ async fn run_mutation_tests(
   parallel_count: usize,
   verbose: bool,
 ) -> Result<Vec<types::MutationResult>> {
-  println!(
-    "\n🧪 Starting mutation testing with {} workers...",
-    parallel_count
-  );
-
   let worker_pool = WorkerPool::new(parallel_count, workspace_dir.to_path_buf()).await?;
   let results = worker_pool.run_mutations(mutations, verbose).await?;
   worker_pool.shutdown().await?;
@@ -822,6 +817,7 @@ fn build_file_stats(file_path: String, file_mutations: Vec<&types::MutationResul
 /// Print the summary report header
 fn print_summary_report(stats: &SummaryStats, duration: std::time::Duration) {
   println!();
+  println!();
   println!("Mutation Testing Results");
   println!("─────────────────────────");
   let viable_mutations = stats.total - stats.compile_errors;
@@ -831,7 +827,6 @@ fn print_summary_report(stats: &SummaryStats, duration: std::time::Duration) {
     println!("Compile errors: {} (excluded from quality calculation)", stats.compile_errors);
   }
   println!("Survived: {}", stats.survived);
-  println!("Test quality: {:.1}%", stats.behavioral_rate);
   println!("Duration: {:.1}s ({:.1} mut/sec)", 
     duration.as_secs_f64(), 
     stats.total as f64 / duration.as_secs_f64()
@@ -841,30 +836,18 @@ fn print_summary_report(stats: &SummaryStats, duration: std::time::Duration) {
 /// Print per-file breakdown in table format
 fn print_per_file_breakdown(per_file_stats: &[FileStats]) {
   println!();
-  println!("Per-file results:");
-  
-  // Only show files with survivors or low behavioral kill rates
-  let problematic_files: Vec<_> = per_file_stats
-    .iter()
-    .filter(|fs| fs.kill_rate < 95.0 && fs.total_mutations > 0)
-    .collect();
+  println!("{}", "-".repeat(80));
+  println!(
+    "{:<41} {:>8} {:>8} {:>9} {:>9}",
+    "File", "Total", "Killed", "Survived", "Quality"
+  );
+  println!("{}", "-".repeat(80));
 
-  if problematic_files.is_empty() {
-    println!("All files have excellent test coverage (≥95% behavioral kill rate)");
-  } else {
-    for file_stat in problematic_files {
-      let short_path = file_stat.file_path
-        .replace("src/cli/", "")
-        .replace("/tmp/", "")
-        .split("/pathogen-workspace/")
-        .last()
-        .unwrap_or(&file_stat.file_path)
-        .to_string();
-      
-      println!("  {} - {:.0}% behavioral kills ({} survivors)", 
-        short_path, file_stat.kill_rate, file_stat.survived);
-    }
+  for file_stat in per_file_stats {
+    print_file_table_row(file_stat);
   }
+
+  println!("{}", "-".repeat(80));
 }
 
 /// Print a single file's stats as a table row
@@ -895,17 +878,17 @@ fn print_file_table_row(file_stat: &FileStats) {
     status_icon,
     truncated_path,
     file_stat.total_mutations,
-    file_stat.behavioral_kills + file_stat.compile_errors,
+    file_stat.behavioral_kills,
     file_stat.survived,
     file_stat.kill_rate
   );
 }
 
-/// Get status icon based on kill rate
-fn get_status_icon(kill_rate: f64) -> &'static str {
-  if kill_rate >= 95.0 {
+/// Get status icon based on behavioral kill rate
+fn get_status_icon(behavioral_kill_rate: f64) -> &'static str {
+  if behavioral_kill_rate >= 95.0 {
     "🟢"
-  } else if kill_rate >= 80.0 {
+  } else if behavioral_kill_rate >= 80.0 {
     "🟡"
   } else {
     "🔴"

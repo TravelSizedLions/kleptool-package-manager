@@ -5,10 +5,12 @@
 
 set -e
 
+source ./scripts/common.sh
+
 # Create mutations directory
 mkdir -p .mutations/typescript
 
-echo "🧬 Generating mutations..."
+log "Generating mutations..." 1
 
 # Try multiple approaches to find and use universalmutator (silenced output)
 if command -v mutate >/dev/null 2>&1; then
@@ -20,10 +22,6 @@ elif python3 -m universalmutator --help >/dev/null 2>&1; then
         python3 -m universalmutator "$file" --mutantDir .mutations/typescript --noCheck >/dev/null 2>&1
     done
 else
-    echo "❌ ERROR: universalmutator not found!"
+    log_error "universalmutator not found!"
     exit 1
 fi
-
-# Count and report generated mutations
-mutation_count=$(find .mutations/typescript -name "*.ts" | wc -l)
-echo "✓ Generated $mutation_count mutations" 

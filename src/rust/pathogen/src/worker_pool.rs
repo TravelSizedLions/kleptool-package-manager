@@ -318,10 +318,7 @@ impl WorkerPool {
     use indicatif::{ProgressBar, ProgressStyle};
 
     let total = mutations.len();
-    println!(
-      "📊 Processing {} mutations across {} workers...",
-      total, self.pool_size
-    );
+    println!("Spinning up {} workers...", self.pool_size);
 
     // Create progress bar
     let progress = ProgressBar::new(total as u64);
