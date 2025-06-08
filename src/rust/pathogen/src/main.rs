@@ -19,10 +19,9 @@ async fn main() -> Result<()> {
 
   // Create isolated temp workspace
   let temp_workspace = create_temp_workspace(&config)?;
-  println!(
-    "🏗️  Created isolated workspace: {}",
-    temp_workspace.display()
-  );
+  if config.verbose {
+    println!("Created isolated workspace: {}", temp_workspace.display());
+  }
 
   // Calculate the relative path of the source directory within the project
   let project_root = std::env::current_dir()?;
@@ -98,6 +97,7 @@ fn build_cli_interface() -> ArgMatches {
         .help("Verbose output")
         .action(clap::ArgAction::SetTrue),
     )
+
     .arg(
       Arg::new("dry-run")
         .long("dry-run")
@@ -115,50 +115,54 @@ fn build_cli_interface() -> ArgMatches {
 
 /// Print the startup banner with configuration info
 fn print_startup_banner(config: &MutationConfig) {
-  // Auto-detect thread info for display
-  let detected_cores = std::thread::available_parallelism()
-    .map(|n| n.get())
-    .unwrap_or(0);
+  if config.verbose {
+    // Auto-detect thread info for display
+    let detected_cores = std::thread::available_parallelism()
+      .map(|n| n.get())
+      .unwrap_or(0);
 
-  println!("{}", "=".repeat(80));
-  println!(
-    "                             Pathogen v{}",
-    env!("CARGO_PKG_VERSION")
-  );
-  println!("{}", "=".repeat(80));
-  println!("📂 Source directory: {}", config.source_dir.display());
-
-  if detected_cores > 0 && config.parallel_count == detected_cores {
+    println!("{}", "=".repeat(80));
     println!(
-      "🧵 Auto-detected {} logical cores, using {} parallel runners",
-      detected_cores, config.parallel_count
+      "                             Pathogen v{}",
+      env!("CARGO_PKG_VERSION")
     );
+    println!("{}", "=".repeat(80));
+    println!("Source directory: {}", config.source_dir.display());
+
+    if detected_cores > 0 && config.parallel_count == detected_cores {
+      println!(
+        "Auto-detected {} logical cores, using {} parallel runners",
+        detected_cores, config.parallel_count
+      );
+    } else {
+      println!("Parallel runners: {}", config.parallel_count);
+    }
+
+    if config.dry_run {
+      println!("DRY RUN MODE - No tests will be executed");
+    }
+
+    if config.no_cache {
+      println!("Cache disabled - All tests will run fresh");
+    }
   } else {
-    println!("🔧 Parallel runners: {}", config.parallel_count);
-  }
-
-  if config.dry_run {
-    println!("🔍 DRY RUN MODE - No tests will be executed");
-  }
-
-  if config.no_cache {
-    println!("🚫 Cache disabled - All tests will run fresh");
+    println!("Pathogen v{} - {} workers", env!("CARGO_PKG_VERSION"), config.parallel_count);
   }
 }
 
 /// Discover and validate target files
 fn discover_and_validate_files(config: &MutationConfig) -> Result<Vec<PathBuf>> {
-  println!(
-    "\n🔍 Discovering {} files...",
-    match config.language {
-      types::Language::TypeScript => "TypeScript",
-      types::Language::Rust => "Rust",
-    }
-  );
   let target_files = discover_target_files(config)?;
-  println!("🎯 Found {} files to analyze", target_files.len());
-
+  
   if config.verbose {
+    println!(
+      "Discovering {} files...",
+      match config.language {
+        types::Language::TypeScript => "TypeScript",
+        types::Language::Rust => "Rust",
+      }
+    );
+    println!("Found {} files to analyze", target_files.len());
     for file in &target_files {
       println!("   - {}", file.display());
     }
@@ -173,9 +177,13 @@ fn generate_mutations(
   config: &MutationConfig,
   verbose: bool,
 ) -> Result<Vec<types::Mutation>> {
-  println!("\n🧬 Loading universalmutator mutations...");
   let mutations = load_universalmutator_mutations(source_dir, &config.language, verbose)?;
-  println!("🎭 Loaded {} total mutations", mutations.len());
+  
+  if verbose {
+    println!("Loading universalmutator mutations...");
+    println!("Loaded {} total mutations", mutations.len());
+  }
+  
   Ok(mutations)
 }
 
@@ -722,8 +730,10 @@ fn calculate_summary_stats(
     .filter(|r| matches!(r.kill_type, KillType::Survived))
     .count();
 
-  let behavioral_rate = if total > 0 {
-    (behavioral_kills as f64 / total as f64) * 100.0
+  // Calculate behavioral rate against viable mutations only (exclude compile errors)
+  let viable_mutations = total - compile_errors;
+  let behavioral_rate = if viable_mutations > 0 {
+    (behavioral_kills as f64 / viable_mutations as f64) * 100.0
   } else {
     0.0
   };
@@ -783,8 +793,11 @@ fn build_file_stats(file_path: String, file_mutations: Vec<&types::MutationResul
     .iter()
     .filter(|r| matches!(r.kill_type, KillType::Survived))
     .count();
-  let kill_rate = if total_mutations > 0 {
-    ((behavioral_kills + compile_errors) as f64 / total_mutations as f64) * 100.0
+  
+  // Use behavioral kill rate as the primary quality metric (exclude compile errors)
+  let viable_mutations = total_mutations - compile_errors;
+  let kill_rate = if viable_mutations > 0 {
+    (behavioral_kills as f64 / viable_mutations as f64) * 100.0
   } else {
     0.0
   };
@@ -809,35 +822,18 @@ fn build_file_stats(file_path: String, file_mutations: Vec<&types::MutationResul
 /// Print the summary report header
 fn print_summary_report(stats: &SummaryStats, duration: std::time::Duration) {
   println!();
-  println!("{}", "=".repeat(80));
-  println!("                         Project Resiliency Results");
-  println!("{}", "=".repeat(80));
-  println!("📊 Total mutations: {}", stats.total);
-  println!(
-    "🧬 Behavioral kills: {}/{} ({:.1}%)",
-    stats.behavioral_kills, stats.total, stats.behavioral_rate
-  );
-  println!(
-    "⚠️  Compile errors: {}/{} ({:.1}%)",
-    stats.compile_errors,
-    stats.total,
-    (stats.compile_errors as f64 / stats.total as f64) * 100.0
-  );
-  println!(
-    "😱 Survived: {}/{} ({:.1}%)",
-    stats.survived,
-    stats.total,
-    (stats.survived as f64 / stats.total as f64) * 100.0
-  );
-  println!(
-    "💀 Total killed: {}/{} ({:.1}%)",
-    stats.behavioral_kills + stats.compile_errors,
-    stats.total,
-    stats.kill_rate
-  );
-  println!("⏱️  Total time: {:.2}s", duration.as_secs_f64());
-  println!(
-    "🚀 Mutations per second: {:.1}",
+  println!("Mutation Testing Results");
+  println!("─────────────────────────");
+  let viable_mutations = stats.total - stats.compile_errors;
+  println!("Total mutations: {} ({} viable)", stats.total, viable_mutations);
+  println!("Behavioral kills: {} ({:.1}%)", stats.behavioral_kills, stats.behavioral_rate);
+  if stats.compile_errors > 0 {
+    println!("Compile errors: {} (excluded from quality calculation)", stats.compile_errors);
+  }
+  println!("Survived: {}", stats.survived);
+  println!("Test quality: {:.1}%", stats.behavioral_rate);
+  println!("Duration: {:.1}s ({:.1} mut/sec)", 
+    duration.as_secs_f64(), 
     stats.total as f64 / duration.as_secs_f64()
   );
 }
@@ -845,34 +841,29 @@ fn print_summary_report(stats: &SummaryStats, duration: std::time::Duration) {
 /// Print per-file breakdown in table format
 fn print_per_file_breakdown(per_file_stats: &[FileStats]) {
   println!();
-  println!("📁 File Coverage Breakdown");
-  println!("{}", "-".repeat(80));
-  println!(
-    "{:<41} {:>8} {:>8} {:>9} {:>9}",
-    "File", "Total", "Killed", "Survived", "Coverage"
-  );
-  println!("{}", "-".repeat(80));
-
-  for file_stat in per_file_stats {
-    print_file_table_row(file_stat);
-  }
-
-  println!("{}", "-".repeat(80));
-
-  // Show survivor details for files that have them
-  let files_with_survivors: Vec<_> = per_file_stats
+  println!("Per-file results:");
+  
+  // Only show files with survivors or low behavioral kill rates
+  let problematic_files: Vec<_> = per_file_stats
     .iter()
-    .filter(|fs| !fs.survived_mutations.is_empty())
+    .filter(|fs| fs.kill_rate < 95.0 && fs.total_mutations > 0)
     .collect();
 
-  if !files_with_survivors.is_empty() {
-    println!();
-    println!("Mutation Survivors:");
-    println!("{}", "-".repeat(80));
-    for file_stat in files_with_survivors {
-      print_survivors_info(file_stat);
+  if problematic_files.is_empty() {
+    println!("All files have excellent test coverage (≥95% behavioral kill rate)");
+  } else {
+    for file_stat in problematic_files {
+      let short_path = file_stat.file_path
+        .replace("src/cli/", "")
+        .replace("/tmp/", "")
+        .split("/pathogen-workspace/")
+        .last()
+        .unwrap_or(&file_stat.file_path)
+        .to_string();
+      
+      println!("  {} - {:.0}% behavioral kills ({} survivors)", 
+        short_path, file_stat.kill_rate, file_stat.survived);
     }
-    println!(); // Extra newline after survivors
   }
 }
 
@@ -949,32 +940,55 @@ fn print_survivors_info(file_stat: &FileStats) {
 
 /// Print final assessment and warnings
 fn print_final_assessment(stats: &SummaryStats, results: &[types::MutationResult]) {
-  let grade = get_coverage_grade(stats.behavioral_rate);
-
-  // Detect common pathogen issues
   detect_and_warn_issues(stats, results);
 
-  println!("{}", grade);
+  let grade_text = if stats.behavioral_rate >= 95.0 {
+    "Excellent"
+  } else if stats.behavioral_rate >= 80.0 {
+    "Good"
+  } else if stats.behavioral_rate >= 60.0 {
+    "Moderate"
+  } else {
+    "Needs improvement"
+  };
+
+  println!();
+  println!("Test quality: {} ({:.1}% behavioral kill rate)", grade_text, stats.behavioral_rate);
 }
 
 /// Detect and warn about common pathogen configuration issues
 fn detect_and_warn_issues(stats: &SummaryStats, results: &[types::MutationResult]) {
-  println!("🔍 Pathogen Health Check:");
+  let mut warnings = Vec::new();
 
-  let mut issues_detected = 0;
-
-  issues_detected += __check_unrealistic_kill_rate(stats);
-  issues_detected += __check_missing_test_files(results);
-  issues_detected += __check_empty_outputs(results);
-  issues_detected += __check_timeout_patterns(results, stats);
-  issues_detected += __check_execution_time_anomalies(results, stats);
-  issues_detected += __check_compile_error_ratio(stats);
-
-  if issues_detected == 0 {
-    println!("✅ All health checks passed - results appear reliable!");
+  if stats.behavioral_rate >= 99.5 && stats.total > 100 {
+    warnings.push("Suspiciously high kill rate - check test detection".to_string());
   }
 
-  println!();
+  let no_matches_count = results
+    .iter()
+    .filter(|r| r.test_output.contains("had no matches"))
+    .count();
+  
+  if no_matches_count > 0 {
+    warnings.push(format!("{} mutations found no matching test files", no_matches_count));
+  }
+
+  let timeout_count = results
+    .iter()
+    .filter(|r| r.test_output.contains("timeout") || r.test_output.contains("timed out"))
+    .count();
+  
+  if timeout_count > stats.total / 20 {
+    warnings.push(format!("{} mutations timed out", timeout_count));
+  }
+
+  if !warnings.is_empty() {
+    println!();
+    println!("Warnings:");
+    for warning in warnings {
+      println!("  • {}", warning);
+    }
+  }
 }
 
 fn __check_unrealistic_kill_rate(stats: &SummaryStats) -> u32 {
