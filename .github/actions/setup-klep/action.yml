@@ -18,6 +18,25 @@ runs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
 
+    - name: Setup Python for universalmutator
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install universalmutator
+      run: |
+        # Install universalmutator with setuptools using pip --user
+        # pipx isolation was causing pkg_resources issues, so use pip directly
+        python3 -m pip install --user universalmutator setuptools
+
+        # Add user bin to PATH for this step
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+        # Verify installation
+        which mutate || echo "mutate command not found after installation"
+        mutate --help || echo "mutate command failed"
+      shell: bash
+
     # Cache Bun dependencies and global cache
     - name: Cache Bun dependencies
       uses: actions/cache@v4
@@ -75,4 +94,4 @@ runs:
     - name: Add klep to PATH (Windows)
       if: runner.os == 'Windows'
       run: echo "${{ github.workspace }}" >> $env:GITHUB_PATH
-      shell: pwsh 
+      shell: pwsh

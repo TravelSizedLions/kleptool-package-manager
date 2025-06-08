@@ -60,4 +60,11 @@ coverage/
 # nyc test coverage
 .nyc_output
 
+# Pathogen mutation testing artifacts
+.mutations
+*mutant*
+*mutation*
+pathogen-report.json
+pathogen-reports/
+
 blizz

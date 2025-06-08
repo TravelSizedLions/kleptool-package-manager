@@ -2,9 +2,9 @@ name: Code Quality
 
 on:
   push:
-    branches: [ dev ]
+    branches: [dev]
   pull_request:
-    branches: [ dev ]
+    branches: [dev]
     # This will run on any PR targeting dev, regardless of source branch name
 
 env:
@@ -15,44 +15,44 @@ jobs:
   code-quality:
     name: Run Functional Complexity Analysis
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Klep Dependencies
-      uses: ./.github/actions/setup-klep
-      with:
-        rust-components: rustfmt, clippy
+      - name: Setup Klep Dependencies
+        uses: ./.github/actions/setup-klep
+        with:
+          rust-components: rustfmt, clippy
 
-    - name: Run Quality Control Tasks
-      run: klep ci:tidy
+      - name: Run Quality Control Tasks
+        run: klep ci:tidy
 
-    - name: Run TypeScript Type Check
-      run: klep ci:typecheck
-      
-    - name: Run Functional Complexity Analysis
-      run: klep quality
+      - name: Run TypeScript Type Check
+        run: klep ci:typecheck
+
+      - name: Run Functional Complexity Analysis
+        run: klep quality
 
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Klep Dependencies
-      uses: ./.github/actions/setup-klep
+      - name: Setup Klep Dependencies
+        uses: ./.github/actions/setup-klep
 
-    - name: Cache Cargo Audit
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/bin/cargo-audit
-        key: cargo-audit-${{ runner.os }}
+      - name: Cache Cargo Audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}
 
-    - name: Install cargo-audit
-      run: cargo install cargo-audit --locked
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
 
-    - name: Run Security Audit
-      run: klep ci:secure
+      - name: Run Security Audit
+        run: klep ci:secure

@@ -3,7 +3,7 @@ description: Test the project on Linux, and upload coverage to Barecheck.
 
 on:
   push:
-    branches: [ dev ]
+    branches: [dev]
 env:
   CARGO_TERM_COLOR: always
 
@@ -11,35 +11,35 @@ jobs:
   test-linux:
     name: Test (Linux)
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Klep Dependencies
-      uses: ./.github/actions/setup-klep
+      - name: Setup Klep Dependencies
+        uses: ./.github/actions/setup-klep
 
-    - name: Setup Additional Cargo Crates
-      uses: ./.github/actions/setup-cargo-crates
-      with:
-        cargo-crates: cargo-tarpaulin
+      - name: Setup Additional Cargo Crates
+        uses: ./.github/actions/setup-cargo-crates
+        with:
+          cargo-crates: cargo-tarpaulin
 
-    - name: Build Project
-      run: klep ci:build
+      - name: Build Project
+        run: klep ci:build
 
-    - name: Test and Generate Coverage
-      run: klep coverage
+      - name: Test and Generate Behavioral Coverage
+        run: klep ci:mutation
 
-    - name: Upload Coverage
-      uses: ./.github/actions/handle-coverage
-      with:
-        operation: upload
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
+      - name: Upload Behavioral Coverage
+        uses: ./.github/actions/handle-coverage
+        with:
+          operation: upload
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          barecheck_token: ${{ vars.BARECHECK_GITHUB_APP_TOKEN }}
 
-    - name: Create Coverage Badges
-      uses: ./.github/actions/handle-coverage
-      with:
-        operation: badge
-        github_token: ${{ secrets.GIST_TOKEN }}
-        gist_id: ${{ secrets.GIST_ID }}
+      - name: Create Behavioral Coverage Badges
+        uses: ./.github/actions/handle-coverage
+        with:
+          operation: badge
+          github_token: ${{ secrets.GIST_TOKEN }}
+          gist_id: ${{ secrets.GIST_ID }}

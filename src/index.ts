@@ -143,4 +143,40 @@ program
     }
   });
 
+program
+  .command('tasks')
+  .description('List all available tasks')
+  .option('-v, --verbose', 'Verbose output')
+  .option('--sort', 'Sort tasks alphabetically')
+  .action(
+    kerror.boundary(async (options: { verbose: boolean; sort: boolean }) => {
+      let tasks = taskRunner.getTaskFile();
+      if (options.sort) {
+        tasks = Object.fromEntries(Object.entries(tasks).sort((a, b) => a[0].localeCompare(b[0])));
+      }
+
+      if (options.verbose) {
+        console.log('Available tasks:');
+        const longestName = Object.keys(tasks).reduce((max, task) => Math.max(max, task.length), 0);
+        console.log(
+          Object.entries(tasks)
+            .map(([task, command]) => {
+              const taskPart = `• ${task}`;
+              const spacesNeeded = longestName - task.length + 3;
+              const padding = ' ' + '·'.repeat(Math.max(1, spacesNeeded)) + ' ';
+              return `${taskPart}${padding}${command}`;
+            })
+            .join('\n')
+        );
+      } else {
+        console.log('Available tasks:');
+        console.log(
+          Object.keys(tasks)
+            .map((task) => `• ${task}`)
+            .join('\n')
+        );
+      }
+    })
+  );
+
 program.parse(process.argv);

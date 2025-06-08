@@ -19,6 +19,9 @@ mkdir -p .cursor
 
 echo "Fetching unresolved review comments for PR #$PR..."
 
+# Unset PAGER to prevent shell pipe issues with gh CLI
+unset PAGER
+
 # Get both unresolved IDs and full context in one GraphQL call
 FULL_DATA=$(gh api graphql -f query='query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { reviewThreads(first: 50) { nodes { id isResolved comments(first: 10) { nodes { id body path line diffHunk } } } } } } }' -f owner="$OWNER" -f repo="$REPO" -F pr="$PR")
 

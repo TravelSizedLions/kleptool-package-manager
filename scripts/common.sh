@@ -9,7 +9,7 @@ validate_env_var() {
   local var_value="${!var_name:-}"
   
   if [[ -z "$var_value" ]]; then
-    echo "❌ Error: $var_name environment variable is required"
+    echo "❌ Error: $var_name environment variable is required" >&2
     exit 1
   fi
 }
@@ -23,24 +23,45 @@ validate_env_vars() {
 }
 
 # Function to log with emoji prefix
+log() {
+  echo "$1" >&2
+  add_lines "$2"
+}
+
 log_info() {
-  echo "ℹ️  $1"
+  echo "ℹ️  $1" >&2
+  add_lines "$2"
 }
 
 log_success() {
-  echo "✅ $1"
+  echo "✅ $1" >&2
+  add_lines "$2"
 }
 
 log_warning() {
-  echo "⚠️  $1"
+  echo "⚠️  $1" >&2
+  add_lines "$2"
 }
 
 log_error() {
-  echo "❌ $1"
+  echo "❌ $1" >&2
+  add_lines "$2"
 }
 
 log_step() {
-  echo "🔧 $1"
+  echo "🔧 $1" >&2
+  add_lines "$2"
+}
+
+add_lines() {
+  local lines=$1
+  if [[ -z "$lines" ]]; then
+    return
+  fi
+
+  for i in $(seq 1 $lines); do
+    echo "" >&2
+  done
 }
 
 # Function to determine badge color based on coverage percentage
@@ -63,41 +84,74 @@ get_badge_color() {
   fi
 }
 
-# Function to extract coverage percentage from an LCOV file
-extract_coverage_from_lcov() {
-  local lcov_file=$1
-  local language_name=$2
-  local output_var_name="${3:-}"
+# Function to safely extract JSON value with error handling
+extract_json_value() {
+  local file="$1"
+  local path="$2"
+  local default="${3:-null}"
   
-  if [[ ! -f "$lcov_file" ]]; then
-    log_warning "LCOV file not found: $lcov_file"
-    if [[ -n "$output_var_name" ]]; then
-      printf -v "$output_var_name" "0%%"
-    elif [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-      echo "${language_name,,}_coverage=0%" >> $GITHUB_OUTPUT
-    fi
-    return 0
+  if [[ ! -f "$file" ]]; then
+    echo "$default"
+    return 1
   fi
   
-  # Extract lines found and lines hit from LCOV file
-  local lines_found=$(grep -o "LF:[0-9]*" "$lcov_file" | sed 's/LF://' | paste -sd+ | bc)
-  local lines_hit=$(grep -o "LH:[0-9]*" "$lcov_file" | sed 's/LH://' | paste -sd+ | bc)
+  local value=$(jq -r "$path" "$file" 2>/dev/null)
+  echo "${value:-$default}"
+}
+
+# Function to calculate percentage with bc
+calculate_percentage() {
+  local numerator="$1"
+  local denominator="$2"
+  local scale="${3:-1}"
   
-  if [[ "$lines_found" -gt 0 ]]; then
-    local coverage=$(echo "scale=1; $lines_hit * 100 / $lines_found" | bc)
-    log_success "$language_name coverage: ${coverage}%"
+  if [[ "$denominator" == "0" ]]; then
+    echo "0.0"
+    return
+  fi
+  
+  echo "scale=$scale; ($numerator * 100) / $denominator" | bc
+}
+
+# Function to format difference value with + prefix for positive
+format_diff() {
+  local value="$1"
+  
+  if (( $(echo "$value >= 0" | bc -l) )); then
+    echo "+$value"
+  else
+    echo "$value"
+  fi
+}
+
+# Function to post comment to GitHub PR
+post_github_comment() {
+  local comment_body="$1"
+  local temp_file=$(mktemp)
+  
+  echo "$comment_body" > "$temp_file"
+  
+  if [[ -n "${GITHUB_EVENT_PATH:-}" ]] && [[ -f "$GITHUB_EVENT_PATH" ]]; then
+    local pr_number=$(jq -r '.pull_request.number // .number // empty' "$GITHUB_EVENT_PATH")
+    local repo=$(jq -r '.repository.full_name' "$GITHUB_EVENT_PATH")
     
-    if [[ -n "$output_var_name" ]]; then
-      printf -v "$output_var_name" "${coverage}%%"
-    elif [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-      echo "${language_name,,}_coverage=${coverage}%" >> $GITHUB_OUTPUT
+    if [[ -n "$pr_number" && "$pr_number" != "null" ]]; then
+      curl -s -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        "https://api.github.com/repos/$repo/issues/$pr_number/comments" \
+        -d "{\"body\": $(jq -Rs . < "$temp_file")}" > /dev/null
+      log_success "Posted comment to PR #$pr_number"
+    else
+      log_info "Not a PR context, skipping comment posting"
+      echo "📝 Comment would have been:"
+      cat "$temp_file"
     fi
   else
-    log_warning "No lines found in $lcov_file"
-    if [[ -n "$output_var_name" ]]; then
-      printf -v "$output_var_name" "0%%"
-    elif [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-      echo "${language_name,,}_coverage=0%" >> $GITHUB_OUTPUT
-    fi
+    log_info "No GitHub event context, skipping comment posting"  
+    echo "📝 Comment would have been:"
+    cat "$temp_file"
   fi
-} 
+  
+  rm -f "$temp_file"
+}
