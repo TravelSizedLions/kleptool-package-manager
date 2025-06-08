@@ -9,7 +9,7 @@ validate_env_var() {
   local var_value="${!var_name:-}"
   
   if [[ -z "$var_value" ]]; then
-    echo "❌ Error: $var_name environment variable is required"
+    echo "❌ Error: $var_name environment variable is required" >&2
     exit 1
   fi
 }
@@ -24,23 +24,23 @@ validate_env_vars() {
 
 # Function to log with emoji prefix
 log_info() {
-  echo "ℹ️  $1"
+  echo "ℹ️  $1" >&2
 }
 
 log_success() {
-  echo "✅ $1"
+  echo "✅ $1" >&2
 }
 
 log_warning() {
-  echo "⚠️  $1"
+  echo "⚠️  $1" >&2
 }
 
 log_error() {
-  echo "❌ $1"
+  echo "❌ $1" >&2
 }
 
 log_step() {
-  echo "🔧 $1"
+  echo "🔧 $1" >&2
 }
 
 # Function to determine badge color based on coverage percentage

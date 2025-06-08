@@ -214,7 +214,9 @@ __build_comment_body() {
   baseline_section=$(__build_baseline_section "$current_metrics" "$baseline_report")
   quality_section=$(__build_quality_section "$current_metrics")
   
-  echo "${current_section}${baseline_section}${quality_section}"
+  echo "$current_section"
+  echo "$baseline_section"
+  echo "$quality_section"
 }
 
 # Execute main function with all arguments
