@@ -40,7 +40,7 @@ tempfile = "3.0"
 # Parallelization 
 rayon = "1.10"
 crossbeam = "0.8"
-dashmap = "5.0"
+dashmap = "6.1"
 
 # Error handling
 anyhow = "1.0"
